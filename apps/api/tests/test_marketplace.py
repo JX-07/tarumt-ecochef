@@ -105,7 +105,9 @@ def test_checkout_accepts_only_supported_payment_methods() -> None:
     [
         ("development", True, "sk_test_example", True),
         ("development", True, "rk_test_example", True),
-        ("production", True, "sk_test_example", False),
+        ("production", True, "sk_test_example", True),
+        ("production", True, "rk_test_example", True),
+        ("production", True, "sk_live_example", False),
         ("development", False, "sk_test_example", False),
         ("development", True, "sk_live_example", False),
     ],

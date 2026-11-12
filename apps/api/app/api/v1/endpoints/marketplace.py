@@ -106,8 +106,6 @@ def _sandbox_payment_simulation_enabled() -> bool:
     settings = get_settings()
     if not settings.stripe_simulated_payments_enabled:
         return False
-    if settings.environment.casefold() not in {"development", "test", "local"}:
-        return False
     if settings.stripe_api_key is None:
         return False
     return settings.stripe_api_key.get_secret_value().startswith(("sk_test_", "rk_test_"))
@@ -1335,7 +1333,7 @@ def simulate_checkout_payment(
     current_user: AuthenticatedUser = CurrentConsumer,
     session: Session = Depends(get_db_session),
 ) -> CheckoutStatusResult:
-    """Complete a local demo order without charging Stripe; never available with live keys."""
+    """Complete an explicitly enabled Stripe test payment; never available with live keys."""
     if not _sandbox_payment_simulation_enabled():
         raise HTTPException(
             status.HTTP_404_NOT_FOUND,

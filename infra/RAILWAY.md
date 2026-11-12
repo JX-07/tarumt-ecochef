@@ -19,6 +19,8 @@ On the web service, create a persistent volume mounted at `/app/downloads`. The 
 
 API: Set `DATABASE_URL=${{Postgres.DATABASE_URL}}`, `FIREBASE_PROJECT_ID`, `ECOCHEF_ENV=production`, and `ECOCHEF_CORS_ALLOWED_ORIGINS=https://YOUR-WEB-DOMAIN`. Add the relevant Gemini, Geoapify, Stripe, and push variables from `apps/api/.env.example` as those features are enabled. Paste the full Firebase Admin service-account JSON into the secret `FIREBASE_CREDENTIALS_JSON` variable. Do not upload that JSON to GitHub.
 
+For the mobile one-tap test payment button, set `STRIPE_SIMULATED_PAYMENTS_ENABLED=true` and `STRIPE_API_KEY` to a Stripe test key (`sk_test_` or a restricted `rk_test_` key with the required permissions). The button remains unavailable with a live key. These test payments create Stripe test transactions and mark the order paid in EcoChef; they do not charge real money.
+
 Web: Set `NEXT_PUBLIC_API_URL=https://YOUR-API-DOMAIN/api/v1`, `ECOCHEF_API_INTERNAL_URL=https://YOUR-API-DOMAIN/api/v1`, the Firebase web values, and the Stripe publishable key from `apps/web/.env.example`. Public `NEXT_PUBLIC_` values are embedded during the web build, so redeploy after changing them.
 
 The API health endpoint is `https://YOUR-API-DOMAIN/api/v1/health/ready`. Apply the ordered SQL files in `infra/database/migrations` to a new PostgreSQL database before testing application features. Do not run the initial migration against a database with existing user data.
