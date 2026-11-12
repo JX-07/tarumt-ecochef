@@ -1,0 +1,47 @@
+# JavaScript / TypeScript
+node_modules/
+.next/
+.expo/
+.expo-*/
+dist/
+coverage/
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+
+# Environment and local data
+.env
+.env.*
+!.env.example
+apps/api/.secrets/
+*.db
+*.sqlite3
+
+# OS and editors
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# Generated media and logs
+uploads/
+logs/
+
+# Local build archives, training datasets, and model outputs
+tmp/
+output/
+.docx-media/
+.docx-render/
+.pytest_cache/
+.agents/
+skills-lock.json
+services/ai_training/data/
+services/ai_training/runs/
+services/ai_training/weights/
+services/ai_training/*.pt
+*.apk
+*.aab

@@ -1,0 +1,1 @@
+"""EcoChef domain modules."""

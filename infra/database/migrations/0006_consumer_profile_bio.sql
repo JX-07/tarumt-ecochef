@@ -1,0 +1,5 @@
+ALTER TABLE users ADD COLUMN IF NOT EXISTS bio VARCHAR(280);
+
+INSERT INTO schema_migrations (version)
+VALUES ('0006')
+ON CONFLICT (version) DO NOTHING;

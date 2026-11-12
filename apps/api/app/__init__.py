@@ -1,0 +1,1 @@
+"""EcoChef API application package."""
