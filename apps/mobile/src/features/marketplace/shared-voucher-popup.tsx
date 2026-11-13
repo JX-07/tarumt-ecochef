@@ -7,19 +7,243 @@ import { Animated, Modal, Pressable, StyleSheet, View } from "react-native";
 import { createMobileApi } from "../../lib/api";
 import { useAuth } from "../auth/auth-provider";
 
-type Voucher = { id: string; code: string; title: string; description: string; discount_percent?: number; discount_amount?: number; minimum_order_amount: number; store_name: string; reward_message?: string };
+type Voucher = {
+  id: string;
+  code: string;
+  title: string;
+  description: string;
+  discount_percent?: number;
+  discount_amount?: number;
+  minimum_order_amount: number;
+  store_name: string;
+  reward_message?: string;
+};
 
-
-export function SharedVoucherPopup({ onVisibilityChange }: { onVisibilityChange?: (busy: boolean) => void }) {
+export function SharedVoucherPopup({
+  onVisibilityChange,
+}: {
+  onVisibilityChange?: (busy: boolean) => void;
+}) {
   const [loaded, setLoaded] = useState(false);
-  const { status, user } = useAuth(); const api = useMemo(() => createMobileApi(apiBaseUrl, () => user?.getIdToken()), [user]); const [vouchers, setVouchers] = useState<Voucher[]>([]), [index, setIndex] = useState(0); const scale = useRef(new Animated.Value(0.75)).current, confetti = useRef(new Animated.Value(0)).current;
-  useEffect(() => { let active = true; setLoaded(false); setVouchers([]); setIndex(0); if (status !== "signed_in") { setLoaded(true); return; } void api.getSharedVouchers<{ vouchers: Voucher[] }>().then((result) => { if (active) setVouchers(result.vouchers); }).catch(() => undefined).finally(() => { if (active) setLoaded(true); }); return () => { active = false; }; }, [api, status]);
-  useEffect(() => { onVisibilityChange?.(status === "signed_in" && (!loaded || !!vouchers[index])); }, [status, loaded, vouchers, index, onVisibilityChange]);
-  useEffect(() => { if (!vouchers.length) return; scale.setValue(0.75); confetti.setValue(0); Animated.parallel([Animated.spring(scale, { toValue: 1, useNativeDriver: true, friction: 6 }), Animated.timing(confetti, { toValue: 1, duration: 900, useNativeDriver: true })]).start(); }, [index, vouchers.length]);
-  const voucher = vouchers[index]; if (!voucher) return null;
-  const next = async () => { await api.markSharedVoucherSeen(voucher.id).catch(() => undefined); if (index < vouchers.length - 1) setIndex((value) => value + 1); else { setVouchers([]); setIndex(0); } };
-  return <Modal visible transparent animationType="fade" statusBarTranslucent><View style={styles.backdrop}>{Array.from({ length: 14 }, (_, item) => <Animated.View key={item} style={[styles.confetti, { left: `${6 + item * 6.5}%`, backgroundColor: item % 3 === 0 ? colors.primary : item % 3 === 1 ? colors.warning : colors.danger, transform: [{ translateY: confetti.interpolate({ inputRange: [0, 1], outputRange: [-260, 260 + (item % 4) * 20] }) }, { rotate: `${item * 27}deg` }] }]} />)}<Animated.View style={[styles.card, { transform: [{ scale }] }]}><View style={styles.present}><Ionicons name="gift" size={spacing[12]} color={colors.surface} /></View><Text style={styles.eyebrow}>A GIFT FROM {voucher.store_name.toUpperCase()}</Text><Text style={styles.title}>{voucher.title}</Text><Text style={styles.reward}>{voucher.reward_message}</Text><View style={styles.codeBox}><Text style={styles.codeLabel}>VOUCHER CODE</Text><Text selectable style={styles.code}>{voucher.code}</Text></View><Text style={styles.description}>{voucher.description}</Text><Text style={styles.discount}>{voucher.discount_percent ? `${voucher.discount_percent}% OFF` : `RM ${Number(voucher.discount_amount).toFixed(2)} OFF`}</Text>{Number(voucher.minimum_order_amount) > 0 ? <Text style={styles.minimum}>Minimum order RM {Number(voucher.minimum_order_amount).toFixed(2)}</Text> : null}<Text style={styles.counter}>{index + 1}/{vouchers.length}</Text><Pressable accessibilityRole="button" style={({ pressed }) => [styles.button, pressed && styles.pressed]} onPress={() => void next()}><Text style={styles.buttonText}>{index < vouchers.length - 1 ? "Next" : "Got it!"}</Text></Pressable></Animated.View></View></Modal>;
+  const { status, user } = useAuth();
+  const api = useMemo(() => createMobileApi(apiBaseUrl, () => user?.getIdToken()), [user]);
+  const [vouchers, setVouchers] = useState<Voucher[]>([]),
+    [index, setIndex] = useState(0);
+  const scale = useRef(new Animated.Value(0.75)).current,
+    confetti = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    let active = true;
+    setLoaded(false);
+    setVouchers([]);
+    setIndex(0);
+    if (status !== "signed_in") {
+      setLoaded(true);
+      return;
+    }
+    void api
+      .getSharedVouchers<{ vouchers: Voucher[] }>()
+      .then((result) => {
+        if (active) setVouchers(result.vouchers);
+      })
+      .catch(() => undefined)
+      .finally(() => {
+        if (active) setLoaded(true);
+      });
+    return () => {
+      active = false;
+    };
+  }, [api, status]);
+  useEffect(() => {
+    onVisibilityChange?.(status === "signed_in" && (!loaded || !!vouchers[index]));
+  }, [status, loaded, vouchers, index, onVisibilityChange]);
+  useEffect(() => {
+    if (!vouchers.length) return;
+    scale.setValue(0.75);
+    confetti.setValue(0);
+    Animated.parallel([
+      Animated.spring(scale, { toValue: 1, useNativeDriver: true, friction: 6 }),
+      Animated.timing(confetti, { toValue: 1, duration: 900, useNativeDriver: true }),
+    ]).start();
+  }, [index, vouchers.length]);
+  const voucher = vouchers[index];
+  if (!voucher) return null;
+  const next = async () => {
+    await api.markSharedVoucherSeen(voucher.id).catch(() => undefined);
+    if (index < vouchers.length - 1) setIndex((value) => value + 1);
+    else {
+      setVouchers([]);
+      setIndex(0);
+    }
+  };
+  return (
+    <Modal visible transparent animationType="fade" statusBarTranslucent>
+      <View style={styles.backdrop}>
+        {Array.from({ length: 14 }, (_, item) => (
+          <Animated.View
+            key={item}
+            style={[
+              styles.confetti,
+              {
+                left: `${6 + item * 6.5}%`,
+                backgroundColor:
+                  item % 3 === 0 ? colors.primary : item % 3 === 1 ? colors.warning : colors.danger,
+                transform: [
+                  {
+                    translateY: confetti.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [-260, 260 + (item % 4) * 20],
+                    }),
+                  },
+                  { rotate: `${item * 27}deg` },
+                ],
+              },
+            ]}
+          />
+        ))}
+        <Animated.View style={[styles.card, { transform: [{ scale }] }]}>
+          <View style={styles.present}>
+            <Ionicons name="gift" size={spacing[12]} color={colors.surface} />
+          </View>
+          <Text style={styles.eyebrow}>A GIFT FROM {voucher.store_name.toUpperCase()}</Text>
+          <Text style={styles.title}>{voucher.title}</Text>
+          <Text style={styles.reward}>{voucher.reward_message}</Text>
+          <View style={styles.codeBox}>
+            <Text style={styles.codeLabel}>VOUCHER CODE</Text>
+            <Text selectable style={styles.code}>
+              {voucher.code}
+            </Text>
+          </View>
+          <Text style={styles.description}>{voucher.description}</Text>
+          <Text style={styles.discount}>
+            {voucher.discount_percent
+              ? `${voucher.discount_percent}% OFF`
+              : `RM ${Number(voucher.discount_amount).toFixed(2)} OFF`}
+          </Text>
+          {Number(voucher.minimum_order_amount) > 0 ? (
+            <Text style={styles.minimum}>
+              Minimum order RM {Number(voucher.minimum_order_amount).toFixed(2)}
+            </Text>
+          ) : null}
+          <Text style={styles.counter}>
+            {index + 1}/{vouchers.length}
+          </Text>
+          <Pressable
+            accessibilityRole="button"
+            style={({ pressed }) => [styles.button, pressed && styles.pressed]}
+            onPress={() => void next()}
+          >
+            <Text style={styles.buttonText}>
+              {index < vouchers.length - 1 ? "Next" : "Got it!"}
+            </Text>
+          </Pressable>
+        </Animated.View>
+      </View>
+    </Modal>
+  );
 }
 
-const type = typography.mobile.size, weight = typography.weight;
-const styles = StyleSheet.create({ backdrop: { flex: 1, alignItems: "center", justifyContent: "center", padding: spacing[5], backgroundColor: colors.overlayStrong }, card: { width: "100%", maxWidth: 420, alignItems: "center", padding: spacing[6], borderRadius: spacing[6], backgroundColor: colors.surface, elevation: 12 }, present: { width: spacing[16], height: spacing[16], alignItems: "center", justifyContent: "center", marginTop: -spacing[12], marginBottom: spacing[3], borderRadius: spacing[8], backgroundColor: colors.primary }, eyebrow: { color: colors.primaryStrong, fontSize: type.caption, fontWeight: weight.bold, letterSpacing: 1, textAlign: "center" }, title: { marginTop: spacing[2], color: colors.text, fontSize: type.pageTitle, fontWeight: weight.bold, textAlign: "center" }, reward: { marginTop: spacing[2], color: colors.textMuted, fontSize: type.secondaryInteraction, textAlign: "center" }, codeBox: { width: "100%", marginTop: spacing[4], padding: spacing[3], alignItems: "center", borderWidth: 1, borderStyle: "dashed", borderColor: colors.primary, borderRadius: spacing[4], backgroundColor: colors.primarySoft }, codeLabel: { color: colors.textMuted, fontSize: type.caption, fontWeight: weight.bold }, code: { marginTop: spacing[1], color: colors.primaryStrong, fontSize: type.bodyTextHeavy, fontWeight: weight.bold, letterSpacing: 2 }, description: { marginTop: spacing[4], color: colors.textMuted, fontSize: type.secondaryInteraction, lineHeight: spacing[5], textAlign: "center" }, discount: { marginTop: spacing[3], color: colors.primaryStrong, fontSize: type.bodyTextHeavy, fontWeight: weight.bold }, minimum: { marginTop: spacing[1], color: colors.textSubtle, fontSize: type.caption }, counter: { marginTop: spacing[4], color: colors.textSubtle, fontSize: type.caption, fontWeight: weight.bold }, button: { width: "100%", minHeight: spacing[12], alignItems: "center", justifyContent: "center", marginTop: spacing[3], borderRadius: spacing[4], backgroundColor: colors.primary }, buttonText: { color: colors.surface, fontSize: type.secondaryInteraction, fontWeight: weight.bold }, pressed: { backgroundColor: colors.primaryStrong }, confetti: { position: "absolute", top: "28%", width: 8, height: 15, borderRadius: 2 } });
+const type = typography.mobile.size,
+  weight = typography.weight;
+const styles = StyleSheet.create({
+  backdrop: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    padding: spacing[5],
+    backgroundColor: colors.overlayStrong,
+  },
+  card: {
+    width: "100%",
+    maxWidth: 420,
+    alignItems: "center",
+    padding: spacing[6],
+    borderRadius: spacing[6],
+    backgroundColor: colors.surface,
+    elevation: 12,
+  },
+  present: {
+    width: spacing[16],
+    height: spacing[16],
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: -spacing[12],
+    marginBottom: spacing[3],
+    borderRadius: spacing[8],
+    backgroundColor: colors.primary,
+  },
+  eyebrow: {
+    color: colors.primaryStrong,
+    fontSize: type.caption,
+    fontWeight: weight.bold,
+    letterSpacing: 1,
+    textAlign: "center",
+  },
+  title: {
+    marginTop: spacing[2],
+    color: colors.text,
+    fontSize: type.pageTitle,
+    fontWeight: weight.bold,
+    textAlign: "center",
+  },
+  reward: {
+    marginTop: spacing[2],
+    color: colors.textMuted,
+    fontSize: type.secondaryInteraction,
+    textAlign: "center",
+  },
+  codeBox: {
+    width: "100%",
+    marginTop: spacing[4],
+    padding: spacing[3],
+    alignItems: "center",
+    borderWidth: 1,
+    borderStyle: "dashed",
+    borderColor: colors.primary,
+    borderRadius: spacing[4],
+    backgroundColor: colors.primarySoft,
+  },
+  codeLabel: { color: colors.textMuted, fontSize: type.caption, fontWeight: weight.bold },
+  code: {
+    marginTop: spacing[1],
+    color: colors.primaryStrong,
+    fontSize: type.bodyTextHeavy,
+    fontWeight: weight.bold,
+    letterSpacing: 2,
+  },
+  description: {
+    marginTop: spacing[4],
+    color: colors.textMuted,
+    fontSize: type.secondaryInteraction,
+    lineHeight: spacing[5],
+    textAlign: "center",
+  },
+  discount: {
+    marginTop: spacing[3],
+    color: colors.primaryStrong,
+    fontSize: type.bodyTextHeavy,
+    fontWeight: weight.bold,
+  },
+  minimum: { marginTop: spacing[1], color: colors.textSubtle, fontSize: type.caption },
+  counter: {
+    marginTop: spacing[4],
+    color: colors.textSubtle,
+    fontSize: type.caption,
+    fontWeight: weight.bold,
+  },
+  button: {
+    width: "100%",
+    minHeight: spacing[12],
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: spacing[3],
+    borderRadius: spacing[4],
+    backgroundColor: colors.primary,
+  },
+  buttonText: {
+    color: colors.surface,
+    fontSize: type.secondaryInteraction,
+    fontWeight: weight.bold,
+  },
+  pressed: { backgroundColor: colors.primaryStrong },
+  confetti: { position: "absolute", top: "28%", width: 8, height: 15, borderRadius: 2 },
+});

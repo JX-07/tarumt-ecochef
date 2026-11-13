@@ -8,10 +8,12 @@ export default function RecipeRoutesLayout() {
   if (status === "loading") return <AppLoadingScreen />;
   if (status === "signed_out") return <Redirect href="/(auth)/sign-in" />;
 
-  return <Stack screenOptions={{ headerShown: false }}>
-    <Stack.Screen name="new" options={{ animation: "none" }} />
-    <Stack.Screen name="[recipeId]" options={{ animation: "none" }} />
-    <Stack.Screen name="[recipeId]/edit" options={{ animation: "none" }} />
-    <Stack.Screen name="[recipeId]/cook" options={{ animation: "fade" }} />
-  </Stack>;
+  return (
+    <Stack screenOptions={{ headerShown: false }}>
+      <Stack.Screen name="new" options={{ animation: "none" }} />
+      <Stack.Screen name="[recipeId]" options={{ animation: "none" }} />
+      <Stack.Screen name="[recipeId]/edit" options={{ animation: "none" }} />
+      <Stack.Screen name="[recipeId]/cook" options={{ animation: "fade" }} />
+    </Stack>
+  );
 }

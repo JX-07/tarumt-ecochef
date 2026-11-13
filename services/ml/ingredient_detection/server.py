@@ -23,7 +23,8 @@ from ultralytics import YOLO
 SERVICE_ROOT = Path(__file__).resolve().parent
 REPOSITORY_ROOT = SERVICE_ROOT.parents[2]
 DEFAULT_CHECKPOINTS = (
-    REPOSITORY_ROOT / "services/ai_training/runs/detector_yolo26s_accurate_all_sources/train/weights/best.pt",
+    REPOSITORY_ROOT
+    / "services/ai_training/runs/detector_yolo26s_accurate_all_sources/train/weights/best.pt",
     REPOSITORY_ROOT / "services/ai_training/runs/detector_yolo26s/train/weights/best.pt",
     REPOSITORY_ROOT / "services/ai_training/runs/detector/train/weights/best.pt",
 )
@@ -55,7 +56,9 @@ def checkpoint_path(explicit: str | None = None) -> Path:
     for candidate in DEFAULT_CHECKPOINTS:
         if candidate.is_file():
             return candidate
-    raise FileNotFoundError("No trained detector checkpoint was found under services/ai_training/runs.")
+    raise FileNotFoundError(
+        "No trained detector checkpoint was found under services/ai_training/runs."
+    )
 
 
 def clean_name(raw_name: str) -> str:
@@ -65,18 +68,53 @@ def clean_name(raw_name: str) -> str:
 def metadata_for(name: str, count: int) -> dict[str, Any]:
     normalized = name.casefold()
     if normalized in PANTRY:
-        return {"suggested_amount": count, "suggested_unit": "packs", "suggested_expiry_days": 30, "category": "Pantry"}
+        return {
+            "suggested_amount": count,
+            "suggested_unit": "packs",
+            "suggested_expiry_days": 30,
+            "category": "Pantry",
+        }
     if normalized in SEAFOOD:
-        return {"suggested_amount": count, "suggested_unit": "pcs", "suggested_expiry_days": 2, "category": "Seafood"}
+        return {
+            "suggested_amount": count,
+            "suggested_unit": "pcs",
+            "suggested_expiry_days": 2,
+            "category": "Seafood",
+        }
     if normalized in MEAT:
-        return {"suggested_amount": count, "suggested_unit": "pcs", "suggested_expiry_days": 2, "category": "Meat"}
+        return {
+            "suggested_amount": count,
+            "suggested_unit": "pcs",
+            "suggested_expiry_days": 2,
+            "category": "Meat",
+        }
     if normalized in DAIRY:
-        return {"suggested_amount": count, "suggested_unit": "packs", "suggested_expiry_days": 7, "category": "Dairy"}
+        return {
+            "suggested_amount": count,
+            "suggested_unit": "packs",
+            "suggested_expiry_days": 7,
+            "category": "Dairy",
+        }
     if normalized == "egg":
-        return {"suggested_amount": count, "suggested_unit": "pcs", "suggested_expiry_days": 21, "category": "Dairy & eggs"}
+        return {
+            "suggested_amount": count,
+            "suggested_unit": "pcs",
+            "suggested_expiry_days": 21,
+            "category": "Dairy & eggs",
+        }
     if normalized in LEAFY:
-        return {"suggested_amount": count, "suggested_unit": "bunch", "suggested_expiry_days": 4, "category": "Vegetables"}
-    return {"suggested_amount": count, "suggested_unit": "pcs", "suggested_expiry_days": 7, "category": "Produce"}
+        return {
+            "suggested_amount": count,
+            "suggested_unit": "bunch",
+            "suggested_expiry_days": 4,
+            "category": "Vegetables",
+        }
+    return {
+        "suggested_amount": count,
+        "suggested_unit": "pcs",
+        "suggested_expiry_days": 7,
+        "category": "Produce",
+    }
 
 
 class IngredientDetector:
@@ -109,14 +147,20 @@ class IngredientDetector:
                 name = clean_name(raw_name)
                 grouped[name].append(confidence)
                 coordinates = [round(float(value), 2) for value in box.xyxy[0].tolist()]
-                boxes.append({"name": name, "confidence": round(confidence, 4), "xyxy": coordinates})
+                boxes.append(
+                    {"name": name, "confidence": round(confidence, 4), "xyxy": coordinates}
+                )
         items = []
-        for name, confidences in sorted(grouped.items(), key=lambda entry: max(entry[1]), reverse=True):
-            items.append({
-                "name": name,
-                "confidence": round(max(confidences), 4),
-                **metadata_for(name, len(confidences)),
-            })
+        for name, confidences in sorted(
+            grouped.items(), key=lambda entry: max(entry[1]), reverse=True
+        ):
+            items.append(
+                {
+                    "name": name,
+                    "confidence": round(max(confidences), 4),
+                    **metadata_for(name, len(confidences)),
+                }
+            )
         return {
             "items": items,
             "detections": boxes,
@@ -131,7 +175,12 @@ class IngredientDetector:
 def decode_image(payload: dict[str, Any]) -> Image.Image:
     data = payload.get("data")
     content_type = payload.get("content_type")
-    if not isinstance(data, str) or content_type not in {"image/jpeg", "image/jpg", "image/png", "image/webp"}:
+    if not isinstance(data, str) or content_type not in {
+        "image/jpeg",
+        "image/jpg",
+        "image/png",
+        "image/webp",
+    }:
         raise ValueError("A base64 JPEG, PNG, or WebP image is required.")
     try:
         image_bytes = base64.b64decode(data, validate=True)
@@ -165,11 +214,14 @@ def handler_for(detector: IngredientDetector) -> type[BaseHTTPRequestHandler]:
             if self.path != "/health":
                 self._json(HTTPStatus.NOT_FOUND, {"detail": "Not found."})
                 return
-            self._json(HTTPStatus.OK, {
-                "status": "ready",
-                "checkpoint": str(detector.weights),
-                "device": "cuda" if detector.device == "0" else "cpu",
-            })
+            self._json(
+                HTTPStatus.OK,
+                {
+                    "status": "ready",
+                    "checkpoint": str(detector.weights),
+                    "device": "cuda" if detector.device == "0" else "cpu",
+                },
+            )
 
         def do_POST(self) -> None:  # noqa: N802
             if self.path != "/v1/detect":
@@ -184,7 +236,10 @@ def handler_for(detector: IngredientDetector) -> type[BaseHTTPRequestHandler]:
             except (ValueError, json.JSONDecodeError) as error:
                 self._json(HTTPStatus.UNPROCESSABLE_ENTITY, {"detail": str(error)})
             except Exception as error:  # The API receives a safe error without a server traceback.
-                self._json(HTTPStatus.INTERNAL_SERVER_ERROR, {"detail": f"Inference failed: {type(error).__name__}"})
+                self._json(
+                    HTTPStatus.INTERNAL_SERVER_ERROR,
+                    {"detail": f"Inference failed: {type(error).__name__}"},
+                )
 
         def log_message(self, message_format: str, *args: object) -> None:
             print(f"{self.address_string()} - {message_format % args}", flush=True)
@@ -206,7 +261,10 @@ def main() -> None:
     print(f"Loading EcoChef detector from {weights}", flush=True)
     detector = IngredientDetector(weights, args.confidence, args.image_size)
     server = ThreadingHTTPServer((args.host, args.port), handler_for(detector))
-    print(f"Ingredient detector ready at http://{args.host}:{args.port} using {detector.device}", flush=True)
+    print(
+        f"Ingredient detector ready at http://{args.host}:{args.port} using {detector.device}",
+        flush=True,
+    )
     try:
         server.serve_forever()
     except KeyboardInterrupt:

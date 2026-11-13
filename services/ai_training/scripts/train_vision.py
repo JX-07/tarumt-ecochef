@@ -31,13 +31,21 @@ def open_archive(path: str) -> zipfile.ZipFile:
 class FreshnessDataset(Dataset):
     def __init__(self, rows: list[dict[str, str]], training: bool):
         self.rows = rows
-        self.transform = transforms.Compose([
-            transforms.RandomResizedCrop(224, scale=(0.75, 1.0)) if training else transforms.Resize((224, 224)),
-            transforms.RandomHorizontalFlip() if training else transforms.Lambda(lambda image: image),
-            transforms.ColorJitter(brightness=0.12, contrast=0.12, saturation=0.08) if training else transforms.Lambda(lambda image: image),
-            transforms.ToTensor(),
-            transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
-        ])
+        self.transform = transforms.Compose(
+            [
+                transforms.RandomResizedCrop(224, scale=(0.75, 1.0))
+                if training
+                else transforms.Resize((224, 224)),
+                transforms.RandomHorizontalFlip()
+                if training
+                else transforms.Lambda(lambda image: image),
+                transforms.ColorJitter(brightness=0.12, contrast=0.12, saturation=0.08)
+                if training
+                else transforms.Lambda(lambda image: image),
+                transforms.ToTensor(),
+                transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+            ]
+        )
 
     def __len__(self) -> int:
         return len(self.rows)
@@ -50,7 +58,15 @@ class FreshnessDataset(Dataset):
         else:
             image = Image.open(row["path"]).convert("RGB")
         if row.get("bbox_x_center"):
-            x, y, width, height = [float(row[key]) for key in ("bbox_x_center", "bbox_y_center", "bbox_width", "bbox_height")]
+            x, y, width, height = [
+                float(row[key])
+                for key in (
+                    "bbox_x_center",
+                    "bbox_y_center",
+                    "bbox_width",
+                    "bbox_height",
+                )
+            ]
             left = max(0, int((x - width / 2) * image.width))
             top = max(0, int((y - height / 2) * image.height))
             right = min(image.width, int((x + width / 2) * image.width))
@@ -75,7 +91,14 @@ def evaluate(model: nn.Module, loader: DataLoader, device: torch.device) -> dict
                 class_total[truth] += 1
                 class_correct[truth] += int(truth == prediction)
     result = {"accuracy": correct / total if total else 0.0}
-    result.update({f"accuracy_{label}": class_correct[index] / class_total[index] if class_total[index] else 0.0 for index, label in enumerate(LABELS)})
+    result.update(
+        {
+            f"accuracy_{label}": class_correct[index] / class_total[index]
+            if class_total[index]
+            else 0.0
+            for index, label in enumerate(LABELS)
+        }
+    )
     return result
 
 
@@ -94,7 +117,9 @@ def main() -> None:
     stop_file = args.run_dir / "STOP"
     with args.manifest.open(encoding="utf-8", newline="") as handle:
         rows = list(csv.DictReader(handle))
-    split_rows = {split: [row for row in rows if row["split"] == split] for split in ("train", "val", "test")}
+    split_rows = {
+        split: [row for row in rows if row["split"] == split] for split in ("train", "val", "test")
+    }
     if any(not split_rows[split] for split in split_rows):
         raise RuntimeError("Manifest must contain non-empty train, val and test splits.")
 
@@ -121,9 +146,25 @@ def main() -> None:
         start_epoch = int(checkpoint["epoch"]) + 1
         history = checkpoint.get("history", [])
 
-    train_loader = DataLoader(FreshnessDataset(split_rows["train"], True), batch_size=args.batch_size, shuffle=True, num_workers=0, pin_memory=device.type == "cuda")
-    val_loader = DataLoader(FreshnessDataset(split_rows["val"], False), batch_size=args.batch_size, num_workers=0, pin_memory=device.type == "cuda")
-    test_loader = DataLoader(FreshnessDataset(split_rows["test"], False), batch_size=args.batch_size, num_workers=0, pin_memory=device.type == "cuda")
+    train_loader = DataLoader(
+        FreshnessDataset(split_rows["train"], True),
+        batch_size=args.batch_size,
+        shuffle=True,
+        num_workers=0,
+        pin_memory=device.type == "cuda",
+    )
+    val_loader = DataLoader(
+        FreshnessDataset(split_rows["val"], False),
+        batch_size=args.batch_size,
+        num_workers=0,
+        pin_memory=device.type == "cuda",
+    )
+    test_loader = DataLoader(
+        FreshnessDataset(split_rows["test"], False),
+        batch_size=args.batch_size,
+        num_workers=0,
+        pin_memory=device.type == "cuda",
+    )
 
     for epoch in range(start_epoch, args.epochs + 1):
         if stop_file.exists():
@@ -139,13 +180,30 @@ def main() -> None:
             optimizer.step()
             running_loss += float(loss) * len(labels)
         validation = evaluate(model, val_loader, device)
-        entry = {"epoch": epoch, "train_loss": running_loss / len(train_loader.dataset), **{f"val_{key}": value for key, value in validation.items()}}
+        entry = {
+            "epoch": epoch,
+            "train_loss": running_loss / len(train_loader.dataset),
+            **{f"val_{key}": value for key, value in validation.items()},
+        }
         history.append(entry)
-        torch.save({"epoch": epoch, "model": model.state_dict(), "optimizer": optimizer.state_dict(), "history": history, "labels": LABELS}, checkpoint_path)
+        torch.save(
+            {
+                "epoch": epoch,
+                "model": model.state_dict(),
+                "optimizer": optimizer.state_dict(),
+                "history": history,
+                "labels": LABELS,
+            },
+            checkpoint_path,
+        )
         (args.run_dir / "history.json").write_text(json.dumps(history, indent=2), encoding="utf-8")
         print(json.dumps(entry), flush=True)
 
-    final = {"validation": evaluate(model, val_loader, device), "test": evaluate(model, test_loader, device), "labels": LABELS}
+    final = {
+        "validation": evaluate(model, val_loader, device),
+        "test": evaluate(model, test_loader, device),
+        "labels": LABELS,
+    }
     (args.run_dir / "metrics.json").write_text(json.dumps(final, indent=2), encoding="utf-8")
     model.eval().cpu()
     scripted = torch.jit.script(model)

@@ -30,10 +30,27 @@ export type RecipeDetail = RecipeSummary & {
   my_feedback_resolution?: string;
   instructions: string[];
   ingredients: Array<{ name: string; quantity: string; icon?: string }>;
-  nutrition: { calories_kcal?: number; protein_g?: number; carbohydrates_g?: number; fat_g?: number; fibre_g?: number };
+  nutrition: {
+    calories_kcal?: number;
+    protein_g?: number;
+    carbohydrates_g?: number;
+    fat_g?: number;
+    fibre_g?: number;
+  };
   author_name: string;
   date_created: string;
-  reviews: Array<{ id: string; user_id: string; is_mine: boolean; can_flag: boolean; flag_status?: "pending" | "dismissed" | "removed"; flag_resolution?: string; user_name: string; rating: number; comment?: string; date_submitted: string }>;
+  reviews: Array<{
+    id: string;
+    user_id: string;
+    is_mine: boolean;
+    can_flag: boolean;
+    flag_status?: "pending" | "dismissed" | "removed";
+    flag_resolution?: string;
+    user_name: string;
+    rating: number;
+    comment?: string;
+    date_submitted: string;
+  }>;
 };
 
 export type RecipeList = { items: RecipeSummary[]; total: number };

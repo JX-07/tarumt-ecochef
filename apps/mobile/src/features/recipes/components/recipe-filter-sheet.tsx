@@ -3,38 +3,632 @@ import { Ionicons } from "@expo/vector-icons";
 import { colors, palette, typography } from "@ecochef/design-tokens";
 import type { ReactNode } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Animated, Modal, PanResponder, Pressable, ScrollView, StyleSheet, useWindowDimensions, View } from "react-native";
+import {
+  Animated,
+  Modal,
+  PanResponder,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  useWindowDimensions,
+  View,
+} from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { recipeDietaryTags, recipeMealTypes } from "../recipe-tag-options";
 
-export type RecipeFilters = { mealTypes: string[]; dietary: string[]; cookTime?: number; customCookTime?: boolean; minimumRating?: number };
-const AnimatedView=Animated.createAnimatedComponent(View) as unknown as typeof View;
+export type RecipeFilters = {
+  mealTypes: string[];
+  dietary: string[];
+  cookTime?: number;
+  customCookTime?: boolean;
+  minimumRating?: number;
+};
+const AnimatedView = Animated.createAnimatedComponent(View) as unknown as typeof View;
 
-export function RecipeFilterSheet({ visible, value, onClose, onApply }: { visible: boolean; value: RecipeFilters; onClose: () => void; onApply: (value: RecipeFilters) => void }) {
+export function RecipeFilterSheet({
+  visible,
+  value,
+  onClose,
+  onApply,
+}: {
+  visible: boolean;
+  value: RecipeFilters;
+  onClose: () => void;
+  onApply: (value: RecipeFilters) => void;
+}) {
   const insets = useSafeAreaInsets();
   const { height } = useWindowDimensions();
-  const translateY=useRef(new Animated.Value(height)).current;
-  const dismissing=useRef(false);
-  useEffect(()=>{if(!visible)return;translateY.setValue(height);const animation=Animated.timing(translateY,{toValue:0,duration:240,useNativeDriver:true});animation.start();return()=>animation.stop();},[height,translateY,visible]);
-  useEffect(()=>{if(visible)dismissing.current=false;},[visible]);
-  const dismiss=()=>{if(dismissing.current)return;dismissing.current=true;Animated.timing(translateY,{toValue:height,duration:190,useNativeDriver:true}).start(({finished})=>{if(finished)onClose();else dismissing.current=false;});};
-  const panResponder=useMemo(()=>PanResponder.create({
-    onMoveShouldSetPanResponder:(_,gesture)=>gesture.dy>8&&Math.abs(gesture.dy)>Math.abs(gesture.dx),
-    onPanResponderMove:(_,gesture)=>translateY.setValue(Math.max(0,gesture.dy)),
-    onPanResponderRelease:(_,gesture)=>{if(gesture.dy>110||gesture.vy>.8)dismiss();else Animated.spring(translateY,{toValue:0,useNativeDriver:true,bounciness:5}).start();},
-    onPanResponderTerminate:()=>Animated.spring(translateY,{toValue:0,useNativeDriver:true,bounciness:5}).start(),
-  }),[translateY,onClose]);
-  const selected = value.mealTypes.length + value.dietary.length + (value.cookTime ? 1 : 0) + (value.minimumRating ? 1 : 0);
-  const toggle = (key: "mealTypes" | "dietary", item: string) => onApply({ ...value, [key]: key==="mealTypes"?(value.mealTypes.includes(item)?[]:[item]):value.dietary.includes(item)?value.dietary.filter((entry) => entry !== item):[...value.dietary, item] });
-  return <Modal visible={visible} transparent animationType="fade" onRequestClose={dismiss}><View style={styles.overlay}><Pressable accessibilityLabel="Close recipe filters" style={styles.backdrop} onPress={dismiss}/><AnimatedView {...panResponder.panHandlers} style={[styles.sheet, { paddingBottom: Math.max(insets.bottom, 14),transform:[{translateY}] }]}><View style={styles.grabber} /><View style={styles.heading}><Ionicons name="options-outline" size={22} color={palette.c0ead56} /><Text style={styles.title}>Filter Recipes</Text><Text style={styles.count}>{selected}</Text><Pressable style={styles.close} onPress={dismiss}><Ionicons name="close" size={18} color={palette.c778292} /></Pressable></View><ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-    <Group title="MEAL TYPE" count={value.mealTypes.length}>{recipeMealTypes.map(([emoji, label]) => <Chip key={label} label={`${emoji}  ${label}`} active={value.mealTypes.includes(label)} onPress={() => toggle("mealTypes", label)} />)}</Group>
-    <Group title="DIETARY" count={value.dietary.length}>{recipeDietaryTags.map(([emoji, label]) => <Chip key={label} label={`${emoji}  ${label}`} active={value.dietary.includes(label)} onPress={() => toggle("dietary", label)} />)}</Group>
-    <Group title="COOK TIME"><CookTimeSlider value={value.cookTime} custom={value.customCookTime===true} onChange={(cookTime,source)=>onApply({...value,cookTime,customCookTime:source==="custom"?true:undefined})}/></Group>
-    <Group title="MINIMUM RATING"><View style={styles.ratings}>{[1,2,3,4,5].map((rating) => {const active=value.minimumRating===rating;return <Pressable key={rating} style={[styles.rating,active&&styles.ratingActive]} onPress={() => onApply({ ...value, minimumRating: active ? undefined : rating })}><Ionicons name={active?"star":"star-outline"} size={20} color={active?palette.cf5b82e:palette.caeb7b2}/><Text style={[styles.ratingText,active&&styles.ratingTextActive]}>{rating}+</Text></Pressable>;})}</View></Group>
-  </ScrollView><View style={styles.footer}><Pressable style={styles.clear} onPress={() => onApply({ mealTypes: [], dietary: [] })}><Text style={styles.clearText}>Clear all</Text></Pressable><Pressable style={styles.apply} onPress={dismiss}><Ionicons name="search" size={18} color={palette.cfff} /><Text style={styles.applyText}>Show Results</Text></Pressable></View></AnimatedView></View></Modal>;
+  const translateY = useRef(new Animated.Value(height)).current;
+  const dismissing = useRef(false);
+  useEffect(() => {
+    if (!visible) return;
+    translateY.setValue(height);
+    const animation = Animated.timing(translateY, {
+      toValue: 0,
+      duration: 240,
+      useNativeDriver: true,
+    });
+    animation.start();
+    return () => animation.stop();
+  }, [height, translateY, visible]);
+  useEffect(() => {
+    if (visible) dismissing.current = false;
+  }, [visible]);
+  const dismiss = () => {
+    if (dismissing.current) return;
+    dismissing.current = true;
+    Animated.timing(translateY, { toValue: height, duration: 190, useNativeDriver: true }).start(
+      ({ finished }) => {
+        if (finished) onClose();
+        else dismissing.current = false;
+      },
+    );
+  };
+  const panResponder = useMemo(
+    () =>
+      PanResponder.create({
+        onMoveShouldSetPanResponder: (_, gesture) =>
+          gesture.dy > 8 && Math.abs(gesture.dy) > Math.abs(gesture.dx),
+        onPanResponderMove: (_, gesture) => translateY.setValue(Math.max(0, gesture.dy)),
+        onPanResponderRelease: (_, gesture) => {
+          if (gesture.dy > 110 || gesture.vy > 0.8) dismiss();
+          else
+            Animated.spring(translateY, {
+              toValue: 0,
+              useNativeDriver: true,
+              bounciness: 5,
+            }).start();
+        },
+        onPanResponderTerminate: () =>
+          Animated.spring(translateY, { toValue: 0, useNativeDriver: true, bounciness: 5 }).start(),
+      }),
+    [translateY, onClose],
+  );
+  const selected =
+    value.mealTypes.length +
+    value.dietary.length +
+    (value.cookTime ? 1 : 0) +
+    (value.minimumRating ? 1 : 0);
+  const toggle = (key: "mealTypes" | "dietary", item: string) =>
+    onApply({
+      ...value,
+      [key]:
+        key === "mealTypes"
+          ? value.mealTypes.includes(item)
+            ? []
+            : [item]
+          : value.dietary.includes(item)
+            ? value.dietary.filter((entry) => entry !== item)
+            : [...value.dietary, item],
+    });
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={dismiss}>
+      <View style={styles.overlay}>
+        <Pressable
+          accessibilityLabel="Close recipe filters"
+          style={styles.backdrop}
+          onPress={dismiss}
+        />
+        <AnimatedView
+          {...panResponder.panHandlers}
+          style={[
+            styles.sheet,
+            { paddingBottom: Math.max(insets.bottom, 14), transform: [{ translateY }] },
+          ]}
+        >
+          <View style={styles.grabber} />
+          <View style={styles.heading}>
+            <Ionicons name="options-outline" size={22} color={palette.c0ead56} />
+            <Text style={styles.title}>Filter Recipes</Text>
+            <Text style={styles.count}>{selected}</Text>
+            <Pressable style={styles.close} onPress={dismiss}>
+              <Ionicons name="close" size={18} color={palette.c778292} />
+            </Pressable>
+          </View>
+          <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+            <Group title="MEAL TYPE" count={value.mealTypes.length}>
+              {recipeMealTypes.map(([emoji, label]) => (
+                <Chip
+                  key={label}
+                  label={`${emoji}  ${label}`}
+                  active={value.mealTypes.includes(label)}
+                  onPress={() => toggle("mealTypes", label)}
+                />
+              ))}
+            </Group>
+            <Group title="DIETARY" count={value.dietary.length}>
+              {recipeDietaryTags.map(([emoji, label]) => (
+                <Chip
+                  key={label}
+                  label={`${emoji}  ${label}`}
+                  active={value.dietary.includes(label)}
+                  onPress={() => toggle("dietary", label)}
+                />
+              ))}
+            </Group>
+            <Group title="COOK TIME">
+              <CookTimeSlider
+                value={value.cookTime}
+                custom={value.customCookTime === true}
+                onChange={(cookTime, source) =>
+                  onApply({
+                    ...value,
+                    cookTime,
+                    customCookTime: source === "custom" ? true : undefined,
+                  })
+                }
+              />
+            </Group>
+            <Group title="MINIMUM RATING">
+              <View style={styles.ratings}>
+                {[1, 2, 3, 4, 5].map((rating) => {
+                  const active = value.minimumRating === rating;
+                  return (
+                    <Pressable
+                      key={rating}
+                      style={[styles.rating, active && styles.ratingActive]}
+                      onPress={() =>
+                        onApply({ ...value, minimumRating: active ? undefined : rating })
+                      }
+                    >
+                      <Ionicons
+                        name={active ? "star" : "star-outline"}
+                        size={20}
+                        color={active ? palette.cf5b82e : palette.caeb7b2}
+                      />
+                      <Text style={[styles.ratingText, active && styles.ratingTextActive]}>
+                        {rating}+
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            </Group>
+          </ScrollView>
+          <View style={styles.footer}>
+            <Pressable style={styles.clear} onPress={() => onApply({ mealTypes: [], dietary: [] })}>
+              <Text style={styles.clearText}>Clear all</Text>
+            </Pressable>
+            <Pressable style={styles.apply} onPress={dismiss}>
+              <Ionicons name="search" size={18} color={palette.cfff} />
+              <Text style={styles.applyText}>Show Results</Text>
+            </Pressable>
+          </View>
+        </AnimatedView>
+      </View>
+    </Modal>
+  );
 }
-function Group({ title, count, children }: { title: string; count?: number; children?: ReactNode }) { return <View style={styles.group}><View style={styles.groupHead}><Text style={styles.groupTitle}>{title}</Text>{count ? <Text style={styles.selected}>{count} selected</Text> : null}</View><View style={styles.chips}>{children}</View></View>; }
-function Chip({ label, active, onPress, wide }: { key?:string|number; label: string; active: boolean; onPress: () => void; wide?: boolean }) { return <Pressable onPress={onPress} style={[styles.chip, wide && styles.wide, active && styles.chipActive]}><Text style={[styles.chipText, active && styles.chipTextActive]}>{label}</Text></Pressable>; }
-function CookTimeSlider({value,custom,onChange}:{value?:number;custom:boolean;onChange:(value: number|undefined,source?:"slider"|"custom")=>void}){const [customTime,setCustomTime]=useState(custom&&value!==undefined?String(value):"");const widthRef=useRef(1);const valueRef=useRef(value);const onChangeRef=useRef(onChange);const dragStart=useRef(0);valueRef.current=value;onChangeRef.current=onChange;useEffect(()=>{if(custom&&value!==undefined)setCustomTime(String(value));},[custom,value]);const minimum=10;const maximum=60;const current=Math.max(minimum,Math.min(maximum,value??minimum));const ratio=value===undefined?0:(current-minimum)/(maximum-minimum);const update=(x:number)=>{const width=widthRef.current;const bounded=Math.max(0,Math.min(width,x));const minutes=Math.round((minimum+(bounded/width)*(maximum-minimum))/10)*10;onChangeRef.current(Math.max(minimum,Math.min(maximum,minutes)),"slider");};const setCustom=()=>{const minutes=Number(customTime);if(Number.isInteger(minutes)&&minutes>0&&minutes<=1440)onChange(minutes,"custom");};const responder=useRef(PanResponder.create({onStartShouldSetPanResponder:()=>true,onMoveShouldSetPanResponder:()=>true,onPanResponderGrant:()=>{const active=Math.max(minimum,Math.min(maximum,valueRef.current??minimum));dragStart.current=((active-minimum)/(maximum-minimum))*widthRef.current;if(valueRef.current===undefined)onChangeRef.current(minimum,"slider");},onPanResponderMove:(_,gesture)=>update(dragStart.current+gesture.dx)})).current;const customApplied=custom&&value!==undefined;return <View style={sliderStyles.wrapper}><View style={sliderStyles.valueRow}><View><Text style={sliderStyles.value}>{value===undefined?"Any time":`${value} min or less`}</Text><Text style={sliderStyles.hint}>{customApplied?"Custom limit selected":"Choose 10, 20, 30, 40, 50 or 60 minutes"}</Text></View>{value!==undefined&&<Pressable style={sliderStyles.reset} onPress={()=>onChange(undefined)}><Text style={sliderStyles.resetText}>Any time</Text></Pressable>}</View><View {...responder.panHandlers} onLayout={event=>{widthRef.current=event.nativeEvent.layout.width;}} style={[sliderStyles.touchArea,customApplied&&sliderStyles.sliderMuted]}><View style={sliderStyles.track}><View style={[sliderStyles.fill,{width:`${ratio*100}%`}]} /><View style={[sliderStyles.thumb,{left:`${ratio*100}%`}]}><Ionicons name="time-outline" size={15} color={palette.cfff}/></View></View></View><View style={[sliderStyles.scale,customApplied&&sliderStyles.sliderMuted]}>{[10,20,30,40,50,60].map(minutes=><Text key={minutes} style={sliderStyles.scaleText}>{minutes}</Text>)}</View><Text style={sliderStyles.customLabel}>OR ENTER A CUSTOM TIME</Text><View style={sliderStyles.customRow}><View style={[sliderStyles.customInputWrap,customApplied&&sliderStyles.customInputActive]}><TextInput value={customTime} onChangeText={text=>{if(/^\d*$/.test(text))setCustomTime(text);}} onSubmitEditing={setCustom} keyboardType="number-pad" returnKeyType="done" placeholder="e.g. 90" placeholderTextColor={palette.c9aa39e} style={sliderStyles.customInput}/><Text style={sliderStyles.customSuffix}>min</Text></View><Pressable disabled={!customTime||Number(customTime)<=0||Number(customTime)>1440} style={[sliderStyles.setButton,customApplied&&sliderStyles.customSetButton,(!customTime||Number(customTime)<=0||Number(customTime)>1440)&&sliderStyles.setButtonDisabled]} onPress={setCustom}><Text style={sliderStyles.setButtonText}>{customApplied?"Applied":"Set"}</Text></Pressable></View><Text style={sliderStyles.customHint}>Enter between 1 and 1,440 minutes.</Text>{customApplied&&<View style={sliderStyles.customStatus}><Ionicons name="checkmark-circle" size={17} color={palette.c0e9e4f}/><View style={sliderStyles.customStatusCopy}><Text style={sliderStyles.customStatusTitle}>Custom time active</Text><Text style={sliderStyles.customStatusText}>{value} minutes is being used. Dragging the slider will replace it.</Text></View></View>}</View>}
-const styles = StyleSheet.create({ overlay:{flex:1,justifyContent:"flex-end",backgroundColor:palette.crgba_24_28_26_42},backdrop:{...StyleSheet.absoluteFill},sheet:{height:"84%",borderTopLeftRadius:24,borderTopRightRadius:24,backgroundColor:palette.cfaf9f5},grabber:{alignSelf:"center",width:42,height:4,marginTop:11,borderRadius:2,backgroundColor:palette.ccdd2d8},heading:{height:62,flexDirection:"row",alignItems:"center",gap:9,paddingHorizontal:20,borderBottomWidth:1,borderColor:palette.cebecea},title:{color:palette.c14233a,fontSize: typography.mobile.rawSize.s19,fontWeight: typography.weight.extrabold},count:{color:palette.cfff,fontSize: typography.mobile.rawSize.s11,fontWeight: typography.weight.extrabold,paddingHorizontal:7,paddingVertical:3,borderRadius:10,backgroundColor:palette.c0ead56},close:{marginLeft:"auto",width:34,height:34,alignItems:"center",justifyContent:"center",borderRadius:17,backgroundColor:palette.ceef0f2},content:{padding:20,paddingBottom:26},group:{marginBottom:26},groupHead:{flexDirection:"row",justifyContent:"space-between",alignItems:"center",marginBottom:11},groupTitle:{color:palette.c667287,fontSize: typography.mobile.rawSize.s11,fontWeight: typography.weight.extrabold,letterSpacing:.7},selected:{color:palette.c0e9e4f,fontSize: typography.mobile.rawSize.s10,fontWeight: typography.weight.extrabold,paddingHorizontal:8,paddingVertical:4,borderRadius:10,backgroundColor:palette.ce3f5e9},chips:{flexDirection:"row",flexWrap:"wrap",gap:8},chip:{paddingHorizontal:14,paddingVertical:10,borderWidth:1,borderColor:palette.ce1e4e8,borderRadius:14,backgroundColor:palette.cf8f9fa},wide:{width:"48%"},chipActive:{borderColor:palette.c0ead56,backgroundColor:palette.c0ead56},chipText:{color:palette.c485468,fontSize: typography.mobile.rawSize.s12,fontWeight: typography.weight.bold},chipTextActive:{color:palette.cfff},ratings:{width:"100%",flexDirection:"row",gap:8},rating:{flex:1,alignItems:"center",gap:3,paddingVertical:10,borderWidth:1,borderColor:palette.caeb7b2,borderRadius:13,backgroundColor:"transparent"},ratingActive:{borderColor:palette.c0ead56,backgroundColor:"transparent"},ratingText:{color:colors.text,fontSize: typography.mobile.rawSize.s10,fontWeight: typography.weight.extrabold},ratingTextActive:{color:palette.c0b9b4c},footer:{flexDirection:"row",gap:12,padding:16,borderTopWidth:1,borderColor:palette.ce7e9e7,backgroundColor:palette.cfff},clear:{width:94,height:48,alignItems:"center",justifyContent:"center",borderWidth:1,borderColor:palette.cdce0e4,borderRadius:14},clearText:{color:palette.c596579,fontWeight: typography.weight.bold},apply:{flex:1,height:48,flexDirection:"row",alignItems:"center",justifyContent:"center",gap:7,borderRadius:14,backgroundColor:palette.c0ead56},applyText:{color:palette.cfff,fontWeight: typography.weight.extrabold} });
-const sliderStyles=StyleSheet.create({wrapper:{width:"100%",paddingHorizontal:2},customStatus:{flexDirection:"row",alignItems:"center",gap:9,marginTop:10,padding:11,borderWidth:1,borderColor:palette.cbfe5cd,borderRadius:13,backgroundColor:palette.ceaf7ee},customStatusCopy:{flex:1},customStatusTitle:{color:palette.c0e8b4a,fontSize: typography.mobile.rawSize.s11,fontWeight: typography.weight.black},customStatusText:{marginTop:2,color:palette.c568069,fontSize: typography.mobile.rawSize.s9,lineHeight:13},valueRow:{flexDirection:"row",alignItems:"center",justifyContent:"space-between",gap:12},value:{color:palette.c253c32,fontSize: typography.mobile.rawSize.s14,fontWeight: typography.weight.black},hint:{marginTop:3,color:palette.c8a958f,fontSize: typography.mobile.rawSize.s9},reset:{paddingHorizontal:10,paddingVertical:7,borderRadius:10,backgroundColor:palette.ce8f5ec},resetText:{color:palette.c0e9e4f,fontSize: typography.mobile.rawSize.s10,fontWeight: typography.weight.extrabold},touchArea:{height:42,justifyContent:"center",marginTop:8,marginHorizontal:16},sliderMuted:{opacity:.45},track:{height:7,borderRadius:4,backgroundColor:palette.ce1e6e3},fill:{height:7,borderRadius:4,backgroundColor:palette.c79cea0},thumb:{position:"absolute",top:-11,width:29,height:29,alignItems:"center",justifyContent:"center",marginLeft:-14.5,borderRadius:15,backgroundColor:palette.c0ead56,shadowColor:palette.c0e7040,shadowOpacity:.2,shadowRadius:4,shadowOffset:{width:0,height:2},elevation:3},scale:{flexDirection:"row",justifyContent:"space-between",marginTop:-2,marginHorizontal:16},scaleText:{color:palette.c98a29d,fontSize: typography.mobile.rawSize.s9},customLabel:{marginTop:17,marginBottom:7,color:palette.c7b8780,fontSize: typography.mobile.rawSize.s9,fontWeight: typography.weight.extrabold,letterSpacing:.5},customRow:{flexDirection:"row",gap:8},customInputWrap:{height:42,flex:1,justifyContent:"center",borderWidth:1,borderColor:palette.cdde3df,borderRadius:12,backgroundColor:palette.cfff},customInputActive:{borderColor:palette.c69c58e,backgroundColor:palette.cf7fcf9},customInput:{height:40,paddingLeft:12,paddingRight:42,color:palette.c31453b,fontSize: typography.mobile.rawSize.s12},customSuffix:{position:"absolute",right:12,color:palette.c87928c,fontSize: typography.mobile.rawSize.s10,fontWeight: typography.weight.bold},setButton:{width:62,height:42,alignItems:"center",justifyContent:"center",borderRadius:12,backgroundColor:palette.c0ead56},customSetButton:{backgroundColor:palette.c0e9e4f},setButtonDisabled:{opacity:.4},setButtonText:{color:palette.cfff,fontSize: typography.mobile.rawSize.s11,fontWeight: typography.weight.black},customHint:{marginTop:5,color:palette.c98a19c,fontSize: typography.mobile.rawSize.s8}});
+function Group({
+  title,
+  count,
+  children,
+}: {
+  title: string;
+  count?: number;
+  children?: ReactNode;
+}) {
+  return (
+    <View style={styles.group}>
+      <View style={styles.groupHead}>
+        <Text style={styles.groupTitle}>{title}</Text>
+        {count ? <Text style={styles.selected}>{count} selected</Text> : null}
+      </View>
+      <View style={styles.chips}>{children}</View>
+    </View>
+  );
+}
+function Chip({
+  label,
+  active,
+  onPress,
+  wide,
+}: {
+  key?: string | number;
+  label: string;
+  active: boolean;
+  onPress: () => void;
+  wide?: boolean;
+}) {
+  return (
+    <Pressable
+      onPress={onPress}
+      style={[styles.chip, wide && styles.wide, active && styles.chipActive]}
+    >
+      <Text style={[styles.chipText, active && styles.chipTextActive]}>{label}</Text>
+    </Pressable>
+  );
+}
+function CookTimeSlider({
+  value,
+  custom,
+  onChange,
+}: {
+  value?: number;
+  custom: boolean;
+  onChange: (value: number | undefined, source?: "slider" | "custom") => void;
+}) {
+  const [customTime, setCustomTime] = useState(custom && value !== undefined ? String(value) : "");
+  const widthRef = useRef(1);
+  const valueRef = useRef(value);
+  const onChangeRef = useRef(onChange);
+  const dragStart = useRef(0);
+  valueRef.current = value;
+  onChangeRef.current = onChange;
+  useEffect(() => {
+    if (custom && value !== undefined) setCustomTime(String(value));
+  }, [custom, value]);
+  const minimum = 10;
+  const maximum = 60;
+  const current = Math.max(minimum, Math.min(maximum, value ?? minimum));
+  const ratio = value === undefined ? 0 : (current - minimum) / (maximum - minimum);
+  const update = (x: number) => {
+    const width = widthRef.current;
+    const bounded = Math.max(0, Math.min(width, x));
+    const minutes = Math.round((minimum + (bounded / width) * (maximum - minimum)) / 10) * 10;
+    onChangeRef.current(Math.max(minimum, Math.min(maximum, minutes)), "slider");
+  };
+  const setCustom = () => {
+    const minutes = Number(customTime);
+    if (Number.isInteger(minutes) && minutes > 0 && minutes <= 1440) onChange(minutes, "custom");
+  };
+  const responder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: () => true,
+      onPanResponderGrant: () => {
+        const active = Math.max(minimum, Math.min(maximum, valueRef.current ?? minimum));
+        dragStart.current = ((active - minimum) / (maximum - minimum)) * widthRef.current;
+        if (valueRef.current === undefined) onChangeRef.current(minimum, "slider");
+      },
+      onPanResponderMove: (_, gesture) => update(dragStart.current + gesture.dx),
+    }),
+  ).current;
+  const customApplied = custom && value !== undefined;
+  return (
+    <View style={sliderStyles.wrapper}>
+      <View style={sliderStyles.valueRow}>
+        <View>
+          <Text style={sliderStyles.value}>
+            {value === undefined ? "Any time" : `${value} min or less`}
+          </Text>
+          <Text style={sliderStyles.hint}>
+            {customApplied ? "Custom limit selected" : "Choose 10, 20, 30, 40, 50 or 60 minutes"}
+          </Text>
+        </View>
+        {value !== undefined && (
+          <Pressable style={sliderStyles.reset} onPress={() => onChange(undefined)}>
+            <Text style={sliderStyles.resetText}>Any time</Text>
+          </Pressable>
+        )}
+      </View>
+      <View
+        {...responder.panHandlers}
+        onLayout={(event) => {
+          widthRef.current = event.nativeEvent.layout.width;
+        }}
+        style={[sliderStyles.touchArea, customApplied && sliderStyles.sliderMuted]}
+      >
+        <View style={sliderStyles.track}>
+          <View style={[sliderStyles.fill, { width: `${ratio * 100}%` }]} />
+          <View style={[sliderStyles.thumb, { left: `${ratio * 100}%` }]}>
+            <Ionicons name="time-outline" size={15} color={palette.cfff} />
+          </View>
+        </View>
+      </View>
+      <View style={[sliderStyles.scale, customApplied && sliderStyles.sliderMuted]}>
+        {[10, 20, 30, 40, 50, 60].map((minutes) => (
+          <Text key={minutes} style={sliderStyles.scaleText}>
+            {minutes}
+          </Text>
+        ))}
+      </View>
+      <Text style={sliderStyles.customLabel}>OR ENTER A CUSTOM TIME</Text>
+      <View style={sliderStyles.customRow}>
+        <View
+          style={[sliderStyles.customInputWrap, customApplied && sliderStyles.customInputActive]}
+        >
+          <TextInput
+            value={customTime}
+            onChangeText={(text) => {
+              if (/^\d*$/.test(text)) setCustomTime(text);
+            }}
+            onSubmitEditing={setCustom}
+            keyboardType="number-pad"
+            returnKeyType="done"
+            placeholder="e.g. 90"
+            placeholderTextColor={palette.c9aa39e}
+            style={sliderStyles.customInput}
+          />
+          <Text style={sliderStyles.customSuffix}>min</Text>
+        </View>
+        <Pressable
+          disabled={!customTime || Number(customTime) <= 0 || Number(customTime) > 1440}
+          style={[
+            sliderStyles.setButton,
+            customApplied && sliderStyles.customSetButton,
+            (!customTime || Number(customTime) <= 0 || Number(customTime) > 1440) &&
+              sliderStyles.setButtonDisabled,
+          ]}
+          onPress={setCustom}
+        >
+          <Text style={sliderStyles.setButtonText}>{customApplied ? "Applied" : "Set"}</Text>
+        </Pressable>
+      </View>
+      <Text style={sliderStyles.customHint}>Enter between 1 and 1,440 minutes.</Text>
+      {customApplied && (
+        <View style={sliderStyles.customStatus}>
+          <Ionicons name="checkmark-circle" size={17} color={palette.c0e9e4f} />
+          <View style={sliderStyles.customStatusCopy}>
+            <Text style={sliderStyles.customStatusTitle}>Custom time active</Text>
+            <Text style={sliderStyles.customStatusText}>
+              {value} minutes is being used. Dragging the slider will replace it.
+            </Text>
+          </View>
+        </View>
+      )}
+    </View>
+  );
+}
+const styles = StyleSheet.create({
+  overlay: { flex: 1, justifyContent: "flex-end", backgroundColor: palette.crgba_24_28_26_42 },
+  backdrop: { ...StyleSheet.absoluteFill },
+  sheet: {
+    height: "84%",
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    backgroundColor: palette.cfaf9f5,
+  },
+  grabber: {
+    alignSelf: "center",
+    width: 42,
+    height: 4,
+    marginTop: 11,
+    borderRadius: 2,
+    backgroundColor: palette.ccdd2d8,
+  },
+  heading: {
+    height: 62,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 9,
+    paddingHorizontal: 20,
+    borderBottomWidth: 1,
+    borderColor: palette.cebecea,
+  },
+  title: {
+    color: palette.c14233a,
+    fontSize: typography.mobile.rawSize.s19,
+    fontWeight: typography.weight.extrabold,
+  },
+  count: {
+    color: palette.cfff,
+    fontSize: typography.mobile.rawSize.s11,
+    fontWeight: typography.weight.extrabold,
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    borderRadius: 10,
+    backgroundColor: palette.c0ead56,
+  },
+  close: {
+    marginLeft: "auto",
+    width: 34,
+    height: 34,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 17,
+    backgroundColor: palette.ceef0f2,
+  },
+  content: { padding: 20, paddingBottom: 26 },
+  group: { marginBottom: 26 },
+  groupHead: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 11,
+  },
+  groupTitle: {
+    color: palette.c667287,
+    fontSize: typography.mobile.rawSize.s11,
+    fontWeight: typography.weight.extrabold,
+    letterSpacing: 0.7,
+  },
+  selected: {
+    color: palette.c0e9e4f,
+    fontSize: typography.mobile.rawSize.s10,
+    fontWeight: typography.weight.extrabold,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 10,
+    backgroundColor: palette.ce3f5e9,
+  },
+  chips: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  chip: {
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderWidth: 1,
+    borderColor: palette.ce1e4e8,
+    borderRadius: 14,
+    backgroundColor: palette.cf8f9fa,
+  },
+  wide: { width: "48%" },
+  chipActive: { borderColor: palette.c0ead56, backgroundColor: palette.c0ead56 },
+  chipText: {
+    color: palette.c485468,
+    fontSize: typography.mobile.rawSize.s12,
+    fontWeight: typography.weight.bold,
+  },
+  chipTextActive: { color: palette.cfff },
+  ratings: { width: "100%", flexDirection: "row", gap: 8 },
+  rating: {
+    flex: 1,
+    alignItems: "center",
+    gap: 3,
+    paddingVertical: 10,
+    borderWidth: 1,
+    borderColor: palette.caeb7b2,
+    borderRadius: 13,
+    backgroundColor: "transparent",
+  },
+  ratingActive: { borderColor: palette.c0ead56, backgroundColor: "transparent" },
+  ratingText: {
+    color: colors.text,
+    fontSize: typography.mobile.rawSize.s10,
+    fontWeight: typography.weight.extrabold,
+  },
+  ratingTextActive: { color: palette.c0b9b4c },
+  footer: {
+    flexDirection: "row",
+    gap: 12,
+    padding: 16,
+    borderTopWidth: 1,
+    borderColor: palette.ce7e9e7,
+    backgroundColor: palette.cfff,
+  },
+  clear: {
+    width: 94,
+    height: 48,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: palette.cdce0e4,
+    borderRadius: 14,
+  },
+  clearText: { color: palette.c596579, fontWeight: typography.weight.bold },
+  apply: {
+    flex: 1,
+    height: 48,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 7,
+    borderRadius: 14,
+    backgroundColor: palette.c0ead56,
+  },
+  applyText: { color: palette.cfff, fontWeight: typography.weight.extrabold },
+});
+const sliderStyles = StyleSheet.create({
+  wrapper: { width: "100%", paddingHorizontal: 2 },
+  customStatus: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 9,
+    marginTop: 10,
+    padding: 11,
+    borderWidth: 1,
+    borderColor: palette.cbfe5cd,
+    borderRadius: 13,
+    backgroundColor: palette.ceaf7ee,
+  },
+  customStatusCopy: { flex: 1 },
+  customStatusTitle: {
+    color: palette.c0e8b4a,
+    fontSize: typography.mobile.rawSize.s11,
+    fontWeight: typography.weight.black,
+  },
+  customStatusText: {
+    marginTop: 2,
+    color: palette.c568069,
+    fontSize: typography.mobile.rawSize.s9,
+    lineHeight: 13,
+  },
+  valueRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
+  },
+  value: {
+    color: palette.c253c32,
+    fontSize: typography.mobile.rawSize.s14,
+    fontWeight: typography.weight.black,
+  },
+  hint: { marginTop: 3, color: palette.c8a958f, fontSize: typography.mobile.rawSize.s9 },
+  reset: {
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    borderRadius: 10,
+    backgroundColor: palette.ce8f5ec,
+  },
+  resetText: {
+    color: palette.c0e9e4f,
+    fontSize: typography.mobile.rawSize.s10,
+    fontWeight: typography.weight.extrabold,
+  },
+  touchArea: { height: 42, justifyContent: "center", marginTop: 8, marginHorizontal: 16 },
+  sliderMuted: { opacity: 0.45 },
+  track: { height: 7, borderRadius: 4, backgroundColor: palette.ce1e6e3 },
+  fill: { height: 7, borderRadius: 4, backgroundColor: palette.c79cea0 },
+  thumb: {
+    position: "absolute",
+    top: -11,
+    width: 29,
+    height: 29,
+    alignItems: "center",
+    justifyContent: "center",
+    marginLeft: -14.5,
+    borderRadius: 15,
+    backgroundColor: palette.c0ead56,
+    shadowColor: palette.c0e7040,
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 3,
+  },
+  scale: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginTop: -2,
+    marginHorizontal: 16,
+  },
+  scaleText: { color: palette.c98a29d, fontSize: typography.mobile.rawSize.s9 },
+  customLabel: {
+    marginTop: 17,
+    marginBottom: 7,
+    color: palette.c7b8780,
+    fontSize: typography.mobile.rawSize.s9,
+    fontWeight: typography.weight.extrabold,
+    letterSpacing: 0.5,
+  },
+  customRow: { flexDirection: "row", gap: 8 },
+  customInputWrap: {
+    height: 42,
+    flex: 1,
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: palette.cdde3df,
+    borderRadius: 12,
+    backgroundColor: palette.cfff,
+  },
+  customInputActive: { borderColor: palette.c69c58e, backgroundColor: palette.cf7fcf9 },
+  customInput: {
+    height: 40,
+    paddingLeft: 12,
+    paddingRight: 42,
+    color: palette.c31453b,
+    fontSize: typography.mobile.rawSize.s12,
+  },
+  customSuffix: {
+    position: "absolute",
+    right: 12,
+    color: palette.c87928c,
+    fontSize: typography.mobile.rawSize.s10,
+    fontWeight: typography.weight.bold,
+  },
+  setButton: {
+    width: 62,
+    height: 42,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 12,
+    backgroundColor: palette.c0ead56,
+  },
+  customSetButton: { backgroundColor: palette.c0e9e4f },
+  setButtonDisabled: { opacity: 0.4 },
+  setButtonText: {
+    color: palette.cfff,
+    fontSize: typography.mobile.rawSize.s11,
+    fontWeight: typography.weight.black,
+  },
+  customHint: { marginTop: 5, color: palette.c98a19c, fontSize: typography.mobile.rawSize.s8 },
+});

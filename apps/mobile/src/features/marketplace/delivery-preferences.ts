@@ -29,7 +29,16 @@ export type MarketplaceLocationDraft = {
   driverNote: string;
 };
 
-const emptyDraft = (): MarketplaceLocationDraft => ({ label: "", addressType: "saved", addressLine1: "", city: "", state: "", postalCode: "", details: "", driverNote: "" });
+const emptyDraft = (): MarketplaceLocationDraft => ({
+  label: "",
+  addressType: "saved",
+  addressLine1: "",
+  city: "",
+  state: "",
+  postalCode: "",
+  details: "",
+  driverNote: "",
+});
 let locationDraft = emptyDraft();
 
 export function chooseMarketplaceAddress(addressId: string) {
@@ -58,8 +67,12 @@ export function getMarketplaceTemporaryLocation() {
   return temporaryLocation;
 }
 
-export function getMarketplaceLocationDraft() { return locationDraft; }
-export function updateMarketplaceLocationDraft(update: Partial<MarketplaceLocationDraft>) { locationDraft = { ...locationDraft, ...update }; }
+export function getMarketplaceLocationDraft() {
+  return locationDraft;
+}
+export function updateMarketplaceLocationDraft(update: Partial<MarketplaceLocationDraft>) {
+  locationDraft = { ...locationDraft, ...update };
+}
 export function startMarketplaceLocationEdit(address: Address) {
   editingAddressId = address.id;
   locationDraft = {
@@ -75,9 +88,16 @@ export function startMarketplaceLocationEdit(address: Address) {
     driverNote: address.delivery_note ?? "",
   };
 }
-export function getMarketplaceEditingAddressId() { return editingAddressId; }
-export function clearMarketplaceLocationDraft() { locationDraft = emptyDraft(); editingAddressId = undefined; }
+export function getMarketplaceEditingAddressId() {
+  return editingAddressId;
+}
+export function clearMarketplaceLocationDraft() {
+  locationDraft = emptyDraft();
+  editingAddressId = undefined;
+}
 
 let fulfillmentMethod: "delivery" | "pickup" = "delivery";
 export const getMarketplaceFulfillment = () => fulfillmentMethod;
-export function setMarketplaceFulfillment(value: "delivery" | "pickup") { fulfillmentMethod = value; }
+export function setMarketplaceFulfillment(value: "delivery" | "pickup") {
+  fulfillmentMethod = value;
+}

@@ -27,17 +27,12 @@ import { ingredientEmojiFor } from "../../../shared/ingredient-icons";
 import { recipeTagKind } from "../recipe-tag-options";
 import { recipeImageUrl } from "../recipe-image";
 import { ScheduleSheet } from "../components/schedule-sheet";
-import type {
-  MealPlanCalendar,
-  MealPlanEntry,
-  MealSlot,
-} from "../../meal-planning/types";
+import type { MealPlanCalendar, MealPlanEntry, MealSlot } from "../../meal-planning/types";
 import { dateToIso } from "../../meal-planning/components/date-picker-sheet";
 
 const GREEN = palette.c19a95b;
-const runtimeProcess = (
-  globalThis as { process?: { env?: Record<string, string | undefined> } }
-).process;
+const runtimeProcess = (globalThis as { process?: { env?: Record<string, string | undefined> } })
+  .process;
 
 type InventoryList = { items: Array<{ name: string; expiry_date: string }> };
 type CookFlow =
@@ -58,9 +53,7 @@ const normalizeIngredient = (value: string) => {
     .replace(/\([^)]*\)/g, "")
     .replace(/[^a-z0-9]+/g, " ")
     .trim();
-  return normalized.length > 3 && normalized.endsWith("s")
-    ? normalized.slice(0, -1)
-    : normalized;
+  return normalized.length > 3 && normalized.endsWith("s") ? normalized.slice(0, -1) : normalized;
 };
 const fallbackMealSlot = (minutes: number): MealSlot =>
   minutes >= 300 && minutes < 660
@@ -72,14 +65,11 @@ const inferMealSlot = (items: MealPlanEntry[], minutes: number): MealSlot => {
   const timed = items
     .filter(
       (item): item is MealPlanEntry & { scheduled_time: string } =>
-        Boolean(item.scheduled_time) &&
-        ["breakfast", "lunch", "dinner"].includes(item.meal_slot),
+        Boolean(item.scheduled_time) && ["breakfast", "lunch", "dinner"].includes(item.meal_slot),
     )
     .map((item) => ({
       slot: item.meal_slot,
-      time:
-        Number(item.scheduled_time.slice(0, 2)) * 60 +
-        Number(item.scheduled_time.slice(3, 5)),
+      time: Number(item.scheduled_time.slice(0, 2)) * 60 + Number(item.scheduled_time.slice(3, 5)),
     }))
     .sort((a, b) => a.time - b.time);
   if (!timed.length) return fallbackMealSlot(minutes);
@@ -97,10 +87,7 @@ export function RecipeDetailScreen() {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation();
   const { user } = useAuth();
-  const api = useMemo(
-    () => createMobileApi(apiBaseUrl, () => user?.getIdToken()),
-    [user],
-  );
+  const api = useMemo(() => createMobileApi(apiBaseUrl, () => user?.getIdToken()), [user]);
   const [recipe, setRecipe] = useState<RecipeDetail>();
   const [imageFailed, setImageFailed] = useState(false);
   const [error, setError] = useState<string>();
@@ -134,9 +121,7 @@ export function RecipeDetailScreen() {
       setImageFailed(false);
     } catch (nextError) {
       setError(
-        nextError instanceof Error
-          ? nextError.message
-          : "Recipe details could not be loaded.",
+        nextError instanceof Error ? nextError.message : "Recipe details could not be loaded.",
       );
     }
   }
@@ -149,18 +134,13 @@ export function RecipeDetailScreen() {
     [navigation, api, recipeId],
   );
   useEffect(() => {
-    if (
-      recipe &&
-      cookNow === "1" &&
-      cookLaunchHandledRef.current !== recipe.id
-    ) {
+    if (recipe && cookNow === "1" && cookLaunchHandledRef.current !== recipe.id) {
       cookLaunchHandledRef.current = recipe.id;
       setCookFlow({ kind: "confirm" });
     }
   }, [recipe, cookNow]);
   const loadPlannedMeals = useCallback(
-    async (date: string) =>
-      (await api.getMyMealPlan<MealPlanCalendar>(date, 1)).items,
+    async (date: string) => (await api.getMyMealPlan<MealPlanCalendar>(date, 1)).items,
     [api],
   );
 
@@ -171,15 +151,11 @@ export function RecipeDetailScreen() {
     try {
       await api.setRecipeFavourite(recipe.id, next);
     } catch (nextError) {
-      setRecipe((current) =>
-        current ? { ...current, is_favourite: !next } : current,
-      );
+      setRecipe((current) => (current ? { ...current, is_favourite: !next } : current));
       setFeedback({
         title: "Favourite not updated",
         message:
-          nextError instanceof Error
-            ? nextError.message
-            : "The favourite could not be updated.",
+          nextError instanceof Error ? nextError.message : "The favourite could not be updated.",
         tone: "error",
       });
     }
@@ -197,16 +173,34 @@ export function RecipeDetailScreen() {
     setFlagging(true);
     try {
       await api.flagRecipeReview(recipe.id, flagReviewId, flagDescription.trim());
-      setFlagReviewId(undefined); setFlagDescription("");
+      setFlagReviewId(undefined);
+      setFlagDescription("");
       await loadRecipe();
-      setFeedback({ title: "Feedback flagged", message: "A moderator will review your explanation. You and the reviewer will be told the outcome.", tone: "success" });
+      setFeedback({
+        title: "Feedback flagged",
+        message:
+          "A moderator will review your explanation. You and the reviewer will be told the outcome.",
+        tone: "success",
+      });
     } catch (reason) {
-      setFeedback({ title: "Flag not submitted", message: reason instanceof Error ? reason.message : "The feedback could not be flagged.", tone: "error" });
-    } finally { setFlagging(false); }
+      setFeedback({
+        title: "Flag not submitted",
+        message: reason instanceof Error ? reason.message : "The feedback could not be flagged.",
+        tone: "error",
+      });
+    } finally {
+      setFlagging(false);
+    }
   }
   async function submitReview() {
     if (!recipe || reviewing) return;
-    if (!recipe.can_review) { setReviewError(recipe.review_eligibility_reason ?? "Use Cook Now or schedule this recipe before reviewing it."); return; }
+    if (!recipe.can_review) {
+      setReviewError(
+        recipe.review_eligibility_reason ??
+          "Use Cook Now or schedule this recipe before reviewing it.",
+      );
+      return;
+    }
     if (reviewRating < 1) {
       setReviewError("Choose a star rating before submitting.");
       return;
@@ -223,15 +217,12 @@ export function RecipeDetailScreen() {
       setReviewComment("");
       setFeedback({
         title: "Review submitted",
-        message:
-          "Your review has been added. Thank you for sharing your experience!",
+        message: "Your review has been added. Thank you for sharing your experience!",
         tone: "success",
       });
     } catch (nextError) {
       setReviewError(
-        nextError instanceof Error
-          ? nextError.message
-          : "Your review could not be submitted.",
+        nextError instanceof Error ? nextError.message : "Your review could not be submitted.",
       );
     } finally {
       setReviewing(false);
@@ -242,7 +233,11 @@ export function RecipeDetailScreen() {
     setCookFlow({ kind: "checking" });
     try {
       await api.startRecipeCooking(recipe.id);
-      setRecipe((current) => current && (!current.my_feedback_status || current.my_feedback_status === "unverified") ? { ...current, can_review: true } : current);
+      setRecipe((current) =>
+        current && (!current.my_feedback_status || current.my_feedback_status === "unverified")
+          ? { ...current, can_review: true }
+          : current,
+      );
       const inventory = await api.getMyInventory<InventoryList>();
       const todayStart = new Date();
       todayStart.setHours(0, 0, 0, 0);
@@ -279,10 +274,7 @@ export function RecipeDetailScreen() {
       const scheduledDate = dateToIso(now);
       const scheduledTime = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
       const plan = await api.getMyMealPlan<MealPlanCalendar>(scheduledDate, 1);
-      const slot = inferMealSlot(
-        plan.items,
-        now.getHours() * 60 + now.getMinutes(),
-      );
+      const slot = inferMealSlot(plan.items, now.getHours() * 60 + now.getMinutes());
       await api.scheduleRecipe(recipe.id, {
         scheduled_date: scheduledDate,
         meal_slot: slot,
@@ -352,9 +344,7 @@ export function RecipeDetailScreen() {
     (warning) => !warning.startsWith("Contains "),
   );
   const matchedAllergens = new Set(
-    allergyWarnings.map((warning) =>
-      warning.slice("Contains ".length).toLowerCase(),
-    ),
+    allergyWarnings.map((warning) => warning.slice("Contains ".length).toLowerCase()),
   );
   const orderedAllergens = [...recipe.allergen_tags].sort(
     (first, second) =>
@@ -381,16 +371,8 @@ export function RecipeDetailScreen() {
               <Text style={styles.emoji}>🍽️</Text>
             </View>
           )}
-          <View
-            style={[
-              styles.topActions,
-              { paddingTop: insets.top + PAGE_TOP_GAP },
-            ]}
-          >
-            <Pressable
-              style={styles.circle}
-              onPress={() => goBackOrReplace("/(tabs)/recipes")}
-            >
+          <View style={[styles.topActions, { paddingTop: insets.top + PAGE_TOP_GAP }]}>
+            <Pressable style={styles.circle} onPress={() => goBackOrReplace("/(tabs)/recipes")}>
               <Ionicons name="chevron-back" size={23} color={palette.c294036} />
             </Pressable>
             <View style={styles.rightActions}>
@@ -405,11 +387,7 @@ export function RecipeDetailScreen() {
                     })
                   }
                 >
-                  <Ionicons
-                    name="pencil-outline"
-                    size={21}
-                    color={palette.c294036}
-                  />
+                  <Ionicons name="pencil-outline" size={21} color={palette.c294036} />
                 </Pressable>
               )}
               <Pressable
@@ -417,28 +395,18 @@ export function RecipeDetailScreen() {
                 style={styles.circle}
                 onPress={() => void shareRecipe()}
               >
-                <Ionicons
-                  name="share-social-outline"
-                  size={21}
-                  color={palette.c294036}
-                />
+                <Ionicons name="share-social-outline" size={21} color={palette.c294036} />
               </Pressable>
               <Pressable
                 accessibilityLabel="Report recipe"
                 style={styles.circle}
                 onPress={() => setReportOpen(true)}
               >
-                <Ionicons
-                  name="flag-outline"
-                  size={21}
-                  color={palette.c294036}
-                />
+                <Ionicons name="flag-outline" size={21} color={palette.c294036} />
               </Pressable>
               <Pressable
                 accessibilityLabel={
-                  recipe.is_favourite
-                    ? "Remove from favourites"
-                    : "Add to favourites"
+                  recipe.is_favourite ? "Remove from favourites" : "Add to favourites"
                 }
                 style={styles.circle}
                 onPress={() => void toggleFavourite()}
@@ -446,9 +414,7 @@ export function RecipeDetailScreen() {
                 <Ionicons
                   name={recipe.is_favourite ? "heart" : "heart-outline"}
                   size={23}
-                  color={
-                    recipe.is_favourite ? palette.ce25252 : palette.c294036
-                  }
+                  color={recipe.is_favourite ? palette.ce25252 : palette.c294036}
                 />
               </Pressable>
             </View>
@@ -457,9 +423,7 @@ export function RecipeDetailScreen() {
         <View style={styles.body}>
           <Text style={styles.title}>{recipe.title}</Text>
           {(recipe.summary || recipe.cuisine) && (
-            <Text style={styles.summary}>
-              {recipe.summary ?? recipe.cuisine}
-            </Text>
+            <Text style={styles.summary}>{recipe.summary ?? recipe.cuisine}</Text>
           )}
           <Text style={styles.author}>By {recipe.author_name}</Text>
           <View style={styles.tags}>
@@ -484,11 +448,7 @@ export function RecipeDetailScreen() {
           </View>
           {suitabilityWarnings.length > 0 && (
             <View style={styles.alert}>
-              <Ionicons
-                name="warning-outline"
-                size={22}
-                color={palette.ca46100}
-              />
+              <Ionicons name="warning-outline" size={22} color={palette.ca46100} />
               <View style={styles.alertBody}>
                 <Text style={styles.alertTitle}>Check before cooking</Text>
                 {suitabilityWarnings.map((warning) => (
@@ -500,21 +460,9 @@ export function RecipeDetailScreen() {
             </View>
           )}
           <View style={styles.stats}>
-            <Stat
-              icon="time-outline"
-              value={`${recipe.total_time} min`}
-              label="Total"
-            />
-            <Stat
-              icon="people-outline"
-              value={`${recipe.servings ?? "-"} pax`}
-              label="Servings"
-            />
-            <Stat
-              icon="speedometer-outline"
-              value={recipe.difficulty}
-              label="Level"
-            />
+            <Stat icon="time-outline" value={`${recipe.total_time} min`} label="Total" />
+            <Stat icon="people-outline" value={`${recipe.servings ?? "-"} pax`} label="Servings" />
+            <Stat icon="speedometer-outline" value={recipe.difficulty} label="Level" />
           </View>
           {nutrition.length > 0 && (
             <>
@@ -535,15 +483,12 @@ export function RecipeDetailScreen() {
               <View
                 style={[
                   allergenDetailStyles.card,
-                  allergyWarnings.length > 0 &&
-                    allergenDetailStyles.cardWarning,
+                  allergyWarnings.length > 0 && allergenDetailStyles.cardWarning,
                 ]}
               >
                 <View style={allergenDetailStyles.tags}>
                   {orderedAllergens.map((allergen) => {
-                    const matched = matchedAllergens.has(
-                      allergen.toLowerCase(),
-                    );
+                    const matched = matchedAllergens.has(allergen.toLowerCase());
                     return (
                       <View
                         key={allergen}
@@ -571,20 +516,13 @@ export function RecipeDetailScreen() {
                 </View>
                 {allergyWarnings.length > 0 && (
                   <View style={allergenDetailStyles.warning}>
-                    <Ionicons
-                      name="warning"
-                      size={20}
-                      color={palette.cc23f48}
-                    />
+                    <Ionicons name="warning" size={20} color={palette.cc23f48} />
                     <View style={allergenDetailStyles.warningCopy}>
                       <Text style={allergenDetailStyles.warningTitle}>
                         Matches your allergy profile
                       </Text>
                       {allergyWarnings.map((warning) => (
-                        <Text
-                          key={warning}
-                          style={allergenDetailStyles.warningText}
-                        >
+                        <Text key={warning} style={allergenDetailStyles.warningText}>
                           • {warning}
                         </Text>
                       ))}
@@ -594,15 +532,9 @@ export function RecipeDetailScreen() {
               </View>
             </>
           )}
-          <SectionTitle
-            title="Ingredients"
-            subtitle={`${recipe.ingredients.length} items`}
-          />
+          <SectionTitle title="Ingredients" subtitle={`${recipe.ingredients.length} items`} />
           {recipe.ingredients.map((ingredient) => (
-            <View
-              key={`${ingredient.name}-${ingredient.quantity}`}
-              style={styles.ingredient}
-            >
+            <View key={`${ingredient.name}-${ingredient.quantity}`} style={styles.ingredient}>
               <View style={styles.check}>
                 <Text style={styles.ingredientEmoji}>
                   {ingredient.icon ?? ingredientEmojiFor(ingredient.name)}
@@ -612,10 +544,7 @@ export function RecipeDetailScreen() {
               <Text style={styles.quantity}>{ingredient.quantity}</Text>
             </View>
           ))}
-          <SectionTitle
-            title="Directions"
-            subtitle={`${recipe.instructions.length} steps`}
-          />
+          <SectionTitle title="Directions" subtitle={`${recipe.instructions.length} steps`} />
           {recipe.instructions.map((instruction, index) => (
             <View key={`${index}-${instruction}`} style={styles.step}>
               <View style={styles.stepNumber}>
@@ -626,14 +555,41 @@ export function RecipeDetailScreen() {
           ))}
           <SectionTitle
             title="Reviews"
-            subtitle={
-              recipe.reviews.length === 1
-                ? "1 review"
-                : `${recipe.reviews.length} reviews`
-            }
+            subtitle={recipe.reviews.length === 1 ? "1 review" : `${recipe.reviews.length} reviews`}
           />
-          {!recipe.is_owner && !recipe.can_review ? <View style={reviewStyles.form}><Text style={reviewStyles.formTitle}>{recipe.my_feedback_status === "unverified" ? "Earlier feedback saved privately" : recipe.my_feedback_status ? "Your feedback outcome" : "Try this recipe before reviewing"}</Text><Text style={reviewStyles.formCopy}>{recipe.review_eligibility_reason ?? "Use Cook Now or add this recipe to your schedule to unlock feedback."}</Text>{recipe.my_feedback_status ? <Text style={reviewStyles.formCopy}>{recipe.my_feedback_status === "pending" ? "Awaiting moderation" : recipe.my_feedback_status === "removed" ? "Feedback removed" : recipe.my_feedback_status === "unverified" ? "Not included in public reviews or ratings" : "Feedback kept"}{recipe.my_feedback_resolution ? `: ${recipe.my_feedback_resolution}` : ""}</Text> : null}</View> : null}
-          {!recipe.is_owner && recipe.can_review && recipe.my_feedback_status === "unverified" ? <Text style={reviewStyles.formCopy}>Your earlier feedback is saved below. Review and resubmit it to publish it after your recorded cooking or scheduling action.</Text> : null}
+          {!recipe.is_owner && !recipe.can_review ? (
+            <View style={reviewStyles.form}>
+              <Text style={reviewStyles.formTitle}>
+                {recipe.my_feedback_status === "unverified"
+                  ? "Earlier feedback saved privately"
+                  : recipe.my_feedback_status
+                    ? "Your feedback outcome"
+                    : "Try this recipe before reviewing"}
+              </Text>
+              <Text style={reviewStyles.formCopy}>
+                {recipe.review_eligibility_reason ??
+                  "Use Cook Now or add this recipe to your schedule to unlock feedback."}
+              </Text>
+              {recipe.my_feedback_status ? (
+                <Text style={reviewStyles.formCopy}>
+                  {recipe.my_feedback_status === "pending"
+                    ? "Awaiting moderation"
+                    : recipe.my_feedback_status === "removed"
+                      ? "Feedback removed"
+                      : recipe.my_feedback_status === "unverified"
+                        ? "Not included in public reviews or ratings"
+                        : "Feedback kept"}
+                  {recipe.my_feedback_resolution ? `: ${recipe.my_feedback_resolution}` : ""}
+                </Text>
+              ) : null}
+            </View>
+          ) : null}
+          {!recipe.is_owner && recipe.can_review && recipe.my_feedback_status === "unverified" ? (
+            <Text style={reviewStyles.formCopy}>
+              Your earlier feedback is saved below. Review and resubmit it to publish it after your
+              recorded cooking or scheduling action.
+            </Text>
+          ) : null}
           {!recipe.is_owner && recipe.can_review && (
             <View style={reviewStyles.form}>
               <View style={reviewStyles.formHeading}>
@@ -643,11 +599,7 @@ export function RecipeDetailScreen() {
                     How was your experience with this recipe?
                   </Text>
                 </View>
-                <Ionicons
-                  name="chatbubble-ellipses-outline"
-                  size={22}
-                  color={GREEN}
-                />
+                <Ionicons name="chatbubble-ellipses-outline" size={22} color={GREEN} />
               </View>
               <View style={reviewStyles.ratingPicker}>
                 {[1, 2, 3, 4, 5].map((rating) => (
@@ -664,11 +616,7 @@ export function RecipeDetailScreen() {
                     <Ionicons
                       name={rating <= reviewRating ? "star" : "star-outline"}
                       size={31}
-                      color={
-                        rating <= reviewRating
-                          ? palette.cf5a623
-                          : palette.caeb7b2
-                      }
+                      color={rating <= reviewRating ? palette.cf5a623 : palette.caeb7b2}
                     />
                   </Pressable>
                 ))}
@@ -684,9 +632,7 @@ export function RecipeDetailScreen() {
                 style={reviewStyles.input}
               />
               <View style={reviewStyles.formFooter}>
-                <Text style={reviewStyles.counter}>
-                  {reviewComment.length}/500
-                </Text>
+                <Text style={reviewStyles.counter}>{reviewComment.length}/500</Text>
                 <Pressable
                   disabled={reviewing}
                   onPress={() => void submitReview()}
@@ -699,11 +645,7 @@ export function RecipeDetailScreen() {
                     <ActivityIndicator size="small" color={palette.cfff} />
                   ) : (
                     <>
-                      <Ionicons
-                        name="send-outline"
-                        size={16}
-                        color={palette.cfff}
-                      />
+                      <Ionicons name="send-outline" size={16} color={palette.cfff} />
                       <Text style={reviewStyles.submitText}>Submit review</Text>
                     </>
                   )}
@@ -711,11 +653,7 @@ export function RecipeDetailScreen() {
               </View>
               {reviewError && (
                 <View style={reviewStyles.formError}>
-                  <Ionicons
-                    name="alert-circle-outline"
-                    size={15}
-                    color={palette.cb42331}
-                  />
+                  <Ionicons name="alert-circle-outline" size={15} color={palette.cb42331} />
                   <Text style={reviewStyles.formErrorText}>{reviewError}</Text>
                 </View>
               )}
@@ -728,8 +666,7 @@ export function RecipeDetailScreen() {
                   key={review.id}
                   style={[
                     reviewStyles.entry,
-                    index < recipe.reviews.length - 1 &&
-                      reviewStyles.entryBorder,
+                    index < recipe.reviews.length - 1 && reviewStyles.entryBorder,
                   ]}
                 >
                   <View style={reviewStyles.avatar}>
@@ -746,26 +683,35 @@ export function RecipeDetailScreen() {
                     </View>
                     <Text style={reviewStyles.stars}>
                       {"★".repeat(review.rating)}
-                      <Text style={reviewStyles.emptyStars}>
-                        {"★".repeat(5 - review.rating)}
-                      </Text>
+                      <Text style={reviewStyles.emptyStars}>{"★".repeat(5 - review.rating)}</Text>
                     </Text>
-                    {review.comment && (
-                      <Text style={reviewStyles.comment}>{review.comment}</Text>
-                    )}
-                    {(recipe.is_owner || review.is_mine) && review.flag_status ? <Text style={reviewStyles.formCopy}>{review.flag_status === "pending" ? "Author flag awaiting moderator review" : "Moderator kept this feedback"}{review.flag_resolution ? `: ${review.flag_resolution}` : ""}</Text> : null}
-                    {review.can_flag ? <Pressable accessibilityRole="button" onPress={() => { setFlagReviewId(review.id); setFlagDescription(""); }}><Text style={reviewStyles.formCopy}>Flag inaccurate feedback</Text></Pressable> : null}
+                    {review.comment && <Text style={reviewStyles.comment}>{review.comment}</Text>}
+                    {(recipe.is_owner || review.is_mine) && review.flag_status ? (
+                      <Text style={reviewStyles.formCopy}>
+                        {review.flag_status === "pending"
+                          ? "Author flag awaiting moderator review"
+                          : "Moderator kept this feedback"}
+                        {review.flag_resolution ? `: ${review.flag_resolution}` : ""}
+                      </Text>
+                    ) : null}
+                    {review.can_flag ? (
+                      <Pressable
+                        accessibilityRole="button"
+                        onPress={() => {
+                          setFlagReviewId(review.id);
+                          setFlagDescription("");
+                        }}
+                      >
+                        <Text style={reviewStyles.formCopy}>Flag inaccurate feedback</Text>
+                      </Pressable>
+                    ) : null}
                   </View>
                 </View>
               ))}
             </View>
           ) : (
             <View style={reviewStyles.empty}>
-              <Ionicons
-                name="chatbubble-ellipses-outline"
-                size={23}
-                color={palette.c8a958f}
-              />
+              <Ionicons name="chatbubble-ellipses-outline" size={23} color={palette.c8a958f} />
               <Text style={reviewStyles.emptyTitle}>No reviews yet</Text>
               <Text style={reviewStyles.emptyCopy}>
                 Be the first to share your experience with this recipe.
@@ -774,27 +720,21 @@ export function RecipeDetailScreen() {
           )}
           {recipe.is_owner && recipe.edit_log.length > 0 && (
             <>
-              <SectionTitle
-                title="Edit History"
-                subtitle={`${recipe.edit_log.length} recent`}
-              />
+              <SectionTitle title="Edit History" subtitle={`${recipe.edit_log.length} recent`} />
               <View style={editHistoryStyles.card}>
                 {recipe.edit_log.map((log, index) => (
                   <View
                     key={log.edited_at}
                     style={[
                       editHistoryStyles.entry,
-                      index < recipe.edit_log.length - 1 &&
-                        editHistoryStyles.entryBorder,
+                      index < recipe.edit_log.length - 1 && editHistoryStyles.entryBorder,
                     ]}
                   >
                     <View style={editHistoryStyles.marker}>
                       <Ionicons name="pencil-outline" size={14} color={GREEN} />
                     </View>
                     <View style={editHistoryStyles.copy}>
-                      <Text style={editHistoryStyles.subjects}>
-                        {log.subjects.join(" · ")}
-                      </Text>
+                      <Text style={editHistoryStyles.subjects}>{log.subjects.join(" · ")}</Text>
                       <Text style={editHistoryStyles.date}>
                         {new Date(log.edited_at).toLocaleString()}
                       </Text>
@@ -806,12 +746,7 @@ export function RecipeDetailScreen() {
           )}
         </View>
       </ScrollView>
-      <View
-        style={[
-          bottomActionStyles.bar,
-          { paddingBottom: Math.max(insets.bottom, 12) },
-        ]}
-      >
+      <View style={[bottomActionStyles.bar, { paddingBottom: Math.max(insets.bottom, 12) }]}>
         <Pressable
           accessibilityRole="button"
           style={({ pressed }) => [
@@ -825,29 +760,66 @@ export function RecipeDetailScreen() {
         </Pressable>
         <Pressable
           accessibilityRole="button"
-          style={({ pressed }) => [
-            bottomActionStyles.cook,
-            pressed && bottomActionStyles.pressed,
-          ]}
+          style={({ pressed }) => [bottomActionStyles.cook, pressed && bottomActionStyles.pressed]}
           onPress={() => setCookFlow({ kind: "confirm" })}
         >
-          <MaterialCommunityIcons
-            name="chef-hat"
-            size={20}
-            color={palette.cfff}
-          />
+          <MaterialCommunityIcons name="chef-hat" size={20} color={palette.cfff} />
           <Text style={bottomActionStyles.cookText}>Cook Now</Text>
         </Pressable>
       </View>
-      <ContentReportSheet visible={reportOpen} onClose={() => setReportOpen(false)} subjectType="recipe" subjectId={recipe.id} subjectName={recipe.title}/>
-      <Modal visible={!!flagReviewId} transparent animationType="fade" onRequestClose={() => { if (!flagging) setFlagReviewId(undefined); }}>
-        <View style={reportStyles.overlay}><View style={reportStyles.card}>
-          <Text style={reportStyles.title}>Flag inaccurate feedback</Text>
-          <Text style={reportStyles.copy}>Explain the accusation and why you believe it is incorrect. The feedback stays visible until a moderator decides.</Text>
-          <TextInput accessibilityLabel="Explanation for moderator" multiline maxLength={2000} value={flagDescription} onChangeText={setFlagDescription} style={reviewStyles.input} placeholder="Describe the inaccuracy in at least 10 characters" placeholderTextColor={colors.textSubtle}/>
-          <Pressable disabled={flagging || flagDescription.trim().length < 10} onPress={() => void submitFeedbackFlag()} style={[reportStyles.submit, (flagging || flagDescription.trim().length < 10) && reportStyles.submitDisabled]}><Text style={reportStyles.submitText}>{flagging ? "Submitting…" : "Send to moderator"}</Text></Pressable>
-          <Pressable disabled={flagging} onPress={() => setFlagReviewId(undefined)} style={reportStyles.close}><Text style={reviewStyles.formCopy}>Cancel</Text></Pressable>
-        </View></View>
+      <ContentReportSheet
+        visible={reportOpen}
+        onClose={() => setReportOpen(false)}
+        subjectType="recipe"
+        subjectId={recipe.id}
+        subjectName={recipe.title}
+      />
+      <Modal
+        visible={!!flagReviewId}
+        transparent
+        animationType="fade"
+        onRequestClose={() => {
+          if (!flagging) setFlagReviewId(undefined);
+        }}
+      >
+        <View style={reportStyles.overlay}>
+          <View style={reportStyles.card}>
+            <Text style={reportStyles.title}>Flag inaccurate feedback</Text>
+            <Text style={reportStyles.copy}>
+              Explain the accusation and why you believe it is incorrect. The feedback stays visible
+              until a moderator decides.
+            </Text>
+            <TextInput
+              accessibilityLabel="Explanation for moderator"
+              multiline
+              maxLength={2000}
+              value={flagDescription}
+              onChangeText={setFlagDescription}
+              style={reviewStyles.input}
+              placeholder="Describe the inaccuracy in at least 10 characters"
+              placeholderTextColor={colors.textSubtle}
+            />
+            <Pressable
+              disabled={flagging || flagDescription.trim().length < 10}
+              onPress={() => void submitFeedbackFlag()}
+              style={[
+                reportStyles.submit,
+                (flagging || flagDescription.trim().length < 10) && reportStyles.submitDisabled,
+              ]}
+            >
+              <Text style={reportStyles.submitText}>
+                {flagging ? "Submitting…" : "Send to moderator"}
+              </Text>
+            </Pressable>
+            <Pressable
+              disabled={flagging}
+              onPress={() => setFlagReviewId(undefined)}
+              style={reportStyles.close}
+            >
+              <Text style={reviewStyles.formCopy}>Cancel</Text>
+            </Pressable>
+          </View>
+        </View>
       </Modal>
       <ScheduleSheet
         recipe={scheduleOpen ? recipe : undefined}
@@ -916,13 +888,7 @@ function Stat({
     </View>
   );
 }
-function SectionTitle({
-  title,
-  subtitle,
-}: {
-  title: string;
-  subtitle: string;
-}) {
+function SectionTitle({ title, subtitle }: { title: string; subtitle: string }) {
   return (
     <View style={styles.sectionHeading}>
       <Text style={styles.sectionTitle}>{title}</Text>
@@ -930,14 +896,7 @@ function SectionTitle({
     </View>
   );
 }
-function NutritionTile({
-  name,
-  value,
-}: {
-  name: string;
-  value: number;
-  key?: string;
-}) {
+function NutritionTile({ name, value }: { name: string; value: number; key?: string }) {
   const data: Record<
     string,
     {
@@ -1000,12 +959,7 @@ function NutritionTile({
   };
   return (
     <View style={[nutritionStyles.tile, { backgroundColor: item.background }]}>
-      <View
-        style={[
-          nutritionStyles.tileIcon,
-          { backgroundColor: `${item.color}18` },
-        ]}
-      >
+      <View style={[nutritionStyles.tileIcon, { backgroundColor: `${item.color}18` }]}>
         <Ionicons name={item.icon} size={17} color={item.color} />
       </View>
       <View>
@@ -1059,10 +1013,7 @@ function CookNowModal({
       <View style={cookFlowStyles.overlay}>
         <View style={cookFlowStyles.card}>
           <View
-            style={[
-              cookFlowStyles.icon,
-              flow?.kind === "missing" && cookFlowStyles.warningIcon,
-            ]}
+            style={[cookFlowStyles.icon, flow?.kind === "missing" && cookFlowStyles.warningIcon]}
           >
             {busy ? (
               <ActivityIndicator color={GREEN} />
@@ -1083,8 +1034,7 @@ function CookNowModal({
           <Text style={cookFlowStyles.title}>{title}</Text>
           {flow?.kind === "confirm" && (
             <Text style={cookFlowStyles.copy}>
-              EcoChef will check whether your kitchen has everything required
-              for {recipeTitle}.
+              EcoChef will check whether your kitchen has everything required for {recipeTitle}.
             </Text>
           )}
           {flow?.kind === "checking" && (
@@ -1094,8 +1044,8 @@ function CookNowModal({
           )}
           {flow?.kind === "deduction" && (
             <Text style={cookFlowStyles.copy}>
-              Should EcoChef deduct compatible recipe quantities from your
-              Ingredient List when you finish cooking?
+              Should EcoChef deduct compatible recipe quantities from your Ingredient List when you
+              finish cooking?
             </Text>
           )}
           {flow?.kind === "scheduling" && (
@@ -1112,18 +1062,12 @@ function CookNowModal({
               >
                 {missing.map((name) => (
                   <View key={name} style={cookFlowStyles.missingRow}>
-                    <Ionicons
-                      name="close-circle-outline"
-                      size={16}
-                      color={palette.cb66a22}
-                    />
+                    <Ionicons name="close-circle-outline" size={16} color={palette.cb66a22} />
                     <Text style={cookFlowStyles.missingText}>{name}</Text>
                   </View>
                 ))}
               </ScrollView>
-              <Text style={cookFlowStyles.question}>
-                Add this recipe to your schedule instead?
-              </Text>
+              <Text style={cookFlowStyles.question}>Add this recipe to your schedule instead?</Text>
             </>
           )}
           {flow?.kind === "scheduled" && (
@@ -1147,21 +1091,11 @@ function CookNowModal({
           )}
           {flow?.kind === "deduction" && (
             <>
-              <Pressable
-                style={cookFlowStyles.primary}
-                onPress={() => onDeductionChoice(true)}
-              >
-                <Text style={cookFlowStyles.primaryText}>
-                  Automatically deduct ingredients
-                </Text>
+              <Pressable style={cookFlowStyles.primary} onPress={() => onDeductionChoice(true)}>
+                <Text style={cookFlowStyles.primaryText}>Automatically deduct ingredients</Text>
               </Pressable>
-              <Pressable
-                style={cookFlowStyles.secondary}
-                onPress={() => onDeductionChoice(false)}
-              >
-                <Text style={cookFlowStyles.secondaryText}>
-                  View cooking mode only
-                </Text>
+              <Pressable style={cookFlowStyles.secondary} onPress={() => onDeductionChoice(false)}>
+                <Text style={cookFlowStyles.secondaryText}>View cooking mode only</Text>
               </Pressable>
               <Pressable style={cookFlowStyles.cancel} onPress={onClose}>
                 <Text style={cookFlowStyles.cancelText}>Cancel cooking</Text>
@@ -1183,9 +1117,7 @@ function CookNowModal({
               style={cookFlowStyles.primary}
               onPress={() => onStartCooking(flow.deductIngredients)}
             >
-              <Text style={cookFlowStyles.primaryText}>
-                Continue to cooking
-              </Text>
+              <Text style={cookFlowStyles.primaryText}>Continue to cooking</Text>
             </Pressable>
           )}
         </View>

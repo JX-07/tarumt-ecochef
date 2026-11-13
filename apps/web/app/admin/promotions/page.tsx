@@ -1,2 +1,4 @@
 import { AdminWorkspace } from "../components/admin-workspace";
-export default function Page() { return <AdminWorkspace page="promotions" />; }
+export default function Page() {
+  return <AdminWorkspace page="promotions" />;
+}

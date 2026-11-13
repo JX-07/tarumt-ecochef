@@ -73,28 +73,41 @@ const searchScore = (product: MarketplaceProduct, query: string) => {
 
 export const recommendedProducts = (products: MarketplaceProduct[], query: string, limit = 10) => {
   const term = query.trim();
-  if (!term) return [...products]
-    .sort((a, b) => b.discount_percent - a.discount_percent || a.name.localeCompare(b.name))
-    .slice(0, Math.min(8, limit));
+  if (!term)
+    return [...products]
+      .sort((a, b) => b.discount_percent - a.discount_percent || a.name.localeCompare(b.name))
+      .slice(0, Math.min(8, limit));
   const ranked = products
     .map((product) => ({ product, score: searchScore(product, term) }))
     .sort((a, b) => b.score - a.score || a.product.name.localeCompare(b.product.name));
   const matches = ranked.filter((result) => result.score > 0).map((result) => result.product);
   if (!matches.length) return [];
-  const relatedCategories = new Set(matches.reduce<string[]>((values, product) => [...values, productCategory(product), productSubcategory(product)], []));
+  const relatedCategories = new Set(
+    matches.reduce<string[]>(
+      (values, product) => [...values, productCategory(product), productSubcategory(product)],
+      [],
+    ),
+  );
   const related = ranked
-    .filter((result) => result.score === 0 && (relatedCategories.has(productCategory(result.product)) || relatedCategories.has(productSubcategory(result.product))))
+    .filter(
+      (result) =>
+        result.score === 0 &&
+        (relatedCategories.has(productCategory(result.product)) ||
+          relatedCategories.has(productSubcategory(result.product))),
+    )
     .map((result) => result.product);
   const suggested = [...matches, ...related];
   if (suggested.length < 6) {
     const used = new Set(suggested.map((product) => product.id));
-    suggested.push(...ranked.filter((result) => !used.has(result.product.id)).map((result) => result.product));
+    suggested.push(
+      ...ranked.filter((result) => !used.has(result.product.id)).map((result) => result.product),
+    );
   }
   return suggested.slice(0, limit);
 };
 
-export const discountedProducts = (products: MarketplaceProduct[]) => products
-  .filter((product) => product.discount_percent > 0)
-  .sort((a, b) => b.discount_percent - a.discount_percent || a.name.localeCompare(b.name))
-  .slice(0, 10);
-
+export const discountedProducts = (products: MarketplaceProduct[]) =>
+  products
+    .filter((product) => product.discount_percent > 0)
+    .sort((a, b) => b.discount_percent - a.discount_percent || a.name.localeCompare(b.name))
+    .slice(0, 10);

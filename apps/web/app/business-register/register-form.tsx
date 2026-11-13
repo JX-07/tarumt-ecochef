@@ -7,7 +7,11 @@ import { CheckCircle2, Eye, EyeOff, Lock, Mail, Store, User } from "lucide-react
 
 import { ApiClientError } from "@ecochef/api-client";
 
-import { sendVerificationForCurrentUser, signInWithEmail, signOutCurrentUser } from "../../src/lib/auth";
+import {
+  sendVerificationForCurrentUser,
+  signInWithEmail,
+  signOutCurrentUser,
+} from "../../src/lib/auth";
 import { createWebApi } from "../../src/lib/api";
 
 type FormStatus = "idle" | "submitting" | "success" | "error";
@@ -117,7 +121,9 @@ export function BusinessRegisterForm() {
     }
     if (availability === "unavailable") {
       setStatus("error");
-      setMessage("This email is no longer available. Enter another work email and check its availability.");
+      setMessage(
+        "This email is no longer available. Enter another work email and check its availability.",
+      );
       return;
     }
     if (availability === "error") {
@@ -137,7 +143,9 @@ export function BusinessRegisterForm() {
     }
     if (!isValidPassword(password)) {
       setStatus("error");
-      setMessage("Your password must include one uppercase letter, one lowercase letter, one number, and one symbol.");
+      setMessage(
+        "Your password must include one uppercase letter, one lowercase letter, one number, and one symbol.",
+      );
       return;
     }
     if (password !== confirmPassword) {
@@ -153,9 +161,7 @@ export function BusinessRegisterForm() {
 
     setStatus("submitting");
     try {
-      const api = createWebApi(
-        "/api/ecochef",
-      );
+      const api = createWebApi("/api/ecochef");
       await api.registerBusinessOwner({
         name: ownerName.trim(),
         email: email.trim(),
@@ -199,7 +205,9 @@ export function BusinessRegisterForm() {
     setMessage("");
     setAvailability("checking");
     try {
-      const result = await createWebApi("/api/ecochef").checkBusinessEmailAvailability({ email: email.trim() });
+      const result = await createWebApi("/api/ecochef").checkBusinessEmailAvailability({
+        email: email.trim(),
+      });
       setAvailability(result.available ? "available" : "unavailable");
     } catch {
       setAvailability("error");
@@ -208,11 +216,7 @@ export function BusinessRegisterForm() {
 
   return (
     <div className="portal-login business-registration">
-      <img
-        className="portal-logo"
-        src="/branding/ecochef-logo.png"
-        alt="EcoChef"
-      />
+      <img className="portal-logo" src="/branding/ecochef-logo.png" alt="EcoChef" />
       <section className="portal-card registration-card">
         <header className="registration-header">
           <span className="registration-icon">
@@ -229,16 +233,56 @@ export function BusinessRegisterForm() {
             <span className="email-availability-row">
               <span className="input-wrap">
                 <Mail size={16} aria-hidden="true" />
-                <input id="email" type="email" autoComplete="email" placeholder="you@yourbusiness.com" value={email} onChange={(event) => { setEmail(event.target.value); setAvailability("idle"); setStatus("idle"); setMessage(""); }} required />
+                <input
+                  id="email"
+                  type="email"
+                  autoComplete="email"
+                  placeholder="you@yourbusiness.com"
+                  value={email}
+                  onChange={(event) => {
+                    setEmail(event.target.value);
+                    setAvailability("idle");
+                    setStatus("idle");
+                    setMessage("");
+                  }}
+                  required
+                />
               </span>
-              <button className="availability-button" type="button" disabled={!isValidWorkEmail || availability === "checking"} onClick={() => void checkEmailAvailability()}>{availability === "checking" ? "Checking…" : "Check availability"}</button>
+              <button
+                className="availability-button"
+                type="button"
+                disabled={!isValidWorkEmail || availability === "checking"}
+                onClick={() => void checkEmailAvailability()}
+              >
+                {availability === "checking" ? "Checking…" : "Check availability"}
+              </button>
             </span>
           </label>
-          {email && !isValidWorkEmail && <p className="field-feedback" role="alert">Enter a valid work email address, for example name@business.com.</p>}
-          {isValidWorkEmail && availability === "idle" && <p className="field-feedback availability-prompt">Check whether this email is available before creating the account.</p>}
-          {availability === "available" && <p className="field-feedback available" role="status">This email is available.</p>}
-          {availability === "unavailable" && <p className="field-feedback" role="alert">This email is no longer available</p>}
-          {availability === "error" && isValidWorkEmail && <p className="field-feedback" role="alert">Email availability could not be checked. Please try again.</p>}
+          {email && !isValidWorkEmail && (
+            <p className="field-feedback" role="alert">
+              Enter a valid work email address, for example name@business.com.
+            </p>
+          )}
+          {isValidWorkEmail && availability === "idle" && (
+            <p className="field-feedback availability-prompt">
+              Check whether this email is available before creating the account.
+            </p>
+          )}
+          {availability === "available" && (
+            <p className="field-feedback available" role="status">
+              This email is available.
+            </p>
+          )}
+          {availability === "unavailable" && (
+            <p className="field-feedback" role="alert">
+              This email is no longer available
+            </p>
+          )}
+          {availability === "error" && isValidWorkEmail && (
+            <p className="field-feedback" role="alert">
+              Email availability could not be checked. Please try again.
+            </p>
+          )}
           {inputFields.map(({ id, label, placeholder, icon: Icon, type }) => (
             <label key={id} htmlFor={id}>
               {label}
@@ -292,12 +336,19 @@ export function BusinessRegisterForm() {
                 aria-valuetext={passwordStrength.label}
               >
                 {[1, 2, 3, 4].map((segment) => (
-                  <span key={segment} className={segment <= passwordStrength.level ? "active" : ""} />
+                  <span
+                    key={segment}
+                    className={segment <= passwordStrength.level ? "active" : ""}
+                  />
                 ))}
               </div>
               <p>
-                <span>Password strength: <strong>{passwordStrength.label}</strong></span>
-                <small>Use 8 or more characters with uppercase, lowercase, a number, and a symbol.</small>
+                <span>
+                  Password strength: <strong>{passwordStrength.label}</strong>
+                </span>
+                <small>
+                  Use 8 or more characters with uppercase, lowercase, a number, and a symbol.
+                </small>
               </p>
             </div>
           )}
@@ -318,29 +369,40 @@ export function BusinessRegisterForm() {
                 className="show-password"
                 type="button"
                 onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                aria-label={showConfirmPassword ? "Hide password confirmation" : "Show password confirmation"}
+                aria-label={
+                  showConfirmPassword ? "Hide password confirmation" : "Show password confirmation"
+                }
               >
                 {showConfirmPassword ? <EyeOff size={16} /> : <Eye size={16} />}
               </button>
             </span>
           </label>
           {message && (
-            <p
-              className={`form-message ${status}`}
-              role={status === "error" ? "alert" : "status"}
-            >
+            <p className={`form-message ${status}`} role={status === "error" ? "alert" : "status"}>
               {message}
             </p>
           )}
-          <label className="registration-terms-check"><input type="checkbox" checked={acceptedTerms} onChange={(event) => setAcceptedTerms(event.target.checked)} required /><span>I have read and agree to the <Link href="/terms/business" target="_blank">Business Terms of Service</Link>, including EcoChef’s 15% service fee on each product sale.</span></label>
+          <label className="registration-terms-check">
+            <input
+              type="checkbox"
+              checked={acceptedTerms}
+              onChange={(event) => setAcceptedTerms(event.target.checked)}
+              required
+            />
+            <span>
+              I have read and agree to the{" "}
+              <Link href="/terms/business" target="_blank">
+                Business Terms of Service
+              </Link>
+              , including EcoChef’s 15% service fee on each product sale.
+            </span>
+          </label>
           <button
             className={`primary-button${status === "submitting" ? " is-submitting" : ""}`}
             type="submit"
             disabled={!canSubmit || !acceptedTerms || status === "submitting"}
           >
-            {status === "submitting"
-              ? "Creating account…"
-              : "Create business account →"}
+            {status === "submitting" ? "Creating account…" : "Create business account →"}
           </button>
         </form>
         <p className="registration-note">

@@ -23,7 +23,9 @@ CurrentConsumer = Depends(require_roles(AccountRole.consumer))
 def _inventory_id(session: Session, user_id: UUID) -> UUID:
     # Two first-time saves must share one kitchen inventory rather than create
     # separate containers and make later updates ambiguous.
-    session.execute(text("SELECT id FROM users WHERE id = :user_id FOR UPDATE"), {"user_id": user_id})
+    session.execute(
+        text("SELECT id FROM users WHERE id = :user_id FOR UPDATE"), {"user_id": user_id}
+    )
     inventory_id = session.execute(
         text("SELECT id FROM ingredient_inventories WHERE user_id = :user_id ORDER BY id LIMIT 1"),
         {"user_id": user_id},
@@ -123,7 +125,9 @@ def add_inventory_item(
     return item
 
 
-@router.post("/me/items/bulk", response_model=InventoryBulkCreateResult, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/me/items/bulk", response_model=InventoryBulkCreateResult, status_code=status.HTTP_201_CREATED
+)
 def add_inventory_items(
     request: InventoryBulkCreateRequest,
     current_user: AuthenticatedUser = CurrentConsumer,
@@ -132,10 +136,7 @@ def add_inventory_items(
     """Add a reviewed shopping batch in one database transaction."""
     try:
         inventory_id = _inventory_id(session, current_user.id)
-        items = [
-            _insert_inventory_item(session, inventory_id, item)
-            for item in request.items
-        ]
+        items = [_insert_inventory_item(session, inventory_id, item) for item in request.items]
         session.commit()
     except Exception:
         session.rollback()
@@ -160,10 +161,17 @@ def update_inventory_item(
               AND inventory.user_id = :user_id AND ingredient.id = :item_id
             RETURNING item.date_recorded
         """),
-        {"user_id": current_user.id, "item_id": item_id, "quantity": request.quantity, "expiry_date": request.expiry_date},
+        {
+            "user_id": current_user.id,
+            "item_id": item_id,
+            "quantity": request.quantity,
+            "expiry_date": request.expiry_date,
+        },
     ).one_or_none()
     if row is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Inventory item not found.")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Inventory item not found."
+        )
     ingredient = session.execute(
         text("""
             SELECT ingredient_name, category, ingredient_type, icon
@@ -172,19 +180,35 @@ def update_inventory_item(
         {"item_id": item_id},
     ).one()
     saved_item_id = item_id
-    if (ingredient.ingredient_name, ingredient.category, ingredient.ingredient_type, ingredient.icon) != (request.name, request.category, request.source, request.icon):
+    if (
+        ingredient.ingredient_name,
+        ingredient.category,
+        ingredient.ingredient_type,
+        ingredient.icon,
+    ) != (request.name, request.category, request.source, request.icon):
         # Recipes and other inventories can reference this ingredient. Personal
         # edits must never rewrite their ingredient names or metadata.
-        saved_item_id = session.execute(text("""
+        saved_item_id = session.execute(
+            text("""
             INSERT INTO ingredients (ingredient_name, category, ingredient_type, icon)
             VALUES (:name, :category, :source, :icon) RETURNING id
-        """), {"name": request.name, "category": request.category, "source": request.source, "icon": request.icon}).scalar_one()
-        session.execute(text("""
+        """),
+            {
+                "name": request.name,
+                "category": request.category,
+                "source": request.source,
+                "icon": request.icon,
+            },
+        ).scalar_one()
+        session.execute(
+            text("""
             UPDATE ingredient_inventory_items item SET ingredient_id = :new_id
             FROM ingredient_inventories inventory
             WHERE inventory.id = item.ingredient_inventory_id
               AND inventory.user_id = :user_id AND item.ingredient_id = :old_id
-        """), {"new_id": saved_item_id, "old_id": item_id, "user_id": current_user.id})
+        """),
+            {"new_id": saved_item_id, "old_id": item_id, "user_id": current_user.id},
+        )
     session.commit()
     return InventoryItem(
         id=saved_item_id,
@@ -214,7 +238,9 @@ def remove_inventory_item(
         {"user_id": current_user.id, "item_id": item_id},
     )
     if result.rowcount != 1:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Inventory item not found.")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Inventory item not found."
+        )
     # Ingredient rows are also reused by recipes. Remove the shared row only
     # when no inventory or recipe still references it; the inventory deletion
     # itself must not fail just because the ingredient is in a recipe.

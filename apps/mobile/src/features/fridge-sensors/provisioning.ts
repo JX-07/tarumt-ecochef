@@ -11,7 +11,8 @@ const QR_PREFIX = "ecochef://sensor-setup";
 
 export function parseSensorSetupQr(value: string): SensorSetupQr {
   const parsed = new URL(value);
-  if (`${parsed.protocol}//${parsed.host}` !== QR_PREFIX) throw new Error("This is not an EcoChef sensor QR code.");
+  if (`${parsed.protocol}//${parsed.host}` !== QR_PREFIX)
+    throw new Error("This is not an EcoChef sensor QR code.");
   const version = Number(parsed.searchParams.get("v"));
   const deviceCode = parsed.searchParams.get("code")?.trim().toUpperCase() ?? "";
   const claimSecret = parsed.searchParams.get("secret")?.trim() ?? "";
@@ -31,9 +32,11 @@ function bytesToBase64(value: string): string {
     const b = bytes[index + 1];
     const c = bytes[index + 2];
     const triple = (a << 16) | ((b ?? 0) << 8) | (c ?? 0);
-    result += alphabet[(triple >> 18) & 63] + alphabet[(triple >> 12) & 63]
-      + (b === undefined ? "=" : alphabet[(triple >> 6) & 63])
-      + (c === undefined ? "=" : alphabet[triple & 63]);
+    result +=
+      alphabet[(triple >> 18) & 63] +
+      alphabet[(triple >> 12) & 63] +
+      (b === undefined ? "=" : alphabet[(triple >> 6) & 63]) +
+      (c === undefined ? "=" : alphabet[triple & 63]);
   }
   return result;
 }
@@ -70,10 +73,13 @@ async function requestBluetoothPermission(): Promise<void> {
 }
 
 async function waitForPoweredOn(manager: BleManager): Promise<void> {
-  if (await manager.state() === State.PoweredOn) return;
+  if ((await manager.state()) === State.PoweredOn) return;
   await new Promise<void>((resolve, reject) => {
     let subscription: Subscription | undefined;
-    const timeout = setTimeout(() => { subscription?.remove(); reject(new Error("Turn on Bluetooth, then try again.")); }, 10_000);
+    const timeout = setTimeout(() => {
+      subscription?.remove();
+      reject(new Error("Turn on Bluetooth, then try again."));
+    }, 10_000);
     subscription = manager.onStateChange((state) => {
       if (state !== State.PoweredOn) return;
       clearTimeout(timeout);
@@ -87,7 +93,9 @@ async function findDevice(manager: BleManager, bleName: string): Promise<Device>
   return new Promise<Device>((resolve, reject) => {
     const timeout = setTimeout(() => {
       manager.stopDeviceScan();
-      reject(new Error("Sensor not found. Hold its setup button until the light pulses, then retry."));
+      reject(
+        new Error("Sensor not found. Hold its setup button until the light pulses, then retry."),
+      );
     }, 10_000);
     manager.startDeviceScan([ECOCHEF_PROVISIONING_SERVICE], null, (error, device) => {
       if (error) {
@@ -120,22 +128,49 @@ export async function scanSensorWifiNetworks(setup: SensorSetupQr): Promise<Sens
     await device.discoverAllServicesAndCharacteristics();
     const networks = await new Promise<SensorWifiNetwork[]>((resolve, reject) => {
       const found = new Map<string, SensorWifiNetwork>();
-      const timeout = setTimeout(() => reject(new Error("The sensor did not return Wi-Fi networks. Confirm it is powered, flashed with EcoChef firmware and in setup mode.")), 15_000);
-      monitor = device?.monitorCharacteristicForService(ECOCHEF_PROVISIONING_SERVICE, ECOCHEF_STATUS_CHARACTERISTIC, (error, characteristic) => {
-        if (error) { clearTimeout(timeout); reject(new Error("Bluetooth connection to the sensor was lost.")); return; }
-        const message = base64ToText(characteristic?.value);
-        if (message.startsWith("wifi:")) {
-          try {
-            const network = JSON.parse(message.slice(5)) as SensorWifiNetwork;
-            if (network.ssid) found.set(network.ssid, network);
-          } catch { /* Ignore a malformed advertisement and keep scanning. */ }
-        }
-        if (message === "wifi_scan_done") {
+      const timeout = setTimeout(
+        () =>
+          reject(
+            new Error(
+              "The sensor did not return Wi-Fi networks. Confirm it is powered, flashed with EcoChef firmware and in setup mode.",
+            ),
+          ),
+        15_000,
+      );
+      monitor = device?.monitorCharacteristicForService(
+        ECOCHEF_PROVISIONING_SERVICE,
+        ECOCHEF_STATUS_CHARACTERISTIC,
+        (error, characteristic) => {
+          if (error) {
+            clearTimeout(timeout);
+            reject(new Error("Bluetooth connection to the sensor was lost."));
+            return;
+          }
+          const message = base64ToText(characteristic?.value);
+          if (message.startsWith("wifi:")) {
+            try {
+              const network = JSON.parse(message.slice(5)) as SensorWifiNetwork;
+              if (network.ssid) found.set(network.ssid, network);
+            } catch {
+              /* Ignore a malformed advertisement and keep scanning. */
+            }
+          }
+          if (message === "wifi_scan_done") {
+            clearTimeout(timeout);
+            resolve([...found.values()].sort((left, right) => right.rssi - left.rssi));
+          }
+        },
+      );
+      void device
+        ?.writeCharacteristicWithResponseForService(
+          ECOCHEF_PROVISIONING_SERVICE,
+          ECOCHEF_CONFIG_CHARACTERISTIC,
+          bytesToBase64(`${JSON.stringify({ v: 1, action: "scan_wifi" })}\n`),
+        )
+        .catch((error) => {
           clearTimeout(timeout);
-          resolve([...found.values()].sort((left, right) => right.rssi - left.rssi));
-        }
-      });
-      void device?.writeCharacteristicWithResponseForService(ECOCHEF_PROVISIONING_SERVICE, ECOCHEF_CONFIG_CHARACTERISTIC, bytesToBase64(`${JSON.stringify({ v: 1, action: "scan_wifi" })}\n`)).catch((error) => { clearTimeout(timeout); reject(error); });
+          reject(error);
+        });
     });
     return networks;
   } finally {
@@ -160,14 +195,39 @@ export async function provisionSensor(
     device = await device.connect({ timeout: 15_000 });
     await device.discoverAllServicesAndCharacteristics();
     const completion = new Promise<void>((resolve, reject) => {
-      const timeout = setTimeout(() => reject(new Error("The sensor did not finish connecting. Check the Wi-Fi password and try again.")), 60_000);
-      monitor = device?.monitorCharacteristicForService(ECOCHEF_PROVISIONING_SERVICE, ECOCHEF_STATUS_CHARACTERISTIC, (error, characteristic) => {
-        if (error) { clearTimeout(timeout); reject(new Error("Bluetooth connection to the sensor was lost.")); return; }
-        const status = base64ToText(characteristic?.value) as ProvisioningStatus | `error:${string}`;
-        if (status.startsWith("error:")) { clearTimeout(timeout); reject(new Error(status.slice(6) || "The sensor could not connect.")); return; }
-        if (status === "wifi_connecting" || status === "api_connecting") onStatus(status);
-        if (status === "ready") { clearTimeout(timeout); onStatus(status); resolve(); }
-      });
+      const timeout = setTimeout(
+        () =>
+          reject(
+            new Error(
+              "The sensor did not finish connecting. Check the Wi-Fi password and try again.",
+            ),
+          ),
+        60_000,
+      );
+      monitor = device?.monitorCharacteristicForService(
+        ECOCHEF_PROVISIONING_SERVICE,
+        ECOCHEF_STATUS_CHARACTERISTIC,
+        (error, characteristic) => {
+          if (error) {
+            clearTimeout(timeout);
+            reject(new Error("Bluetooth connection to the sensor was lost."));
+            return;
+          }
+          const status = base64ToText(characteristic?.value) as
+            ProvisioningStatus | `error:${string}`;
+          if (status.startsWith("error:")) {
+            clearTimeout(timeout);
+            reject(new Error(status.slice(6) || "The sensor could not connect."));
+            return;
+          }
+          if (status === "wifi_connecting" || status === "api_connecting") onStatus(status);
+          if (status === "ready") {
+            clearTimeout(timeout);
+            onStatus(status);
+            resolve();
+          }
+        },
+      );
     });
     const payload = `${JSON.stringify({ v: 1, ...config })}\n`;
     // BLE writes are deliberately chunked so provisioning works before MTU negotiation on both platforms.

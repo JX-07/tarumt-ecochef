@@ -1,4 +1,5 @@
 """Conservative recipe outlier checks, scaled by servings rather than fixed totals."""
+
 import re
 from collections import defaultdict
 from fractions import Fraction
@@ -24,7 +25,27 @@ def ingredient_quantity_issues(ingredients: list, servings: int) -> list[str]:
             issues.append(f"{name}: enter a positive amount and a unit, such as 2 pcs or 100 g.")
             continue
         unit = parsed[2].strip().lower()
-        aliases = {"gram": "g", "grams": "g", "kilogram": "kg", "kilograms": "kg", "millilitre": "ml", "millilitres": "ml", "liter": "l", "litre": "l", "litres": "l", "liters": "l", "piece": "pcs", "pieces": "pcs", "pc": "pcs", "": "pcs", "cups": "cup", "tablespoon": "tbsp", "tablespoons": "tbsp", "teaspoon": "tsp", "teaspoons": "tsp"}
+        aliases = {
+            "gram": "g",
+            "grams": "g",
+            "kilogram": "kg",
+            "kilograms": "kg",
+            "millilitre": "ml",
+            "millilitres": "ml",
+            "liter": "l",
+            "litre": "l",
+            "litres": "l",
+            "liters": "l",
+            "piece": "pcs",
+            "pieces": "pcs",
+            "pc": "pcs",
+            "": "pcs",
+            "cups": "cup",
+            "tablespoon": "tbsp",
+            "tablespoons": "tbsp",
+            "teaspoon": "tsp",
+            "teaspoons": "tsp",
+        }
         unit = aliases.get(unit, unit)
         if unit in {"kg", "l"}:
             amount *= 1000
@@ -36,15 +57,30 @@ def ingredient_quantity_issues(ingredients: list, servings: int) -> list[str]:
         labels[key] = name
     for (name, unit), amount in totals.items():
         # Broad outlier limits, not dietary advice or recommended portions.
-        limit = {"g": 2000, "ml": 3000, "cup": 12, "tbsp": 100, "tsp": 300, "bunch": 10, "pcs": 500}.get(unit, 500)
-        if unit == "pcs" and re.search(r"\b(apple|orange|banana|pear|peach|avocado|mango|potato|tomato)\b", name):
+        limit = {
+            "g": 2000,
+            "ml": 3000,
+            "cup": 12,
+            "tbsp": 100,
+            "tsp": 300,
+            "bunch": 10,
+            "pcs": 500,
+        }.get(unit, 500)
+        if unit == "pcs" and re.search(
+            r"\b(apple|orange|banana|pear|peach|avocado|mango|potato|tomato)\b", name
+        ):
             limit = 10
         if unit == "pcs" and re.search(r"\begg\b", name):
             limit = 12
         if unit == "pcs" and re.search(r"\b(chicken|duck|turkey|watermelon|pumpkin)\b", name):
             limit = 4
-        if re.search(r"\b(salt|black pepper|white pepper|ground pepper|cinnamon|cumin|turmeric|paprika|nutmeg)\b", name):
+        if re.search(
+            r"\b(salt|black pepper|white pepper|ground pepper|cinnamon|cumin|turmeric|paprika|nutmeg)\b",
+            name,
+        ):
             limit = {"g": 50, "tsp": 10, "tbsp": 4, "cup": 0.25}.get(unit, limit)
         if amount / servings > limit:
-            issues.append(f"{labels[name]}: {amount:g} {unit} for {servings} servings is unusually high ({amount / servings:g} {unit} per serving). Correct the amount, unit, or number of servings.")
+            issues.append(
+                f"{labels[name]}: {amount:g} {unit} for {servings} servings is unusually high ({amount / servings:g} {unit} per serving). Correct the amount, unit, or number of servings."
+            )
     return issues

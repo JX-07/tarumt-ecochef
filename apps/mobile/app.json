@@ -16,9 +16,7 @@
         "react-native-ble-plx",
         {
           "isBackgroundEnabled": false,
-          "modes": [
-            "central"
-          ],
+          "modes": ["central"],
           "bluetoothAlwaysPermission": "Allow EcoChef to connect and configure your sensor set."
         }
       ],

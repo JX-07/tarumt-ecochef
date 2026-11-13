@@ -21,9 +21,13 @@ SENSORS = {
     "Humidity(%)": "humidity",
 }
 PHYSICAL_BOUNDS = {
-    "MQ3": (0.0, 1023.0), "MQ5": (0.0, 1023.0), "MQ9": (0.0, 1023.0),
-    "MQ135": (0.0, 1023.0), "MQ137": (0.0, 1023.0),
-    "Temperature(°C)": (-10.0, 50.0), "Humidity(%)": (0.0, 100.0),
+    "MQ3": (0.0, 1023.0),
+    "MQ5": (0.0, 1023.0),
+    "MQ9": (0.0, 1023.0),
+    "MQ135": (0.0, 1023.0),
+    "MQ137": (0.0, 1023.0),
+    "Temperature(°C)": (-10.0, 50.0),
+    "Humidity(%)": (0.0, 100.0),
 }
 STATISTICS = ("mean", "std", "min", "max", "slope", "delta")
 
@@ -104,7 +108,9 @@ def prepare(root: Path, output: Path) -> dict:
             if labels[0] != expected_label:
                 raise ValueError(f"label {labels[0]} conflicts with TVC threshold: {tvc.iloc[0]}")
 
-            numeric_signature = frame[list(SENSORS)].apply(pd.to_numeric, errors="coerce").to_csv(index=False)
+            numeric_signature = (
+                frame[list(SENSORS)].apply(pd.to_numeric, errors="coerce").to_csv(index=False)
+            )
             signature = hashlib.sha256(numeric_signature.encode("utf-8")).hexdigest()
             if signature in seen_recordings:
                 raise ValueError(f"duplicate recording content of {seen_recordings[signature]}")
@@ -131,14 +137,21 @@ def prepare(root: Path, output: Path) -> dict:
                 for statistic, value in signal_features(values).items():
                     row[f"{name}_{statistic}"] = value
             rows.append(row)
-            cleaning_audit.append({
-                "recording": path.name, "rows": len(frame), "repeated_adc_rows_preserved": repeated_rows,
-                "invalid_values_repaired": invalid_values, "isolated_spikes_corrected": corrected_spikes,
-                "status": "accepted",
-            })
+            cleaning_audit.append(
+                {
+                    "recording": path.name,
+                    "rows": len(frame),
+                    "repeated_adc_rows_preserved": repeated_rows,
+                    "invalid_values_repaired": invalid_values,
+                    "isolated_spikes_corrected": corrected_spikes,
+                    "status": "accepted",
+                }
+            )
         except (OSError, ValueError, pd.errors.ParserError) as error:
             rejected.append({"recording": str(path), "reason": str(error)})
-            cleaning_audit.append({"recording": path.name, "status": "rejected", "reason": str(error)})
+            cleaning_audit.append(
+                {"recording": path.name, "status": "rejected", "reason": str(error)}
+            )
 
     result = pd.DataFrame(rows)
     if result.empty:
@@ -162,9 +175,15 @@ def prepare(root: Path, output: Path) -> dict:
             "source_recordings": len(cleaning_audit),
             "accepted_recordings": len(result),
             "rejected_recordings": len(rejected),
-            "invalid_values_repaired": int(sum(int(row.get("invalid_values_repaired", 0)) for row in cleaning_audit)),
-            "isolated_spikes_corrected": int(sum(int(row.get("isolated_spikes_corrected", 0)) for row in cleaning_audit)),
-            "repeated_adc_rows_preserved": int(sum(int(row.get("repeated_adc_rows_preserved", 0)) for row in cleaning_audit)),
+            "invalid_values_repaired": int(
+                sum(int(row.get("invalid_values_repaired", 0)) for row in cleaning_audit)
+            ),
+            "isolated_spikes_corrected": int(
+                sum(int(row.get("isolated_spikes_corrected", 0)) for row in cleaning_audit)
+            ),
+            "repeated_adc_rows_preserved": int(
+                sum(int(row.get("repeated_adc_rows_preserved", 0)) for row in cleaning_audit)
+            ),
             "audit_file": str(audit_path),
         },
         "label_scope": "Storage-day microbiological status; not individual-fillet ground truth.",
@@ -175,7 +194,9 @@ def prepare(root: Path, output: Path) -> dict:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Prepare the rainbow-trout e-nose recordings without fillet leakage.")
+    parser = argparse.ArgumentParser(
+        description="Prepare the rainbow-trout e-nose recordings without fillet leakage."
+    )
     parser.add_argument("--root", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()

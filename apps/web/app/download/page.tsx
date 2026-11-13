@@ -6,14 +6,16 @@ export const dynamic = "force-dynamic";
 
 export default async function DownloadPage() {
   const apkPath = process.env.ECOCHEF_ANDROID_APK_PATH || "/app/downloads/ecochef.apk";
-  const available = await access(apkPath, constants.R_OK).then(() => true).catch(() => false);
+  const available = await access(apkPath, constants.R_OK)
+    .then(() => true)
+    .catch(() => false);
 
   return (
-    <main style={{ maxWidth: 620, margin: "10vh auto", padding: 24, fontFamily: "sans-serif", lineHeight: 1.6 }}>
+    <main className="app-download-page">
       <h1>Get EcoChef</h1>
       <p>Install EcoChef on your Android phone to manage your food and recipes.</p>
       {available ? (
-        <a href="/download/android" style={{ display: "inline-block", padding: "12px 20px", borderRadius: 8, background: "#235951", color: "white", textDecoration: "none" }}>
+        <a href="/download/android" className="app-download-button">
           Download Android app
         </a>
       ) : (

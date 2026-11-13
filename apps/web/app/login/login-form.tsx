@@ -15,11 +15,7 @@ type PortalRole = "business_owner" | "administrator";
 
 const describeLoginError = (error: unknown): string => {
   if (error instanceof ApiClientError && error.status === 403) {
-    if (
-      error.response?.message
-        .toLowerCase()
-        .includes("verify your firebase email")
-    ) {
+    if (error.response?.message.toLowerCase().includes("verify your firebase email")) {
       return "Please make sure to verify your email before logging in.";
     }
     return "The email address or password is incorrect.";
@@ -32,8 +28,7 @@ const describeLoginError = (error: unknown): string => {
 
 export function LoginForm() {
   const router = useRouter();
-  const [selectedRole, setSelectedRole] =
-    useState<PortalRole>("business_owner");
+  const [selectedRole, setSelectedRole] = useState<PortalRole>("business_owner");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -57,12 +52,9 @@ export function LoginForm() {
         return;
       }
       setStatus("success");
-      const signedInRole = profile.role === "business_owner"
-        ? "Business Account user"
-        : "Administrator";
-      setMessage(
-        `Signed in as ${signedInRole}. Your dashboard will open next.`,
-      );
+      const signedInRole =
+        profile.role === "business_owner" ? "Business Account user" : "Administrator";
+      setMessage(`Signed in as ${signedInRole}. Your dashboard will open next.`);
       router.replace(profile.role === "business_owner" ? "/vendor" : "/admin");
     } catch (error) {
       setStatus("error");
@@ -79,26 +71,19 @@ export function LoginForm() {
         }
       : {
           title: "EcoChef Admin Console",
-          description:
-            "Manage platform users, shops, reports, and compliance operations.",
+          description: "Manage platform users, shops, reports, and compliance operations.",
         };
 
   return (
     <div className="portal-login">
-      <img
-        className="portal-logo"
-        src="/branding/ecochef-logo.png"
-        alt="EcoChef"
-      />
+      <img className="portal-logo" src="/branding/ecochef-logo.png" alt="EcoChef" />
       <section className="portal-card">
         <div className="role-picker">
           <p>Select account role</p>
           <div>
             <button
               type="button"
-              className={
-                selectedRole === "business_owner" ? "active business" : ""
-              }
+              className={selectedRole === "business_owner" ? "active business" : ""}
               aria-pressed={selectedRole === "business_owner"}
               onClick={() => {
                 setSelectedRole("business_owner");
@@ -125,11 +110,7 @@ export function LoginForm() {
 
         <div className={`role-summary ${selectedRole}`}>
           <span aria-hidden="true">
-            {selectedRole === "business_owner" ? (
-              <Store size={20} />
-            ) : (
-              <ShieldCheck size={20} />
-            )}
+            {selectedRole === "business_owner" ? <Store size={20} /> : <ShieldCheck size={20} />}
           </span>
           <div>
             <strong>{roleInfo.title}</strong>
@@ -178,25 +159,28 @@ export function LoginForm() {
           </div>
 
           <div className={`form-options ${selectedRole}`}>
-            {selectedRole === "business_owner" ? <label className="remember-me">
-              <input
-                type="checkbox"
-                checked={rememberMe}
-                onChange={(event) => setRememberMe(event.target.checked)}
-              />
-              <span className="custom-checkbox" aria-hidden="true" />
-              Keep me signed in
-            </label> : <span className="admin-session-note">Admin sessions end when this page is refreshed.</span>}
+            {selectedRole === "business_owner" ? (
+              <label className="remember-me">
+                <input
+                  type="checkbox"
+                  checked={rememberMe}
+                  onChange={(event) => setRememberMe(event.target.checked)}
+                />
+                <span className="custom-checkbox" aria-hidden="true" />
+                Keep me signed in
+              </label>
+            ) : (
+              <span className="admin-session-note">
+                Admin sessions end when this page is refreshed.
+              </span>
+            )}
             <Link className="link-button" href="/forgot-password">
               Forgot password?
             </Link>
           </div>
 
           {message && (
-            <p
-              className={`form-message ${status}`}
-              role={status === "error" ? "alert" : "status"}
-            >
+            <p className={`form-message ${status}`} role={status === "error" ? "alert" : "status"}>
               {message}
             </p>
           )}
@@ -212,8 +196,7 @@ export function LoginForm() {
           </button>
           {selectedRole === "business_owner" && (
             <p className="registration-note">
-              New to EcoChef?{" "}
-              <Link href="/business-register">Create a business account</Link>
+              New to EcoChef? <Link href="/business-register">Create a business account</Link>
             </p>
           )}
         </form>

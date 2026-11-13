@@ -49,16 +49,10 @@ export function DatePickerSheet({
   const cells = useMemo(() => {
     const first = new Date(month.getFullYear(), month.getMonth(), 1);
     const offset = (first.getDay() + 6) % 7;
-    const count = new Date(
-      month.getFullYear(),
-      month.getMonth() + 1,
-      0,
-    ).getDate();
+    const count = new Date(month.getFullYear(), month.getMonth() + 1, 0).getDate();
     return Array.from({ length: 42 }, (_, index) => {
       const day = index - offset + 1;
-      return day >= 1 && day <= count
-        ? new Date(month.getFullYear(), month.getMonth(), day)
-        : null;
+      return day >= 1 && day <= count ? new Date(month.getFullYear(), month.getMonth(), day) : null;
     });
   }, [month]);
   const sheetMotion = useBottomSheetSlide(visible);
@@ -67,17 +61,9 @@ export function DatePickerSheet({
     onClose();
   };
   const move = (amount: number) =>
-    setMonth(
-      (current) =>
-        new Date(current.getFullYear(), current.getMonth() + amount, 1),
-    );
+    setMonth((current) => new Date(current.getFullYear(), current.getMonth() + amount, 1));
   return (
-    <Modal
-      visible={visible}
-      transparent
-      animationType="fade"
-      onRequestClose={onClose}
-    >
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <View style={styles.overlay}>
         <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
         <Animated.View
@@ -115,8 +101,7 @@ export function DatePickerSheet({
           </View>
           <View style={styles.grid}>
             {cells.map((date, index) => {
-              if (!date)
-                return <View key={`blank-${index}`} style={styles.day} />;
+              if (!date) return <View key={`blank-${index}`} style={styles.day} />;
               const iso = dateToIso(date),
                 selected = iso === value,
                 isToday = iso === todayIso();
@@ -132,27 +117,17 @@ export function DatePickerSheet({
                   ]}
                   onPress={() => choose(date)}
                 >
-                  <Text
-                    style={[styles.dayText, selected && styles.dayTextSelected]}
-                  >
+                  <Text style={[styles.dayText, selected && styles.dayTextSelected]}>
                     {date.getDate()}
                   </Text>
                   {isToday && (
-                    <View
-                      style={[
-                        styles.todayDot,
-                        selected && styles.todayDotSelected,
-                      ]}
-                    />
+                    <View style={[styles.todayDot, selected && styles.todayDotSelected]} />
                   )}
                 </Pressable>
               );
             })}
           </View>
-          <Pressable
-            style={styles.todayButton}
-            onPress={() => choose(new Date())}
-          >
+          <Pressable style={styles.todayButton} onPress={() => choose(new Date())}>
             <Ionicons name="today-outline" size={17} color={GREEN} />
             <Text style={styles.todayText}>Go to today</Text>
           </Pressable>
@@ -182,7 +157,11 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
   },
-  title: { color: palette.c17283c, fontSize: typography.mobile.rawSize.s20, fontWeight: typography.weight.black },
+  title: {
+    color: palette.c17283c,
+    fontSize: typography.mobile.rawSize.s20,
+    fontWeight: typography.weight.black,
+  },
   copy: { marginTop: 4, color: palette.c8993a1, fontSize: typography.mobile.rawSize.s11 },
   close: {
     width: 35,
@@ -207,7 +186,11 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     backgroundColor: palette.cf4f6f5,
   },
-  month: { color: palette.c2a3c4f, fontSize: typography.mobile.rawSize.s14, fontWeight: typography.weight.black },
+  month: {
+    color: palette.c2a3c4f,
+    fontSize: typography.mobile.rawSize.s14,
+    fontWeight: typography.weight.black,
+  },
   weekdays: { flexDirection: "row", marginTop: 5 },
   weekday: {
     width: "14.2857%",
@@ -230,7 +213,11 @@ const styles = StyleSheet.create({
     borderColor: palette.c90d5aa,
     backgroundColor: palette.ceff9f2,
   },
-  dayText: { color: palette.c445266, fontSize: typography.mobile.rawSize.s12, fontWeight: typography.weight.extrabold },
+  dayText: {
+    color: palette.c445266,
+    fontSize: typography.mobile.rawSize.s12,
+    fontWeight: typography.weight.extrabold,
+  },
   dayTextSelected: { color: palette.cfff },
   todayDot: {
     position: "absolute",
@@ -253,5 +240,9 @@ const styles = StyleSheet.create({
     borderRadius: 13,
     backgroundColor: palette.cf3faf5,
   },
-  todayText: { color: GREEN, fontSize: typography.mobile.rawSize.s11, fontWeight: typography.weight.black },
+  todayText: {
+    color: GREEN,
+    fontSize: typography.mobile.rawSize.s11,
+    fontWeight: typography.weight.black,
+  },
 });

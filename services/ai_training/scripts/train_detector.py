@@ -186,7 +186,10 @@ def main() -> None:
 
     def safe_stop(trainer) -> None:
         if stop_file.exists():
-            print("Safe stop requested; finishing the current epoch and saving a checkpoint.", flush=True)
+            print(
+                "Safe stop requested; finishing the current epoch and saving a checkpoint.",
+                flush=True,
+            )
             trainer.stop = True
 
     def report_epoch(trainer) -> None:
@@ -200,7 +203,10 @@ def main() -> None:
             for key, value in metrics.items()
             if isinstance(value, (int, float))
         )
-        print(f"epoch={trainer.epoch + 1}/{trainer.epochs} completed {summary}".strip(), flush=True)
+        print(
+            f"epoch={trainer.epoch + 1}/{trainer.epochs} completed {summary}".strip(),
+            flush=True,
+        )
 
     def preserve_resume_checkpoint(trainer) -> None:
         # Ultralytics strips optimizer state during final evaluation. Preserve the just-saved

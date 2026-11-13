@@ -1,0 +1,21 @@
+# Generated and downloaded files
+pnpm-lock.yaml
+node_modules/
+.next/
+.expo/
+.expo-*/
+dist/
+coverage/
+tmp/
+output/
+uploads/
+logs/
+services/ai_training/data/
+services/ai_training/runs/
+services/ai_training/weights/
+
+# Local configuration and credentials
+.env
+.env.*
+!.env.example
+**/.secrets/

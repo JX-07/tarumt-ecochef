@@ -18,24 +18,17 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "../../auth/auth-provider";
 import { createMobileApi } from "../../../lib/api";
 import type { RecipeList, RecipeSummary } from "../types";
-import {
-  PAGE_TOP_GAP,
-  PageHeader,
-} from "../../../shared/components/page-header";
+import { PAGE_TOP_GAP, PageHeader } from "../../../shared/components/page-header";
 import { AppMessageModal } from "../../../shared/components/app-message-modal";
-import {
-  RecipeFilterSheet,
-  type RecipeFilters,
-} from "../components/recipe-filter-sheet";
+import { RecipeFilterSheet, type RecipeFilters } from "../components/recipe-filter-sheet";
 import { ScheduleSheet } from "../components/schedule-sheet";
 import { recipeTagKind } from "../recipe-tag-options";
 import { recipeImageUrl } from "../recipe-image";
 import type { MealPlanCalendar } from "../../meal-planning/types";
 
 const GREEN = palette.c12ad55;
-const runtimeProcess = (
-  globalThis as { process?: { env?: Record<string, string | undefined> } }
-).process;
+const runtimeProcess = (globalThis as { process?: { env?: Record<string, string | undefined> } })
+  .process;
 
 const tabs = ["For You", "Favourites", "Self-Created", "Community"] as const;
 
@@ -50,10 +43,7 @@ export function RecipesScreen() {
     new Map<string, { value: boolean; recipe: RecipeSummary }>(),
   );
   const { status, user } = useAuth();
-  const api = useMemo(
-    () => createMobileApi(apiBaseUrl, () => user?.getIdToken()),
-    [user],
-  );
+  const api = useMemo(() => createMobileApi(apiBaseUrl, () => user?.getIdToken()), [user]);
   const [recipes, setRecipes] = useState<RecipeSummary[]>([]);
   const [query, setQuery] = useState("");
   const [activeTab, setActiveTab] = useState<(typeof tabs)[number]>("For You");
@@ -81,15 +71,11 @@ export function RecipesScreen() {
     [...filters.mealTypes, ...filters.dietary].forEach((tag) =>
       parameters.append("tags", tag.toLowerCase()),
     );
-    if (filters.cookTime)
-      parameters.set("max_total_time", String(filters.cookTime));
+    if (filters.cookTime) parameters.set("max_total_time", String(filters.cookTime));
     return parameters.toString();
   }
 
-  function applyFavouriteOverrides(
-    items: RecipeSummary[],
-    parameterString: string,
-  ) {
+  function applyFavouriteOverrides(items: RecipeSummary[], parameterString: string) {
     const next = items.map((item) => {
       const override = favouriteOverridesRef.current.get(item.id);
       if (!override) return item;
@@ -99,14 +85,9 @@ export function RecipesScreen() {
       }
       return { ...item, is_favourite: override.value };
     });
-    if (
-      new URLSearchParams(parameterString).get("favourites_only") === "true"
-    ) {
+    if (new URLSearchParams(parameterString).get("favourites_only") === "true") {
       favouriteOverridesRef.current.forEach((override) => {
-        if (
-          override.value &&
-          !next.some((item) => item.id === override.recipe.id)
-        )
+        if (override.value && !next.some((item) => item.id === override.recipe.id))
           next.unshift({ ...override.recipe, is_favourite: true });
       });
     }
@@ -127,11 +108,7 @@ export function RecipesScreen() {
       if (requestId === requestIdRef.current) setRecipes(items);
     } catch (nextError) {
       if (requestId === requestIdRef.current)
-        setError(
-          nextError instanceof Error
-            ? nextError.message
-            : "Recipes could not be loaded.",
-        );
+        setError(nextError instanceof Error ? nextError.message : "Recipes could not be loaded.");
     } finally {
       if (requestId === requestIdRef.current) {
         setLoading(false);
@@ -169,8 +146,7 @@ export function RecipesScreen() {
       recipe: { ...recipe, is_favourite: next },
     });
     recipeCacheRef.current.forEach((items, key) => {
-      const favouritesOnly =
-        new URLSearchParams(key).get("favourites_only") === "true";
+      const favouritesOnly = new URLSearchParams(key).get("favourites_only") === "true";
       let updated = items.map((item) =>
         item.id === recipe.id ? { ...item, is_favourite: next } : item,
       );
@@ -183,9 +159,7 @@ export function RecipesScreen() {
       recipeCacheRef.current.set(key, updated);
     });
     setRecipes((current) =>
-      current.map((item) =>
-        item.id === recipe.id ? { ...item, is_favourite: next } : item,
-      ),
+      current.map((item) => (item.id === recipe.id ? { ...item, is_favourite: next } : item)),
     );
     try {
       await api.setRecipeFavourite(recipe.id, next);
@@ -194,15 +168,11 @@ export function RecipesScreen() {
       recipeCacheRef.current.forEach((items, key) =>
         recipeCacheRef.current.set(
           key,
-          items.map((item) =>
-            item.id === recipe.id ? { ...item, is_favourite: !next } : item,
-          ),
+          items.map((item) => (item.id === recipe.id ? { ...item, is_favourite: !next } : item)),
         ),
       );
       setRecipes((current) =>
-        current.map((item) =>
-          item.id === recipe.id ? { ...item, is_favourite: !next } : item,
-        ),
+        current.map((item) => (item.id === recipe.id ? { ...item, is_favourite: !next } : item)),
       );
       setPageMessage({
         title: "Favourite not updated",
@@ -238,11 +208,7 @@ export function RecipesScreen() {
     (recipe) => (recipe.smart_match_ingredients ?? []).length > 0,
   );
   const smartMatchIngredients = Array.from(
-    new Set(
-      smartMatchRecipes.flatMap(
-        (recipe) => recipe.smart_match_ingredients ?? [],
-      ),
-    ),
+    new Set(smartMatchRecipes.flatMap((recipe) => recipe.smart_match_ingredients ?? [])),
   );
   const smartMatchPreview = smartMatchIngredients.slice(0, 2).join(" and ");
   const relevantTagTerms = [...filters.mealTypes, ...filters.dietary, query]
@@ -254,8 +220,7 @@ export function RecipesScreen() {
     (filters.cookTime ? 1 : 0) +
     (filters.minimumRating ? 1 : 0);
   const loadPlannedMeals = useCallback(
-    async (date: string) =>
-      (await api.getMyMealPlan<MealPlanCalendar>(date, 1)).items,
+    async (date: string) => (await api.getMyMealPlan<MealPlanCalendar>(date, 1)).items,
     [api],
   );
 
@@ -267,10 +232,7 @@ export function RecipesScreen() {
           action={
             <Pressable
               accessibilityLabel="Create recipe"
-              style={({ pressed }) => [
-                styles.addButton,
-                pressed && styles.addButtonPressed,
-              ]}
+              style={({ pressed }) => [styles.addButton, pressed && styles.addButtonPressed]}
               onPress={() => router.push("/recipes/new")}
             >
               <Ionicons name="add" size={27} color={palette.cffffff} />
@@ -289,10 +251,7 @@ export function RecipesScreen() {
           returnKeyType="search"
         />
         <Pressable
-          style={({ pressed }) => [
-            styles.filterButton,
-            pressed && styles.filterButtonPressed,
-          ]}
+          style={({ pressed }) => [styles.filterButton, pressed && styles.filterButtonPressed]}
           onPress={() => setFiltersOpen(true)}
         >
           <Ionicons name="options-outline" size={15} color={GREEN} />
@@ -311,14 +270,7 @@ export function RecipesScreen() {
             onPress={() => selectTab(tab)}
             style={[styles.tab, activeTab === tab && styles.tabActive]}
           >
-            <Text
-              style={[
-                styles.tabText,
-                activeTab === tab && styles.tabTextActive,
-              ]}
-            >
-              {tab}
-            </Text>
+            <Text style={[styles.tabText, activeTab === tab && styles.tabTextActive]}>{tab}</Text>
           </Pressable>
         ))}
       </View>
@@ -331,8 +283,7 @@ export function RecipesScreen() {
             <Text style={styles.smartTitle}>Smart Match active</Text>
             <Text style={styles.smartCopy}>
               {smartMatchRecipes.length}{" "}
-              {smartMatchRecipes.length === 1 ? "recipe uses" : "recipes use"}{" "}
-              {smartMatchPreview}
+              {smartMatchRecipes.length === 1 ? "recipe uses" : "recipes use"} {smartMatchPreview}
               {smartMatchIngredients.length > 2
                 ? ` and ${smartMatchIngredients.length - 2} more`
                 : ""}
@@ -383,21 +334,19 @@ export function RecipesScreen() {
               <Text style={styles.emptyTitle}>
                 {error ? "Unable to load recipes" : "No recipes found"}
               </Text>
-              <Text style={styles.stateCopy}>
-                {error ?? "Try another search or collection."}
-              </Text>
+              <Text style={styles.stateCopy}>{error ?? "Try another search or collection."}</Text>
               {error && (
-                <Pressable
-                  style={styles.retry}
-                  onPress={() => void loadRecipes()}
-                >
+                <Pressable style={styles.retry} onPress={() => void loadRecipes()}>
                   <Text style={styles.retryText}>Try again</Text>
                 </Pressable>
               )}
             </View>
           )
         }
-        contentContainerStyle={[styles.content, { paddingBottom: Math.max(insets.bottom + 105, 120) }]}
+        contentContainerStyle={[
+          styles.content,
+          { paddingBottom: Math.max(insets.bottom + 105, 120) },
+        ]}
         contentInsetAdjustmentBehavior="automatic"
         keyboardShouldPersistTaps="handled"
         refreshControl={
@@ -482,10 +431,7 @@ function RecipeCard({
     });
   const imageUrl = recipeImageUrl(recipe.image_url, apiBaseUrl);
   return (
-    <Pressable
-      onPress={open}
-      style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}
-    >
+    <Pressable onPress={open} style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}>
       <View style={styles.hero}>
         {imageUrl && !imageFailed ? (
           <Image
@@ -501,15 +447,12 @@ function RecipeCard({
         {matchedIngredientCount > 0 && (
           <View style={styles.match}>
             <Text style={styles.matchText}>
-              {matchedIngredientCount} expiring{" "}
-              {matchedIngredientCount === 1 ? "item" : "items"}
+              {matchedIngredientCount} expiring {matchedIngredientCount === 1 ? "item" : "items"}
             </Text>
           </View>
         )}
         <Pressable
-          accessibilityLabel={
-            recipe.is_favourite ? "Remove from favourites" : "Add to favourites"
-          }
+          accessibilityLabel={recipe.is_favourite ? "Remove from favourites" : "Add to favourites"}
           style={styles.heart}
           onPress={(event) => {
             event.stopPropagation();
@@ -535,16 +478,12 @@ function RecipeCard({
           <View style={styles.rating}>
             <Ionicons name="star" size={15} color={palette.cf5a623} />
             <Text style={styles.ratingText}>
-              {typeof recipe.average_rating === "number"
-                ? recipe.average_rating.toFixed(1)
-                : "New"}
+              {typeof recipe.average_rating === "number" ? recipe.average_rating.toFixed(1) : "New"}
             </Text>
           </View>
         </View>
         <View style={styles.meta}>
-          {recipe.cuisine && (
-            <Text style={styles.metaText}>{recipe.cuisine}</Text>
-          )}
+          {recipe.cuisine && <Text style={styles.metaText}>{recipe.cuisine}</Text>}
           {orderedTags.slice(0, 3).map((tag) => {
             const kind = recipeTagKind(tag);
             return (
@@ -563,9 +502,7 @@ function RecipeCard({
               </Text>
             );
           })}
-          {hiddenTagCount > 0 && (
-            <Text style={cardTagStyles.more}>+{hiddenTagCount} more</Text>
-          )}
+          {hiddenTagCount > 0 && <Text style={cardTagStyles.more}>+{hiddenTagCount} more</Text>}
         </View>
         {recipe.safety_warnings.length > 0 && (
           <Text style={styles.safety} numberOfLines={1}>
@@ -592,11 +529,7 @@ function RecipeCard({
               onSchedule();
             }}
           >
-            <Ionicons
-              name="calendar-outline"
-              size={17}
-              color={palette.c344154}
-            />
+            <Ionicons name="calendar-outline" size={17} color={palette.c344154} />
             <Text style={styles.scheduleText}>Add to Schedule</Text>
           </Pressable>
           <Pressable
@@ -606,11 +539,7 @@ function RecipeCard({
               onCook();
             }}
           >
-            <MaterialCommunityIcons
-              name="chef-hat"
-              size={18}
-              color={palette.cffffff}
-            />
+            <MaterialCommunityIcons name="chef-hat" size={18} color={palette.cffffff} />
             <Text style={styles.cookText}>Cook Now</Text>
           </Pressable>
         </View>

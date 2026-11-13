@@ -23,7 +23,6 @@ pnpm --filter @ecochef/mobile dev:client
 The customer setup flow intentionally does not display the readings URL or sensor key. Factory identity
 creation and the BLE firmware protocol live under `services/iot_gateway`.
 
-
 ### Android emulator API connection
 
 If the emulator cannot reach `10.0.2.2:8000`, forward the API port over ADB:

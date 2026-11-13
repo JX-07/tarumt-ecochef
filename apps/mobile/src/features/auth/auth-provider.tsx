@@ -10,8 +10,18 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [status, setStatus] = useState<AuthStatus>("loading");
-  useEffect(() => onAuthStateChanged(firebaseAuth, (nextUser) => { setUser(nextUser); setStatus(nextUser ? "signed_in" : "signed_out"); }), []);
-  const value = useMemo(() => ({ status, user, signOut: () => signOut(firebaseAuth) }), [status, user]);
+  useEffect(
+    () =>
+      onAuthStateChanged(firebaseAuth, (nextUser) => {
+        setUser(nextUser);
+        setStatus(nextUser ? "signed_in" : "signed_out");
+      }),
+    [],
+  );
+  const value = useMemo(
+    () => ({ status, user, signOut: () => signOut(firebaseAuth) }),
+    [status, user],
+  );
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 

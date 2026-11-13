@@ -37,10 +37,7 @@ import { firebaseAuth } from "../../../src/lib/firebase";
 import { sendVerificationForCurrentUser } from "../../../src/lib/auth";
 import { useVendor, type Shop } from "../components/vendor-context";
 import { StripeConnectCard } from "../components/stripe-connect-card";
-import {
-  ThemedDatePickerControl,
-  ThemedSelectControl,
-} from "../components/themed-controls";
+import { ThemedDatePickerControl, ThemedSelectControl } from "../components/themed-controls";
 
 const DRAFT_KEY = "ecochef.vendor.store-onboarding";
 const storeTypes = [
@@ -55,15 +52,7 @@ const storeTypes = [
   "Non-store Retailers",
 ];
 const prefixes = ["+60", "+65", "+62", "+66"];
-const days = [
-  "Monday",
-  "Tuesday",
-  "Wednesday",
-  "Thursday",
-  "Friday",
-  "Saturday",
-  "Sunday",
-];
+const days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
 
 type Phone = { prefix: string; number: string };
 type Hours = Record<string, { open: string; close: string; closed: boolean }>;
@@ -135,9 +124,7 @@ const parsePhone = (phone: string): Phone => {
   const prefix = prefixes.find((item) => phone.startsWith(item)) ?? "+60";
   return {
     prefix,
-    number: phone.startsWith(prefix)
-      ? phone.slice(prefix.length).trim()
-      : phone,
+    number: phone.startsWith(prefix) ? phone.slice(prefix.length).trim() : phone,
   };
 };
 const formatTime = (value: string) => {
@@ -146,23 +133,15 @@ const formatTime = (value: string) => {
   const period = hours >= 12 ? "PM" : "AM";
   return `${hours % 12 || 12}:${String(minutes).padStart(2, "0")} ${period}`;
 };
-const hoursDuration = (value: {
-  open: string;
-  close: string;
-  closed: boolean;
-}) => {
+const hoursDuration = (value: { open: string; close: string; closed: boolean }) => {
   if (value.closed) return 0;
   const [openHour, openMinute] = value.open.split(":").map(Number),
     [closeHour, closeMinute] = value.close.split(":").map(Number);
-  return (
-    Math.max(0, closeHour * 60 + closeMinute - openHour * 60 - openMinute) / 60
-  );
+  return Math.max(0, closeHour * 60 + closeMinute - openHour * 60 - openMinute) / 60;
 };
 const formatDuration = (hours: number) =>
   `${Number.isInteger(hours) ? hours : hours.toFixed(1)} hr${hours === 1 ? "" : "s"}`;
-const normaliseDraft = (
-  value: Partial<Draft> & { helpline_phones?: string[] },
-): Draft => ({
+const normaliseDraft = (value: Partial<Draft> & { helpline_phones?: string[] }): Draft => ({
   ...emptyDraft(),
   ...value,
   phones: value.phones?.length
@@ -209,16 +188,12 @@ export default function StoreProfile() {
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState(false);
   const [locations, setLocations] = useState<Record<string, string[]>>({});
-  const [onboardingStep, setOnboardingStep] = useState<
-    "details" | "hours" | "email"
-  >("details");
+  const [onboardingStep, setOnboardingStep] = useState<"details" | "hours" | "email">("details");
   const [submittedEmail, setSubmittedEmail] = useState("");
   const [emailVerificationMessage, setEmailVerificationMessage] = useState("");
   const [emailVerified, setEmailVerified] = useState(false);
   const [pendingLogo, setPendingLogo] = useState("");
-  const [savedDraft, setSavedDraft] = useState(() =>
-    JSON.stringify(emptyDraft()),
-  );
+  const [savedDraft, setSavedDraft] = useState(() => JSON.stringify(emptyDraft()));
   const [pendingNavigation, setPendingNavigation] = useState<string>();
   const errorSummaryRef = useRef<HTMLDivElement>(null);
   const allowNavigationRef = useRef(false);
@@ -263,9 +238,7 @@ export default function StoreProfile() {
     let active = true;
     const timer = setTimeout(() => {
       void createAuthenticatedWebApi("/api/ecochef")
-        .getVendorPostcode<{ city: string; state: string; country: string }>(
-          draft.postal_code,
-        )
+        .getVendorPostcode<{ city: string; state: string; country: string }>(draft.postal_code)
         .then((location) => {
           if (active)
             setDraft((current) => ({
@@ -283,9 +256,7 @@ export default function StoreProfile() {
     };
   }, [draft.postal_code]);
 
-  const hasUnsavedChanges = Boolean(
-    shop && JSON.stringify(draft) !== savedDraft,
-  );
+  const hasUnsavedChanges = Boolean(shop && JSON.stringify(draft) !== savedDraft);
   useEffect(() => {
     if (!hasUnsavedChanges) return;
     const beforeUnload = (event: BeforeUnloadEvent) => {
@@ -305,15 +276,8 @@ export default function StoreProfile() {
       )
         return;
       const target =
-        event.target instanceof Element
-          ? event.target.closest<HTMLAnchorElement>("a[href]")
-          : null;
-      if (
-        !target ||
-        target.target === "_blank" ||
-        target.hasAttribute("download")
-      )
-        return;
+        event.target instanceof Element ? event.target.closest<HTMLAnchorElement>("a[href]") : null;
+      if (!target || target.target === "_blank" || target.hasAttribute("download")) return;
       const destination = new URL(target.href, window.location.href);
       if (
         destination.href === window.location.href ||
@@ -348,10 +312,7 @@ export default function StoreProfile() {
     new Set([...Object.keys(locations), ...(draft.state ? [draft.state] : [])]),
   );
   const cityOptions = Array.from(
-    new Set([
-      ...(locations[draft.state] || []),
-      ...(draft.city ? [draft.city] : []),
-    ]),
+    new Set([...(locations[draft.state] || []), ...(draft.city ? [draft.city] : [])]),
   );
   const payload = () => ({
     name: draft.name,
@@ -384,10 +345,7 @@ export default function StoreProfile() {
     slot_item_limit: draft.slot_item_limit,
     operating_hours_schedule: draft.operating_hours_schedule,
   });
-  const showSubmissionErrors = (
-    errors: string[],
-    fields: Record<string, string> = {},
-  ) => {
+  const showSubmissionErrors = (errors: string[], fields: Record<string, string> = {}) => {
     setMessage("");
     setSubmissionErrors(errors);
     setFieldErrors(fields);
@@ -404,11 +362,9 @@ export default function StoreProfile() {
     if (!draft.name.trim()) fields.name = "Enter the public store name.";
     else if (draft.name.trim().length < 2 || draft.name.length > 100)
       fields.name = "Store name must contain 2–100 characters.";
-    if (!draft.contact_email.trim())
-      fields.contact_email = "Enter the store contact email.";
+    if (!draft.contact_email.trim()) fields.contact_email = "Enter the store contact email.";
     else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(draft.contact_email))
-      fields.contact_email =
-        "Enter a valid email, such as contact@yourstore.com.";
+      fields.contact_email = "Enter a valid email, such as contact@yourstore.com.";
     else if (
       !shop &&
       ownerEmail &&
@@ -416,21 +372,17 @@ export default function StoreProfile() {
     )
       fields.contact_email = `Use your verified Business account email: ${ownerEmail}.`;
     if (!draft.category) fields.category = "Select a store type.";
-    if (!phoneValues.length)
-      fields.phone = "Enter at least one customer helpline phone number.";
+    if (!phoneValues.length) fields.phone = "Enter at least one customer helpline phone number.";
     else if (phoneValues.some((phone) => phone.length > 20))
-      fields.phone =
-        "Each phone number must contain no more than 20 characters.";
-    if (!draft.street_address.trim())
-      fields.street_address = "Enter the street address.";
+      fields.phone = "Each phone number must contain no more than 20 characters.";
+    if (!draft.street_address.trim()) fields.street_address = "Enter the street address.";
     if (!/^\d{5}$/.test(draft.postal_code))
       fields.postal_code = "Enter a valid five-digit Malaysian postal code.";
     if (!draft.state) fields.state = "Select a state.";
     if (!draft.city) fields.city = "Select a city.";
     if (!draft.country) fields.country = "Select Malaysia as the country.";
     if (draft.description.length > 500)
-      fields.description =
-        "Mission & Description must contain no more than 500 characters.";
+      fields.description = "Mission & Description must contain no more than 500 characters.";
     if (draft.additional_location_details.length > 255)
       fields.additional_location_details =
         "Additional Location Details must contain no more than 255 characters.";
@@ -457,16 +409,11 @@ export default function StoreProfile() {
     const fields = validateDetails();
     for (const day of days) {
       const hours = draft.operating_hours_schedule[day];
-      if (
-        !hours.closed &&
-        (!hours.open || !hours.close || hours.open >= hours.close)
-      )
-        fields[`hours.${day}`] =
-          `${day}: closing time must be later than opening time.`;
+      if (!hours.closed && (!hours.open || !hours.close || hours.open >= hours.close))
+        fields[`hours.${day}`] = `${day}: closing time must be later than opening time.`;
     }
     const totalHours = days.reduce(
-      (total, day) =>
-        total + hoursDuration(draft.operating_hours_schedule[day]),
+      (total, day) => total + hoursDuration(draft.operating_hours_schedule[day]),
       0,
     );
     if (totalHours < 1)
@@ -482,17 +429,12 @@ export default function StoreProfile() {
     setSubmitting(true);
     try {
       if (shop) {
-        await createAuthenticatedWebApi("/api/ecochef").updateVendorStore(
-          shop.id,
-          payload(),
-        );
+        await createAuthenticatedWebApi("/api/ecochef").updateVendorStore(shop.id, payload());
         setSavedDraft(JSON.stringify(draft));
         await reload();
         setMessage("Store settings saved.");
       } else {
-        await createAuthenticatedWebApi("/api/ecochef").createVendorStore(
-          payload(),
-        );
+        await createAuthenticatedWebApi("/api/ecochef").createVendorStore(payload());
         sessionStorage.removeItem(DRAFT_KEY);
         setSubmittedEmail(draft.contact_email);
         setOnboardingStep("email");
@@ -502,12 +444,9 @@ export default function StoreProfile() {
       return true;
     } catch (error) {
       const status =
-        typeof error === "object" && error && "status" in error
-          ? Number(error.status)
-          : 0;
+        typeof error === "object" && error && "status" in error ? Number(error.status) : 0;
       const apiIssues =
-        error instanceof ApiClientError &&
-        Array.isArray(error.response?.details)
+        error instanceof ApiClientError && Array.isArray(error.response?.details)
           ? (error.response.details as ApiValidationIssue[])
           : [];
       const fieldMap: Record<string, string> = {
@@ -526,10 +465,7 @@ export default function StoreProfile() {
         helpline_phones: "phone",
       };
       const rejectedFields = Object.fromEntries(
-        apiIssues.map((issue) => [
-          fieldMap[issue.field] ?? issue.field,
-          issue.message,
-        ]),
+        apiIssues.map((issue) => [fieldMap[issue.field] ?? issue.field, issue.message]),
       );
       const guidance =
         status === 401 || status === 403
@@ -550,9 +486,7 @@ export default function StoreProfile() {
         apiMessages.length
           ? [...apiMessages, guidance]
           : [
-              error instanceof Error
-                ? error.message
-                : "The store request could not be submitted.",
+              error instanceof Error ? error.message : "The store request could not be submitted.",
               guidance,
             ],
         rejectedFields,
@@ -588,10 +522,7 @@ export default function StoreProfile() {
       image.onload = () => {
         const width = 1600;
         const height = 900;
-        const scale = Math.max(
-          width / image.naturalWidth,
-          height / image.naturalHeight,
-        );
+        const scale = Math.max(width / image.naturalWidth, height / image.naturalHeight);
         const renderedWidth = image.naturalWidth * scale;
         const renderedHeight = image.naturalHeight * scale;
         const canvas = document.createElement("canvas");
@@ -627,9 +558,7 @@ export default function StoreProfile() {
     allowNavigationRef.current = true;
     const destination = new URL(href, window.location.href);
     if (destination.origin === window.location.origin)
-      router.push(
-        `${destination.pathname}${destination.search}${destination.hash}`,
-      );
+      router.push(`${destination.pathname}${destination.search}${destination.hash}`);
     else window.location.assign(destination.href);
   };
   const discardAndLeave = () => {
@@ -640,13 +569,10 @@ export default function StoreProfile() {
   const verifyBusinessEmail = async () => {
     try {
       const user = firebaseAuth.currentUser;
-      if (!user)
-        throw new Error("Sign in again to verify your business email.");
+      if (!user) throw new Error("Sign in again to verify your business email.");
       await user.reload();
       if (user.email?.toLowerCase() !== submittedEmail.toLowerCase())
-        throw new Error(
-          `Your signed-in business email must match ${submittedEmail}.`,
-        );
+        throw new Error(`Your signed-in business email must match ${submittedEmail}.`);
       if (!user.emailVerified) {
         await sendVerificationForCurrentUser();
         setEmailVerificationMessage(
@@ -680,9 +606,8 @@ export default function StoreProfile() {
           <p>FINAL VERIFICATION</p>
           <h2>Verify your business email</h2>
           <p>
-            Your store request was submitted. Confirm the verified Firebase
-            business account for <strong>{submittedEmail}</strong> before
-            continuing to Store Settings.
+            Your store request was submitted. Confirm the verified Firebase business account for{" "}
+            <strong>{submittedEmail}</strong> before continuing to Store Settings.
           </p>
           {emailVerificationMessage && (
             <div
@@ -693,17 +618,10 @@ export default function StoreProfile() {
             </div>
           )}
           <div className="email-verification-actions">
-            <button
-              className="secondary"
-              onClick={() => void verifyBusinessEmail()}
-            >
+            <button className="secondary" onClick={() => void verifyBusinessEmail()}>
               {emailVerified ? "Verified" : "Check Verification"}
             </button>
-            <button
-              className="cta"
-              disabled={!emailVerified}
-              onClick={() => void reload()}
-            >
+            <button className="cta" disabled={!emailVerified} onClick={() => void reload()}>
               Continue to Store Settings
             </button>
           </div>
@@ -730,10 +648,7 @@ export default function StoreProfile() {
           <b>Email Verification</b>
         </div>
         {submissionErrors.length > 0 && (
-          <SubmissionErrorSummary
-            ref={errorSummaryRef}
-            errors={submissionErrors}
-          />
+          <SubmissionErrorSummary ref={errorSummaryRef} errors={submissionErrors} />
         )}
         {message && <p className="vendor-message">{message}</p>}
         {onboardingStep === "details" ? (
@@ -745,53 +660,34 @@ export default function StoreProfile() {
               <p>STORE ONBOARDING</p>
               <h2>Tell us about your store</h2>
               <p>
-                Complete the details below to submit your storefront for
-                administrator review. Your progress remains available until you
-                sign out.
+                Complete the details below to submit your storefront for administrator review. Your
+                progress remains available until you sign out.
               </p>
             </div>
             <div className="onboarding-form">
-              <RequiredLabel
-                plain
-                text="Public Store Name"
-                error={fieldErrors.name}
-              >
+              <RequiredLabel plain text="Public Store Name" error={fieldErrors.name}>
                 <input
                   value={draft.name}
-                  onChange={(event) =>
-                    setDraft({ ...draft, name: event.target.value })
-                  }
+                  onChange={(event) => setDraft({ ...draft, name: event.target.value })}
                   placeholder="e.g. Always TT Fresh Organics"
                 />
               </RequiredLabel>
-              <label
-                className={
-                  fieldErrors.description ? "field-has-error" : undefined
-                }
-              >
+              <label className={fieldErrors.description ? "field-has-error" : undefined}>
                 Mission &amp; Description
                 <textarea
                   className="vertical-resize"
                   value={draft.description}
-                  onChange={(event) =>
-                    setDraft({ ...draft, description: event.target.value })
-                  }
+                  onChange={(event) => setDraft({ ...draft, description: event.target.value })}
                   placeholder="Share your mission and the store details"
                 />
                 <FieldError message={fieldErrors.description} />
               </label>
               <div className="form-row">
-                <RequiredLabel
-                  plain
-                  text="Store Contact Email"
-                  error={fieldErrors.contact_email}
-                >
+                <RequiredLabel plain text="Store Contact Email" error={fieldErrors.contact_email}>
                   <input
                     type="email"
                     value={draft.contact_email}
-                    onChange={(event) =>
-                      setDraft({ ...draft, contact_email: event.target.value })
-                    }
+                    onChange={(event) => setDraft({ ...draft, contact_email: event.target.value })}
                     placeholder="e.g. contact@yourstore.com"
                   />
                 </RequiredLabel>
@@ -807,10 +703,7 @@ export default function StoreProfile() {
                 setDraft={setDraft}
                 updatePhone={updatePhone}
               />
-              <RequiredLabel
-                text="Street Address"
-                error={fieldErrors.street_address}
-              >
+              <RequiredLabel text="Street Address" error={fieldErrors.street_address}>
                 <input
                   className="street-input"
                   value={draft.street_address}
@@ -826,18 +719,12 @@ export default function StoreProfile() {
                 />
               </RequiredLabel>
               <div className="address-grid">
-                <RequiredLabel
-                  plain
-                  text="Postal Code"
-                  error={fieldErrors.postal_code}
-                >
+                <RequiredLabel plain text="Postal Code" error={fieldErrors.postal_code}>
                   <input
                     inputMode="numeric"
                     maxLength={5}
                     value={draft.postal_code}
-                    onChange={(event) =>
-                      setDraft({ ...draft, postal_code: event.target.value })
-                    }
+                    onChange={(event) => setDraft({ ...draft, postal_code: event.target.value })}
                     placeholder="11900"
                   />
                 </RequiredLabel>
@@ -847,9 +734,7 @@ export default function StoreProfile() {
                     value={draft.state}
                     placeholder="Select State"
                     options={stateOptions}
-                    onChange={(state) =>
-                      setDraft({ ...draft, state, city: "" })
-                    }
+                    onChange={(state) => setDraft({ ...draft, state, city: "" })}
                   />
                 </RequiredLabel>
                 <RequiredLabel plain text="City" error={fieldErrors.city}>
@@ -890,10 +775,7 @@ export default function StoreProfile() {
               <LogoUpload draft={draft} upload={upload} />
               <BackdropUpload draft={draft} upload={uploadBackdrop} />
               <div className="onboarding-actions">
-                <button
-                  className="secondary danger-action"
-                  onClick={() => setConfirmClear(true)}
-                >
+                <button className="secondary danger-action" onClick={() => setConfirmClear(true)}>
                   <Trash2 size={16} /> Clear all
                 </button>
                 <button className="cta" onClick={nextToHours}>
@@ -909,11 +791,35 @@ export default function StoreProfile() {
             </h2>
             <div className="settings-body">
               <p className="hours-guidance">
-                Set when customers can collect their orders. Mark a day closed
-                if your store does not operate that day.
+                Set when customers can collect their orders. Mark a day closed if your store does
+                not operate that day.
               </p>
-              <label>Maximum orders per 30-minute slot<input type="number" min={1} max={1000} required value={draft.slot_order_limit} onChange={(event) => setDraft({ ...draft, slot_order_limit: Number(event.target.value) })} /></label>
-              <label>Maximum items per 30-minute slot<input type="number" min={1} max={10000} required value={draft.slot_item_limit} onChange={(event) => setDraft({ ...draft, slot_item_limit: Number(event.target.value) })} /></label>
+              <label>
+                Maximum orders per 30-minute slot
+                <input
+                  type="number"
+                  min={1}
+                  max={1000}
+                  required
+                  value={draft.slot_order_limit}
+                  onChange={(event) =>
+                    setDraft({ ...draft, slot_order_limit: Number(event.target.value) })
+                  }
+                />
+              </label>
+              <label>
+                Maximum items per 30-minute slot
+                <input
+                  type="number"
+                  min={1}
+                  max={10000}
+                  required
+                  value={draft.slot_item_limit}
+                  onChange={(event) =>
+                    setDraft({ ...draft, slot_item_limit: Number(event.target.value) })
+                  }
+                />
+              </label>
               {days.map((day) => {
                 const value = draft.operating_hours_schedule[day];
                 const error = fieldErrors[`hours.${day}`];
@@ -993,24 +899,14 @@ export default function StoreProfile() {
                 >
                   <ArrowLeft size={16} /> Back
                 </button>
-                <button
-                  className="cta"
-                  disabled={submitting}
-                  onClick={() => void save()}
-                >
-                  <Save size={16} />{" "}
-                  {submitting ? "Submitting…" : "Submit Store Request"}
+                <button className="cta" disabled={submitting} onClick={() => void save()}>
+                  <Save size={16} /> {submitting ? "Submitting…" : "Submit Store Request"}
                 </button>
               </div>
             </div>
           </section>
         )}
-        {confirmClear && (
-          <ClearConfirmation
-            close={() => setConfirmClear(false)}
-            clear={clear}
-          />
-        )}
+        {confirmClear && <ClearConfirmation close={() => setConfirmClear(false)} clear={clear} />}
         {pendingLogo && (
           <LogoCropModal
             source={pendingLogo}
@@ -1025,9 +921,7 @@ export default function StoreProfile() {
     );
 
   return (
-    <main
-      className={`workspace store-workspace${shop.can_edit_store ? "" : " view-only"}`}
-    >
+    <main className={`workspace store-workspace${shop.can_edit_store ? "" : " view-only"}`}>
       <header className="store-page-head">
         <div>
           <h1>Storefront Profile &amp; Operations</h1>
@@ -1059,22 +953,14 @@ export default function StoreProfile() {
       )}
       <div className="store-tabs">
         <div className="store-tab-options">
-          <button
-            className={tab === "details" ? "active" : ""}
-            onClick={() => setTab("details")}
-          >
+          <button className={tab === "details" ? "active" : ""} onClick={() => setTab("details")}>
             Store Details &amp; Branding
           </button>
-          <button
-            className={tab === "hours" ? "active" : ""}
-            onClick={() => setTab("hours")}
-          >
+          <button className={tab === "hours" ? "active" : ""} onClick={() => setTab("hours")}>
             Operating Hours
           </button>
         </div>
-        <em
-          className={`pill ${shop.status === "approved" ? "verified" : shop.status}`}
-        >
+        <em className={`pill ${shop.status === "approved" ? "verified" : shop.status}`}>
           Status: {storeStatusLabel(shop.status)}
         </em>
       </div>
@@ -1086,40 +972,24 @@ export default function StoreProfile() {
                 <Store size={18} /> Basic Merchant Details
               </h2>
               <div className="settings-body">
-                <RequiredLabel
-                  plain
-                  text="Public Store Name"
-                  error={fieldErrors.name}
-                >
+                <RequiredLabel plain text="Public Store Name" error={fieldErrors.name}>
                   <input
                     value={draft.name}
-                    onChange={(event) =>
-                      setDraft({ ...draft, name: event.target.value })
-                    }
+                    onChange={(event) => setDraft({ ...draft, name: event.target.value })}
                   />
                 </RequiredLabel>
-                <label
-                  className={
-                    fieldErrors.description ? "field-has-error" : undefined
-                  }
-                >
+                <label className={fieldErrors.description ? "field-has-error" : undefined}>
                   Mission &amp; Description
                   <textarea
                     className="vertical-resize"
                     value={draft.description}
-                    onChange={(event) =>
-                      setDraft({ ...draft, description: event.target.value })
-                    }
+                    onChange={(event) => setDraft({ ...draft, description: event.target.value })}
                     placeholder="Share your mission and the store details"
                   />
                   <FieldError message={fieldErrors.description} />
                 </label>
                 <div className="form-row">
-                  <RequiredLabel
-                    plain
-                    text="Store Contact Email"
-                    error={fieldErrors.contact_email}
-                  >
+                  <RequiredLabel plain text="Store Contact Email" error={fieldErrors.contact_email}>
                     <input
                       type="email"
                       value={draft.contact_email}
@@ -1151,10 +1021,7 @@ export default function StoreProfile() {
                 <MapPin size={18} /> Location
               </h2>
               <div className="settings-body">
-                <RequiredLabel
-                  text="Street Address"
-                  error={fieldErrors.street_address}
-                >
+                <RequiredLabel text="Street Address" error={fieldErrors.street_address}>
                   <input
                     className="street-input"
                     value={draft.street_address}
@@ -1169,16 +1036,10 @@ export default function StoreProfile() {
                   />
                 </RequiredLabel>
                 <div className="address-grid">
-                  <RequiredLabel
-                    plain
-                    text="Postal Code"
-                    error={fieldErrors.postal_code}
-                  >
+                  <RequiredLabel plain text="Postal Code" error={fieldErrors.postal_code}>
                     <input
                       value={draft.postal_code}
-                      onChange={(event) =>
-                        setDraft({ ...draft, postal_code: event.target.value })
-                      }
+                      onChange={(event) => setDraft({ ...draft, postal_code: event.target.value })}
                     />
                   </RequiredLabel>
                   <RequiredLabel plain text="State" error={fieldErrors.state}>
@@ -1187,9 +1048,7 @@ export default function StoreProfile() {
                       value={draft.state}
                       placeholder="Select State"
                       options={stateOptions}
-                      onChange={(state) =>
-                        setDraft({ ...draft, state, city: "" })
-                      }
+                      onChange={(state) => setDraft({ ...draft, state, city: "" })}
                     />
                   </RequiredLabel>
                   <RequiredLabel plain text="City" error={fieldErrors.city}>
@@ -1201,11 +1060,7 @@ export default function StoreProfile() {
                       onChange={(city) => setDraft({ ...draft, city })}
                     />
                   </RequiredLabel>
-                  <RequiredLabel
-                    plain
-                    text="Country"
-                    error={fieldErrors.country}
-                  >
+                  <RequiredLabel plain text="Country" error={fieldErrors.country}>
                     <ThemedSelect
                       ariaLabel="Country"
                       value={draft.country}
@@ -1229,9 +1084,7 @@ export default function StoreProfile() {
                     }
                     placeholder="Unit, floor, landmark, or pickup instructions"
                   />
-                  <FieldError
-                    message={fieldErrors.additional_location_details}
-                  />
+                  <FieldError message={fieldErrors.additional_location_details} />
                 </label>
               </div>
             </section>
@@ -1249,100 +1102,125 @@ export default function StoreProfile() {
           </aside>
         </div>
       ) : (
-        <div className="hours-settings-stack"><div className="operating-limits-layout">
-          <section className="settings-card hours-card">
-            <h2>
-              <Clock size={18} /> Operating Hours
-            </h2>
-            <div className="settings-body">
-              {days.map((day) => {
-                const value = draft.operating_hours_schedule[day];
-                return (
-                  <div
-                    className={`hours-row${value.closed ? " is-closed" : ""}`}
-                    key={day}
-                  >
-                    <div>
-                      <strong>
-                        {day}
-                        <em>
+        <div className="hours-settings-stack">
+          <div className="operating-limits-layout">
+            <section className="settings-card hours-card">
+              <h2>
+                <Clock size={18} /> Operating Hours
+              </h2>
+              <div className="settings-body">
+                {days.map((day) => {
+                  const value = draft.operating_hours_schedule[day];
+                  return (
+                    <div className={`hours-row${value.closed ? " is-closed" : ""}`} key={day}>
+                      <div>
+                        <strong>
+                          {day}
+                          <em>{value.closed ? "0 hrs" : formatDuration(hoursDuration(value))}</em>
+                        </strong>
+                        <small>
                           {value.closed
-                            ? "0 hrs"
-                            : formatDuration(hoursDuration(value))}
-                        </em>
-                      </strong>
-                      <small>
-                        {value.closed
-                          ? "Closed"
-                          : `${formatTime(value.open)} – ${formatTime(value.close)}`}
-                      </small>
+                            ? "Closed"
+                            : `${formatTime(value.open)} – ${formatTime(value.close)}`}
+                        </small>
+                      </div>
+                      <label className="closed-check">
+                        <input
+                          type="checkbox"
+                          checked={value.closed}
+                          onChange={(event) =>
+                            setDraft({
+                              ...draft,
+                              operating_hours_schedule: {
+                                ...draft.operating_hours_schedule,
+                                [day]: { ...value, closed: event.target.checked },
+                              },
+                            })
+                          }
+                        />{" "}
+                        Closed
+                      </label>
+                      <div className="time-range">
+                        <input
+                          type="time"
+                          disabled={value.closed}
+                          value={value.open}
+                          onChange={(event) =>
+                            setDraft({
+                              ...draft,
+                              operating_hours_schedule: {
+                                ...draft.operating_hours_schedule,
+                                [day]: { ...value, open: event.target.value },
+                              },
+                            })
+                          }
+                        />
+                        <span>to</span>
+                        <input
+                          type="time"
+                          disabled={value.closed}
+                          value={value.close}
+                          onChange={(event) =>
+                            setDraft({
+                              ...draft,
+                              operating_hours_schedule: {
+                                ...draft.operating_hours_schedule,
+                                [day]: { ...value, close: event.target.value },
+                              },
+                            })
+                          }
+                        />
+                      </div>
                     </div>
-                    <label className="closed-check">
-                      <input
-                        type="checkbox"
-                        checked={value.closed}
-                        onChange={(event) =>
-                          setDraft({
-                            ...draft,
-                            operating_hours_schedule: {
-                              ...draft.operating_hours_schedule,
-                              [day]: { ...value, closed: event.target.checked },
-                            },
-                          })
-                        }
-                      />{" "}
-                      Closed
-                    </label>
-                    <div className="time-range">
-                      <input
-                        type="time"
-                        disabled={value.closed}
-                        value={value.open}
-                        onChange={(event) =>
-                          setDraft({
-                            ...draft,
-                            operating_hours_schedule: {
-                              ...draft.operating_hours_schedule,
-                              [day]: { ...value, open: event.target.value },
-                            },
-                          })
-                        }
-                      />
-                      <span>to</span>
-                      <input
-                        type="time"
-                        disabled={value.closed}
-                        value={value.close}
-                        onChange={(event) =>
-                          setDraft({
-                            ...draft,
-                            operating_hours_schedule: {
-                              ...draft.operating_hours_schedule,
-                              [day]: { ...value, close: event.target.value },
-                            },
-                          })
-                        }
-                      />
-                    </div>
-                  </div>
-                );
-              })}
-              <footer className="weekly-hours-total">
-                <span>Weekly operating total</span>
-                <strong>
-                  {formatDuration(
-                    days.reduce(
-                      (total, day) =>
-                        total +
-                        hoursDuration(draft.operating_hours_schedule[day]),
-                      0,
-                    ),
-                  )}
-                </strong>
-              </footer>
-            </div>
-          </section>
-          <section className="settings-card preorder-limits-card"><h2><Clock size={18}/> Pre-Order Limits</h2><div className="settings-body"><label>Maximum orders per 30-minute slot<input type="number" min={1} max={1000} required value={draft.slot_order_limit} onChange={(event) => setDraft({ ...draft, slot_order_limit: Number(event.target.value) })} /></label><label>Maximum items per 30-minute slot<input type="number" min={1} max={10000} required value={draft.slot_item_limit} onChange={(event) => setDraft({ ...draft, slot_item_limit: Number(event.target.value) })} /></label></div></section></div>
+                  );
+                })}
+                <footer className="weekly-hours-total">
+                  <span>Weekly operating total</span>
+                  <strong>
+                    {formatDuration(
+                      days.reduce(
+                        (total, day) => total + hoursDuration(draft.operating_hours_schedule[day]),
+                        0,
+                      ),
+                    )}
+                  </strong>
+                </footer>
+              </div>
+            </section>
+            <section className="settings-card preorder-limits-card">
+              <h2>
+                <Clock size={18} /> Pre-Order Limits
+              </h2>
+              <div className="settings-body">
+                <label>
+                  Maximum orders per 30-minute slot
+                  <input
+                    type="number"
+                    min={1}
+                    max={1000}
+                    required
+                    value={draft.slot_order_limit}
+                    onChange={(event) =>
+                      setDraft({ ...draft, slot_order_limit: Number(event.target.value) })
+                    }
+                  />
+                </label>
+                <label>
+                  Maximum items per 30-minute slot
+                  <input
+                    type="number"
+                    min={1}
+                    max={10000}
+                    required
+                    value={draft.slot_item_limit}
+                    onChange={(event) =>
+                      setDraft({ ...draft, slot_item_limit: Number(event.target.value) })
+                    }
+                  />
+                </label>
+              </div>
+            </section>
+          </div>
           <HolidayClosingNotice storeId={shop.id} />
         </div>
       )}
@@ -1412,30 +1290,20 @@ function HolidayClosingNotice({ storeId }: { storeId: string }) {
     void load();
   }, [storeId]);
   const add = async () => {
-    if (
-      !reason.trim() ||
-      start < today ||
-      end < start ||
-      (!wholeDay && open >= close)
-    ) {
+    if (!reason.trim() || start < today || end < start || (!wholeDay && open >= close)) {
       setMessageTone("error");
-      setMessage(
-        "Choose a valid date range, operating time, and closure reason.",
-      );
+      setMessage("Choose a valid date range, operating time, and closure reason.");
       return;
     }
     try {
-      await createAuthenticatedWebApi("/api/ecochef").createVendorHoliday(
-        storeId,
-        {
-          starts_on: start,
-          ends_on: end,
-          whole_day: wholeDay,
-          opens_at: wholeDay ? null : open,
-          closes_at: wholeDay ? null : close,
-          reason: reason.trim(),
-        },
-      );
+      await createAuthenticatedWebApi("/api/ecochef").createVendorHoliday(storeId, {
+        starts_on: start,
+        ends_on: end,
+        whole_day: wholeDay,
+        opens_at: wholeDay ? null : open,
+        closes_at: wholeDay ? null : close,
+        reason: reason.trim(),
+      });
       setReason("");
       setMessageTone("success");
       setMessage("Holiday Closing Notice added successfully.");
@@ -1443,9 +1311,7 @@ function HolidayClosingNotice({ storeId }: { storeId: string }) {
     } catch (error) {
       setMessageTone("error");
       setMessage(
-        error instanceof Error
-          ? error.message
-          : "The Holiday Closing Notice could not be applied.",
+        error instanceof Error ? error.message : "The Holiday Closing Notice could not be applied.",
       );
     }
   };
@@ -1453,19 +1319,14 @@ function HolidayClosingNotice({ storeId }: { storeId: string }) {
     setDeletingId(holiday.id);
     setMessage("");
     try {
-      await createAuthenticatedWebApi("/api/ecochef").deleteVendorHoliday(
-        storeId,
-        holiday.id,
-      );
+      await createAuthenticatedWebApi("/api/ecochef").deleteVendorHoliday(storeId, holiday.id);
       setMessageTone("success");
       setMessage("Holiday Closing Notice deleted successfully.");
       await load();
     } catch (error) {
       setMessageTone("error");
       setMessage(
-        error instanceof Error
-          ? error.message
-          : "The Holiday Closing Notice could not be deleted.",
+        error instanceof Error ? error.message : "The Holiday Closing Notice could not be deleted.",
       );
     } finally {
       setDeletingId(undefined);
@@ -1486,137 +1347,136 @@ function HolidayClosingNotice({ storeId }: { storeId: string }) {
   return (
     <>
       <section className="settings-card holiday-card">
-      <header>
-        <div>
-          <h2>
-            <CalendarDays size={18} /> Holiday Closing Notice
-          </h2>
-          <p>
-            Apply a full-day closure or reduced hours for a specific date or
-            range. No approval is required.
-          </p>
-        </div>
-      </header>
-      <div className="settings-body">
-        <div className="holiday-date-grid">
-          <ThemedDatePickerControl
-            label="Start date"
+        <header>
+          <div>
+            <h2>
+              <CalendarDays size={18} /> Holiday Closing Notice
+            </h2>
+            <p>
+              Apply a full-day closure or reduced hours for a specific date or range. No approval is
+              required.
+            </p>
+          </div>
+        </header>
+        <div className="settings-body">
+          <div className="holiday-date-grid">
+            <ThemedDatePickerControl
+              label="Start date"
+              minimum={today}
+              value={start}
+              onChange={(value) => {
+                setStart(value);
+                if (end < value) setEnd(value);
+              }}
+            />
+            <ThemedDatePickerControl
+              label="End date"
+              minimum={start}
+              value={end}
+              onChange={setEnd}
+            />
+          </div>
+          <HolidayRangeCalendar
+            start={start}
+            end={end}
             minimum={today}
-            value={start}
-            onChange={(value) => {
-              setStart(value);
-              if (end < value) setEnd(value);
+            change={(nextStart, nextEnd) => {
+              setStart(nextStart);
+              setEnd(nextEnd);
             }}
           />
-          <ThemedDatePickerControl
-            label="End date"
-            minimum={start}
-            value={end}
-            onChange={setEnd}
-          />
-        </div>
-        <HolidayRangeCalendar
-          start={start}
-          end={end}
-          minimum={today}
-          change={(nextStart, nextEnd) => {
-            setStart(nextStart);
-            setEnd(nextEnd);
-          }}
-        />
-        <label className="whole-day-toggle">
-          <input
-            type="checkbox"
-            checked={wholeDay}
-            onChange={(event) => setWholeDay(event.target.checked)}
-          />
-          <span className="holiday-checkbox" aria-hidden="true">
-            {wholeDay ? <Check size={13} /> : null}
-          </span>
-          <span>Whole day</span>
-        </label>
-        <div className={`holiday-times${wholeDay ? " disabled" : ""}`}>
-          <div>
-            <span className="holiday-field-heading">Temporary opening</span>
-            <ThemedSelectControl
-              disabled={wholeDay}
-              ariaLabel="Temporary opening time"
-              value={open}
-              onChange={setOpen}
-              options={timeOptions}
+          <label className="whole-day-toggle">
+            <input
+              type="checkbox"
+              checked={wholeDay}
+              onChange={(event) => setWholeDay(event.target.checked)}
             />
+            <span className="holiday-checkbox" aria-hidden="true">
+              {wholeDay ? <Check size={13} /> : null}
+            </span>
+            <span>Whole day</span>
+          </label>
+          <div className={`holiday-times${wholeDay ? " disabled" : ""}`}>
+            <div>
+              <span className="holiday-field-heading">Temporary opening</span>
+              <ThemedSelectControl
+                disabled={wholeDay}
+                ariaLabel="Temporary opening time"
+                value={open}
+                onChange={setOpen}
+                options={timeOptions}
+              />
+            </div>
+            <span className="holiday-time-separator">to</span>
+            <div>
+              <span className="holiday-field-heading">Temporary closing</span>
+              <ThemedSelectControl
+                disabled={wholeDay}
+                ariaLabel="Temporary closing time"
+                value={close}
+                onChange={setClose}
+                options={timeOptions}
+              />
+            </div>
           </div>
-          <span className="holiday-time-separator">to</span>
-          <div>
-            <span className="holiday-field-heading">Temporary closing</span>
-            <ThemedSelectControl
-              disabled={wholeDay}
-              ariaLabel="Temporary closing time"
-              value={close}
-              onChange={setClose}
-              options={timeOptions}
+          <label>
+            <span className="holiday-field-heading">Reason shown to customers</span>
+            <textarea
+              rows={3}
+              maxLength={300}
+              value={reason}
+              onChange={(event) => setReason(event.target.value)}
+              placeholder="e.g. Closed for Deepavali celebrations"
             />
-          </div>
+            <small className="holiday-word-count">
+              {reason.trim() ? reason.trim().split(/\s+/).length : 0}/30 words
+            </small>
+          </label>
+          {message ? (
+            <p
+              className={`holiday-message ${messageTone}`}
+              role={messageTone === "error" ? "alert" : "status"}
+            >
+              {message}
+            </p>
+          ) : null}
+          <button className="cta holiday-add" onClick={() => void add()}>
+            <Plus size={15} /> Apply Holiday Notice
+          </button>
+          {holidays.length ? (
+            <div className="holiday-list">
+              {holidays.map((holiday) => (
+                <article key={holiday.id}>
+                  <b>
+                    {new Date(`${holiday.starts_on}T00:00:00`).toLocaleDateString("en-MY", {
+                      day: "2-digit",
+                      month: "short",
+                      year: "numeric",
+                    })}
+                    {holiday.ends_on !== holiday.starts_on
+                      ? ` – ${new Date(`${holiday.ends_on}T00:00:00`).toLocaleDateString("en-MY", { day: "2-digit", month: "short", year: "numeric" })}`
+                      : ""}
+                  </b>
+                  <span>
+                    {holiday.whole_day
+                      ? "Closed all day"
+                      : `${formatTime(holiday.opens_at!)} – ${formatTime(holiday.closes_at!)}`}
+                  </span>
+                  <button
+                    type="button"
+                    className="holiday-delete"
+                    aria-label="Delete holiday closure notice"
+                    disabled={deletingId === holiday.id}
+                    onClick={() => setPendingDelete(holiday)}
+                  >
+                    <Trash2 size={16} />
+                  </button>
+                  <p>{holiday.reason}</p>
+                </article>
+              ))}
+            </div>
+          ) : null}
         </div>
-        <label>
-          <span className="holiday-field-heading">
-            Reason shown to customers
-          </span>
-          <textarea
-            rows={3}
-            maxLength={300}
-            value={reason}
-            onChange={(event) => setReason(event.target.value)}
-            placeholder="e.g. Closed for Deepavali celebrations"
-          />
-          <small className="holiday-word-count">
-            {reason.trim() ? reason.trim().split(/\s+/).length : 0}/30 words
-          </small>
-        </label>
-        {message ? (
-          <p
-            className={`holiday-message ${messageTone}`}
-            role={messageTone === "error" ? "alert" : "status"}
-          >
-            {message}
-          </p>
-        ) : null}
-        <button className="cta holiday-add" onClick={() => void add()}>
-          <Plus size={15} /> Apply Holiday Notice
-        </button>
-        {holidays.length ? (
-          <div className="holiday-list">
-            {holidays.map((holiday) => (
-              <article key={holiday.id}>
-                <b>
-                  {new Date(`${holiday.starts_on}T00:00:00`).toLocaleDateString(
-                    "en-MY",
-                    { day: "2-digit", month: "short", year: "numeric" },
-                  )}
-                  {holiday.ends_on !== holiday.starts_on
-                    ? ` – ${new Date(`${holiday.ends_on}T00:00:00`).toLocaleDateString("en-MY", { day: "2-digit", month: "short", year: "numeric" })}`
-                    : ""}
-                </b>
-                <span>
-                  {holiday.whole_day
-                    ? "Closed all day"
-                    : `${formatTime(holiday.opens_at!)} – ${formatTime(holiday.closes_at!)}`}
-                </span>
-                <button
-                  type="button"
-                  className="holiday-delete"
-                  aria-label="Delete holiday closure notice"
-                  disabled={deletingId === holiday.id}
-                  onClick={() => setPendingDelete(holiday)}
-                >
-                  <Trash2 size={16} />
-                </button>
-                <p>{holiday.reason}</p>
-              </article>
-            ))}
-          </div>
-        ) : null}
-      </div>
       </section>
       {pendingDelete ? (
         <div className="modal-backdrop">
@@ -1627,14 +1487,31 @@ function HolidayClosingNotice({ storeId }: { storeId: string }) {
             aria-labelledby="holiday-delete-title"
             aria-describedby="holiday-delete-description"
           >
-            <span><Trash2 size={24} /></span>
+            <span>
+              <Trash2 size={24} />
+            </span>
             <h2 id="holiday-delete-title">Delete Holiday Closing Notice?</h2>
             <p id="holiday-delete-description">
-              The closure scheduled for <strong>{holidayDateLabel(pendingDelete)}</strong> will be removed. Customers will no longer see this notice.
+              The closure scheduled for <strong>{holidayDateLabel(pendingDelete)}</strong> will be
+              removed. Customers will no longer see this notice.
             </p>
             <footer>
-              <button className="neutral-button" type="button" disabled={Boolean(deletingId)} onClick={() => setPendingDelete(undefined)}>Cancel</button>
-              <button className="danger-button" type="button" disabled={Boolean(deletingId)} onClick={() => void remove(pendingDelete)}>{deletingId ? "Deleting…" : "Delete Notice"}</button>
+              <button
+                className="neutral-button"
+                type="button"
+                disabled={Boolean(deletingId)}
+                onClick={() => setPendingDelete(undefined)}
+              >
+                Cancel
+              </button>
+              <button
+                className="danger-button"
+                type="button"
+                disabled={Boolean(deletingId)}
+                onClick={() => void remove(pendingDelete)}
+              >
+                {deletingId ? "Deleting…" : "Delete Notice"}
+              </button>
             </footer>
           </section>
         </div>
@@ -1673,9 +1550,7 @@ function HolidayRangeCalendar({
       <header>
         <button
           type="button"
-          onClick={() =>
-            setMonth(new Date(month.getFullYear(), month.getMonth() - 1, 1))
-          }
+          onClick={() => setMonth(new Date(month.getFullYear(), month.getMonth() - 1, 1))}
         >
           <ChevronLeft />
         </button>
@@ -1687,9 +1562,7 @@ function HolidayRangeCalendar({
         </strong>
         <button
           type="button"
-          onClick={() =>
-            setMonth(new Date(month.getFullYear(), month.getMonth() + 1, 1))
-          }
+          onClick={() => setMonth(new Date(month.getFullYear(), month.getMonth() + 1, 1))}
         >
           <ChevronRight />
         </button>
@@ -1723,9 +1596,7 @@ function HolidayRangeCalendar({
           );
         })}
       </div>
-      <small>
-        Tap one date or drag across several dates to select a closure range.
-      </small>
+      <small>Tap one date or drag across several dates to select a closure range.</small>
     </div>
   );
 }
@@ -1740,22 +1611,15 @@ function formatPhoneNumber(value: string, prefix: string) {
   const digits = value.replace(/\D/g, "").slice(0, 10);
   if (prefix === "+60") {
     const leading = digits.length > 9 ? 3 : 2;
-    return [
-      digits.slice(0, leading),
-      digits.slice(leading, leading + 3),
-      digits.slice(leading + 3),
-    ]
+    return [digits.slice(0, leading), digits.slice(leading, leading + 3), digits.slice(leading + 3)]
       .filter(Boolean)
       .join(" ");
   }
-  if (prefix === "+65")
-    return [digits.slice(0, 4), digits.slice(4, 8)].filter(Boolean).join(" ");
+  if (prefix === "+65") return [digits.slice(0, 4), digits.slice(4, 8)].filter(Boolean).join(" ");
   return digits.replace(/(\d{3})(?=\d)/g, "$1 ");
 }
 function FieldError({ message }: { message?: string }) {
-  return message ? (
-    <small className="inline-field-error">{message}</small>
-  ) : null;
+  return message ? <small className="inline-field-error">{message}</small> : null;
 }
 function RequiredLabel({
   text,
@@ -1912,17 +1776,11 @@ function ThemedSelect({
         aria-expanded={open}
         onClick={() => setOpen((current) => !current)}
       >
-        <span className={value ? "" : "placeholder"}>
-          {value || placeholder}
-        </span>
+        <span className={value ? "" : "placeholder"}>{value || placeholder}</span>
         <ChevronDown size={15} />
       </button>
       {open && (
-        <div
-          className="themed-select-menu"
-          role="listbox"
-          aria-label={ariaLabel}
-        >
+        <div className="themed-select-menu" role="listbox" aria-label={ariaLabel}>
           {options.map((option) => (
             <button
               type="button"
@@ -1949,9 +1807,7 @@ function storeStatusLabel(status: string) {
   if (status === "pending_approval") return "Awaiting Admin Approval";
   if (status === "rejected") return "Changes Required";
   if (status === "suspended") return "Temporarily Suspended";
-  return status
-    .replaceAll("_", " ")
-    .replace(/\b\w/g, (letter) => letter.toUpperCase());
+  return status.replaceAll("_", " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 function StoreTeam({ shop }: { shop: Shop }) {
   const [members, setMembers] = useState<TeamMember[]>([]);
@@ -1979,10 +1835,10 @@ function StoreTeam({ shop }: { shop: Shop }) {
   }, [shop.id]);
   const invite = async () => {
     try {
-      const result = await api().inviteVendorStoreStaff<{ message: string }>(
-        shop.id,
-        { email, assigned_role: role },
-      );
+      const result = await api().inviteVendorStoreStaff<{ message: string }>(shop.id, {
+        email,
+        assigned_role: role,
+      });
       setMessage(result.message);
       setEmail("");
       setRole("Staff");
@@ -1990,18 +1846,12 @@ function StoreTeam({ shop }: { shop: Shop }) {
       await load();
     } catch (error) {
       setMessage(
-        error instanceof Error
-          ? error.message
-          : "The staff invitation could not be sent.",
+        error instanceof Error ? error.message : "The staff invitation could not be sent.",
       );
     }
   };
   const setPermission = async (member: TeamMember, value: boolean) => {
-    await api().updateVendorStoreStaffPermission(
-      shop.id,
-      member.account_id,
-      value,
-    );
+    await api().updateVendorStoreStaffPermission(shop.id, member.account_id, value);
     await load();
   };
   return (
@@ -2011,10 +1861,7 @@ function StoreTeam({ shop }: { shop: Shop }) {
           <Users size={18} /> Team Staff &amp; Permissions
         </h2>
         {canManage && (
-          <button
-            className="secondary invite-staff-button"
-            onClick={() => setInviteOpen(true)}
-          >
+          <button className="secondary invite-staff-button" onClick={() => setInviteOpen(true)}>
             <UserPlus size={16} /> Invite Staff
           </button>
         )}
@@ -2045,9 +1892,7 @@ function StoreTeam({ shop }: { shop: Shop }) {
                   <input
                     type="checkbox"
                     checked={member.can_edit_store}
-                    onChange={(event) =>
-                      void setPermission(member, event.target.checked)
-                    }
+                    onChange={(event) => void setPermission(member, event.target.checked)}
                   />{" "}
                   Can edit store
                 </label>
@@ -2097,26 +1942,17 @@ function StoreTeam({ shop }: { shop: Shop }) {
                 ariaLabel="Assigned Role"
                 value={role}
                 placeholder="Select Role"
-                options={[
-                  "Store Manager",
-                  "Inventory Specialist",
-                  "Cashier",
-                  "Staff",
-                ]}
+                options={["Store Manager", "Inventory Specialist", "Cashier", "Staff"]}
                 onChange={setRole}
               />
             </label>
             <p className="invite-permission-note">
-              Store Profile edit access can be granted after the staff member
-              accepts this invitation.
+              Store Profile edit access can be granted after the staff member accepts this
+              invitation.
             </p>
             <footer>
               <button onClick={() => setInviteOpen(false)}>Cancel</button>
-              <button
-                className="cta"
-                disabled={!email.trim()}
-                onClick={() => void invite()}
-              >
+              <button className="cta" disabled={!email.trim()} onClick={() => void invite()}>
                 Send Invitation
               </button>
             </footer>
@@ -2161,20 +1997,14 @@ function LogoUpload({
   );
 }
 
-function BackdropUpload({
-  draft,
-  upload,
-}: {
-  draft: Draft;
-  upload: (file?: File) => void;
-}) {
+function BackdropUpload({ draft, upload }: { draft: Draft; upload: (file?: File) => void }) {
   return (
     <div className="store-backdrop-field">
       <div>
         <h3>Shop Backdrop</h3>
         <p>
-          Upload a clear landscape photo of your storefront or products. This
-          appears behind your shop information in the Marketplace.
+          Upload a clear landscape photo of your storefront or products. This appears behind your
+          shop information in the Marketplace.
         </p>
       </div>
       <label className="backdrop-upload">
@@ -2187,10 +2017,8 @@ function BackdropUpload({
           </span>
         )}
         <small>
-          {draft.cover_image_url
-            ? "Click the image to replace it"
-            : "Landscape recommended"}{" "}
-          · prepared to 1600 × 900
+          {draft.cover_image_url ? "Click the image to replace it" : "Landscape recommended"} ·
+          prepared to 1600 × 900
         </small>
         <input
           type="file"
@@ -2234,10 +2062,7 @@ function LogoCropModal({
   const [position, setPosition] = useState({ x: 0, y: 0 });
   const [zoom, setZoom] = useState(1);
 
-  const baseScale = Math.max(
-    previewSize / imageSize.width,
-    previewSize / imageSize.height,
-  );
+  const baseScale = Math.max(previewSize / imageSize.width, previewSize / imageSize.height);
   const renderedWidth = imageSize.width * baseScale * zoom;
   const renderedHeight = imageSize.height * baseScale * zoom;
   const clampPosition = (next: { x: number; y: number }, nextZoom = zoom) => {
@@ -2275,8 +2100,7 @@ function LogoCropModal({
     );
   };
   const stopDrag = (event: ReactPointerEvent<HTMLDivElement>) => {
-    if (dragRef.current?.pointerId === event.pointerId)
-      dragRef.current = undefined;
+    if (dragRef.current?.pointerId === event.pointerId) dragRef.current = undefined;
   };
   const confirmCrop = () => {
     const image = imageRef.current;
@@ -2312,11 +2136,7 @@ function LogoCropModal({
             <h2 id="logo-crop-title">Crop Store Logo</h2>
             <p>Drag the image to reposition it, then zoom until it fits.</p>
           </div>
-          <button
-            type="button"
-            aria-label="Cancel logo cropping"
-            onClick={cancel}
-          >
+          <button type="button" aria-label="Cancel logo cropping" onClick={cancel}>
             <X />
           </button>
         </header>
@@ -2390,19 +2210,13 @@ function UnsavedChangesConfirmation({
         <span>
           <Trash2 size={24} />
         </span>
-        <h2 id="unsaved-changes-title">
-          Discard unsaved store profile changes?
-        </h2>
+        <h2 id="unsaved-changes-title">Discard unsaved store profile changes?</h2>
         <p>
-          You have edits that have not been saved. Keep editing to remain on
-          this page, or discard the changes and leave.
+          You have edits that have not been saved. Keep editing to remain on this page, or discard
+          the changes and leave.
         </p>
         <footer>
-          <button
-            className="neutral-button"
-            type="button"
-            onClick={keepEditing}
-          >
+          <button className="neutral-button" type="button" onClick={keepEditing}>
             Keep Editing
           </button>
           <button className="danger-button" type="button" onClick={discard}>
@@ -2413,37 +2227,25 @@ function UnsavedChangesConfirmation({
     </div>
   );
 }
-const SubmissionErrorSummary = forwardRef<
-  HTMLDivElement,
-  { errors: string[]; title?: string }
->(function SubmissionErrorSummary(
-  { errors, title = "We could not submit the store request." },
-  ref,
-) {
-  return (
-    <div
-      ref={ref}
-      className="vendor-message submission-error-summary"
-      role="alert"
-      tabIndex={-1}
-    >
-      <strong>{title}</strong>
-      <p>Please correct the following:</p>
-      <ul>
-        {errors.map((error, index) => (
-          <li key={`${index}-${error}`}>{error}</li>
-        ))}
-      </ul>
-    </div>
-  );
-});
-function ClearConfirmation({
-  close,
-  clear,
-}: {
-  close: () => void;
-  clear: () => void;
-}) {
+const SubmissionErrorSummary = forwardRef<HTMLDivElement, { errors: string[]; title?: string }>(
+  function SubmissionErrorSummary(
+    { errors, title = "We could not submit the store request." },
+    ref,
+  ) {
+    return (
+      <div ref={ref} className="vendor-message submission-error-summary" role="alert" tabIndex={-1}>
+        <strong>{title}</strong>
+        <p>Please correct the following:</p>
+        <ul>
+          {errors.map((error, index) => (
+            <li key={`${index}-${error}`}>{error}</li>
+          ))}
+        </ul>
+      </div>
+    );
+  },
+);
+function ClearConfirmation({ close, clear }: { close: () => void; clear: () => void }) {
   return (
     <div className="modal-backdrop">
       <section className="modal-card confirm-card">
@@ -2452,8 +2254,8 @@ function ClearConfirmation({
         </span>
         <h2>Clear all store details?</h2>
         <p>
-          This removes every unsaved onboarding field from this session. This
-          action cannot be undone.
+          This removes every unsaved onboarding field from this session. This action cannot be
+          undone.
         </p>
         <footer>
           <button className="neutral-button" onClick={close}>

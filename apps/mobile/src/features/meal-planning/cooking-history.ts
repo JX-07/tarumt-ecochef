@@ -11,18 +11,12 @@ export async function markMealCooked(recipeId: string, date: string) {
 
 export async function getCookedMeals() {
   try {
-    return new Set<string>(
-      JSON.parse((await AsyncStorage.getItem(KEY)) ?? "[]"),
-    );
+    return new Set<string>(JSON.parse((await AsyncStorage.getItem(KEY)) ?? "[]"));
   } catch {
     return new Set<string>();
   }
 }
 
-export function wasMealCooked(
-  history: Set<string>,
-  recipeId: string,
-  date: string,
-) {
+export function wasMealCooked(history: Set<string>, recipeId: string, date: string) {
   return history.has(cookedKey(recipeId, date));
 }

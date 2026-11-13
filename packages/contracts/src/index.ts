@@ -223,7 +223,14 @@ export interface MarketplaceStoreDetail extends MarketplaceStoreSummary {
   phone_number?: string;
   operating_hours?: string;
   operating_hours_schedule?: Record<string, { open: string; close: string; closed: boolean }>;
-  holiday_closure?: { starts_on: string; ends_on: string; whole_day: boolean; opens_at?: string | null; closes_at?: string | null; reason: string };
+  holiday_closure?: {
+    starts_on: string;
+    ends_on: string;
+    whole_day: boolean;
+    opens_at?: string | null;
+    closes_at?: string | null;
+    reason: string;
+  };
   is_favourite: boolean;
   latitude?: number;
   longitude?: number;
@@ -249,8 +256,14 @@ export interface MarketplaceSummary {
   cart_item_count: number;
 }
 
-export interface MarketplaceStoreList { stores: MarketplaceStoreSummary[]; total: number }
-export interface MarketplaceReviewList { reviews: MarketplaceReview[]; total: number }
+export interface MarketplaceStoreList {
+  stores: MarketplaceStoreSummary[];
+  total: number;
+}
+export interface MarketplaceReviewList {
+  reviews: MarketplaceReview[];
+  total: number;
+}
 
 export interface MarketplaceCartItem {
   product: MarketplaceProduct;
@@ -300,30 +313,74 @@ export interface MarketplaceCheckoutStatus {
 }
 
 export interface VendorProductInput {
-  name: string; description?: string; price: number; stock_quantity: number;
-  category?: string; subcategory?: string; unit_label?: string; brand?: string; size?: string; image_url?: string; original_price?: number;
-  expiry_date?: string; status: "active" | "hidden" | "sold_out";
+  name: string;
+  description?: string;
+  price: number;
+  stock_quantity: number;
+  category?: string;
+  subcategory?: string;
+  unit_label?: string;
+  brand?: string;
+  size?: string;
+  image_url?: string;
+  original_price?: number;
+  expiry_date?: string;
+  status: "active" | "hidden" | "sold_out";
   addons?: VendorProductAddon[];
   discount?: VendorProductDiscount;
 }
-export interface VendorProductAddonOption { name: string; price: number }
-export interface VendorProductAddon { name: string; required: boolean; selection_mode: "single" | "multiple"; max_selections: number; options: VendorProductAddonOption[] }
+export interface VendorProductAddonOption {
+  name: string;
+  price: number;
+}
+export interface VendorProductAddon {
+  name: string;
+  required: boolean;
+  selection_mode: "single" | "multiple";
+  max_selections: number;
+  options: VendorProductAddonOption[];
+}
 export type VendorProductDiscount =
   | { type: "percentage" | "fixed_amount"; value: number; starts_at: string; ends_at: string }
-  | { type: "buy_x_get_y"; buy_quantity: number; gift_quantity: number; starts_at: string; ends_at: string };
-export interface VendorProduct extends VendorProductInput { id: string; store_id: string }
+  | {
+      type: "buy_x_get_y";
+      buy_quantity: number;
+      gift_quantity: number;
+      starts_at: string;
+      ends_at: string;
+    };
+export interface VendorProduct extends VendorProductInput {
+  id: string;
+  store_id: string;
+}
 export interface VendorStoreInput {
-  name: string; address: string; phone_number?: string; operating_hours?: string;
-  description?: string; category?: string; delivery_fee: number; estimated_delivery_minutes?: number;
-  street_address?: string; postal_code?: string; city?: string; state?: string; country?: string;
-  additional_location_details?: string; contact_email?: string;
-  helpline_phones?: string[]; icon_url?: string;
+  name: string;
+  address: string;
+  phone_number?: string;
+  operating_hours?: string;
+  description?: string;
+  category?: string;
+  delivery_fee: number;
+  estimated_delivery_minutes?: number;
+  street_address?: string;
+  postal_code?: string;
+  city?: string;
+  state?: string;
+  country?: string;
+  additional_location_details?: string;
+  contact_email?: string;
+  helpline_phones?: string[];
+  icon_url?: string;
   operating_hours_schedule?: Record<string, { open: string; close: string; closed: boolean }>;
 }
 export interface VendorStore extends VendorStoreInput {
-  id: string; status: string; products: VendorProduct[];
+  id: string;
+  status: string;
+  products: VendorProduct[];
 }
-export interface VendorStoreList { stores: VendorStore[] }
+export interface VendorStoreList {
+  stores: VendorStore[];
+}
 
 export type RecipeDifficulty = "easy" | "medium" | "hard";
 
@@ -381,13 +438,11 @@ export interface RecipeFilters {
   community_only?: boolean;
 }
 
-
 export interface MarketplaceSlotAvailability {
   slots: { start: string; end: string; available: boolean; reason?: string | null }[];
   cart_checked: boolean;
   timezone: string;
 }
-
 
 /** Marketplace feedback is attached to a verified purchased product. */
 export interface MarketplaceProductReview extends MarketplaceReview {
@@ -414,4 +469,6 @@ export interface MarketplaceReviewPrompt {
   rating?: number | null;
   comment?: string | null;
 }
-export interface MarketplaceReviewPromptList { items: MarketplaceReviewPrompt[] }
+export interface MarketplaceReviewPromptList {
+  items: MarketplaceReviewPrompt[];
+}

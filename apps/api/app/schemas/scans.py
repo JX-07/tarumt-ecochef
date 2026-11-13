@@ -48,4 +48,6 @@ class FreshnessItem(BaseModel):
 class FreshnessAnalysisResult(BaseModel):
     items: list[FreshnessItem] = Field(max_length=30)
     provider: str = Field(default="gemini", pattern="^(freshness_model_api|gemini)$")
-    disclaimer: str = "AI image assessment cannot confirm food safety. When in doubt, discard the food."
+    disclaimer: str = (
+        "AI image assessment cannot confirm food safety. When in doubt, discard the food."
+    )

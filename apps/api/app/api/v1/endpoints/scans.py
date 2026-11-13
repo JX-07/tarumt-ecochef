@@ -39,10 +39,14 @@ def _gemini_image_json(image: ScanImageRequest, prompt: str, schema: dict) -> di
             ),
         )
     payload = {
-        "contents": [{"parts": [
-            {"text": prompt},
-            {"inlineData": {"mimeType": image.content_type, "data": image.data}},
-        ]}],
+        "contents": [
+            {
+                "parts": [
+                    {"text": prompt},
+                    {"inlineData": {"mimeType": image.content_type, "data": image.data}},
+                ]
+            }
+        ],
         "generationConfig": {
             "temperature": 0.1,
             "responseMimeType": "application/json",
@@ -76,29 +80,64 @@ def _analysis_error(error: Exception, service_name: str) -> HTTPException:
 
 INGREDIENT_SCHEMA = {
     "type": "OBJECT",
-    "properties": {"items": {"type": "ARRAY", "items": {"type": "OBJECT", "properties": {
-        "name": {"type": "STRING"},
-        "confidence": {"type": "NUMBER"},
-        "suggested_amount": {"type": "NUMBER"},
-        "suggested_unit": {"type": "STRING"},
-        "suggested_expiry_days": {"type": "INTEGER"},
-        "category": {"type": "STRING"},
-    }, "required": ["name", "confidence", "suggested_amount", "suggested_unit", "suggested_expiry_days"]}}},
+    "properties": {
+        "items": {
+            "type": "ARRAY",
+            "items": {
+                "type": "OBJECT",
+                "properties": {
+                    "name": {"type": "STRING"},
+                    "confidence": {"type": "NUMBER"},
+                    "suggested_amount": {"type": "NUMBER"},
+                    "suggested_unit": {"type": "STRING"},
+                    "suggested_expiry_days": {"type": "INTEGER"},
+                    "category": {"type": "STRING"},
+                },
+                "required": [
+                    "name",
+                    "confidence",
+                    "suggested_amount",
+                    "suggested_unit",
+                    "suggested_expiry_days",
+                ],
+            },
+        }
+    },
     "required": ["items"],
 }
 
 FRESHNESS_SCHEMA = {
     "type": "OBJECT",
-    "properties": {"items": {"type": "ARRAY", "items": {"type": "OBJECT", "properties": {
-        "name": {"type": "STRING"},
-        "status": {"type": "STRING", "enum": ["fresh", "use_soon", "spoiled", "unknown"]},
-        "confidence": {"type": "NUMBER"},
-        "finding": {"type": "STRING"},
-        "spoilage_reasons": {"type": "ARRAY", "items": {"type": "STRING"}},
-        "prevention": {"type": "ARRAY", "items": {"type": "STRING"}},
-        "safe_to_consume": {"type": "BOOLEAN", "nullable": True},
-        "safety_note": {"type": "STRING"},
-    }, "required": ["name", "status", "confidence", "finding", "spoilage_reasons", "prevention", "safety_note"]}}},
+    "properties": {
+        "items": {
+            "type": "ARRAY",
+            "items": {
+                "type": "OBJECT",
+                "properties": {
+                    "name": {"type": "STRING"},
+                    "status": {
+                        "type": "STRING",
+                        "enum": ["fresh", "use_soon", "spoiled", "unknown"],
+                    },
+                    "confidence": {"type": "NUMBER"},
+                    "finding": {"type": "STRING"},
+                    "spoilage_reasons": {"type": "ARRAY", "items": {"type": "STRING"}},
+                    "prevention": {"type": "ARRAY", "items": {"type": "STRING"}},
+                    "safe_to_consume": {"type": "BOOLEAN", "nullable": True},
+                    "safety_note": {"type": "STRING"},
+                },
+                "required": [
+                    "name",
+                    "status",
+                    "confidence",
+                    "finding",
+                    "spoilage_reasons",
+                    "prevention",
+                    "safety_note",
+                ],
+            },
+        }
+    },
     "required": ["items"],
 }
 
@@ -115,8 +154,17 @@ def detect_ingredients(
         if settings.ingredient_detection_api_url:
             try:
                 result = _post_json(settings.ingredient_detection_api_url, image.model_dump())
-                return IngredientDetectionResult.model_validate({**result, "provider": "food_detection_api"})
-            except (HTTPError, URLError, TimeoutError, KeyError, json.JSONDecodeError, ValueError) as error:
+                return IngredientDetectionResult.model_validate(
+                    {**result, "provider": "food_detection_api"}
+                )
+            except (
+                HTTPError,
+                URLError,
+                TimeoutError,
+                KeyError,
+                json.JSONDecodeError,
+                ValueError,
+            ) as error:
                 model_error = error
                 if not settings.gemini_api_key:
                     raise _analysis_error(error, "Food detection model") from error
@@ -131,7 +179,15 @@ def detect_ingredients(
         return IngredientDetectionResult.model_validate({**result, "provider": "gemini"})
     except HTTPException:
         raise
-    except (HTTPError, URLError, TimeoutError, KeyError, IndexError, json.JSONDecodeError, ValueError) as error:
+    except (
+        HTTPError,
+        URLError,
+        TimeoutError,
+        KeyError,
+        IndexError,
+        json.JSONDecodeError,
+        ValueError,
+    ) as error:
         raise _analysis_error(model_error or error, "Food detection") from error
 
 
@@ -147,8 +203,17 @@ def analyze_freshness(
         if settings.freshness_model_api_url:
             try:
                 result = _post_json(settings.freshness_model_api_url, image.model_dump())
-                return FreshnessAnalysisResult.model_validate({**result, "provider": "freshness_model_api"})
-            except (HTTPError, URLError, TimeoutError, KeyError, json.JSONDecodeError, ValueError) as error:
+                return FreshnessAnalysisResult.model_validate(
+                    {**result, "provider": "freshness_model_api"}
+                )
+            except (
+                HTTPError,
+                URLError,
+                TimeoutError,
+                KeyError,
+                json.JSONDecodeError,
+                ValueError,
+            ) as error:
                 model_error = error
                 if not settings.gemini_api_key:
                     raise _analysis_error(error, "Freshness model") from error
@@ -164,5 +229,13 @@ def analyze_freshness(
         return FreshnessAnalysisResult.model_validate({**result, "provider": "gemini"})
     except HTTPException:
         raise
-    except (HTTPError, URLError, TimeoutError, KeyError, IndexError, json.JSONDecodeError, ValueError) as error:
+    except (
+        HTTPError,
+        URLError,
+        TimeoutError,
+        KeyError,
+        IndexError,
+        json.JSONDecodeError,
+        ValueError,
+    ) as error:
         raise _analysis_error(model_error or error, "Freshness analysis") from error

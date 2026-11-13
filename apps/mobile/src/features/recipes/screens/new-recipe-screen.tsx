@@ -51,18 +51,7 @@ type AIEstimate = {
   confidence: "low" | "medium" | "high";
   assumptions: string[];
 };
-const quantityUnits = [
-  "g",
-  "kg",
-  "ml",
-  "L",
-  "pcs",
-  "tbsp",
-  "tsp",
-  "cup",
-  "bunch",
-  "Custom",
-];
+const quantityUnits = ["g", "kg", "ml", "L", "pcs", "tbsp", "tsp", "cup", "bunch", "Custom"];
 const kcalPer100: Record<string, number> = {
   chicken: 165,
   rice: 130,
@@ -128,50 +117,13 @@ const allergenTerms: Record<string, string[]> = {
     "macadamia",
     "brazil nut",
   ],
-  milk: [
-    "milk",
-    "cheese",
-    "butter",
-    "cream",
-    "yogurt",
-    "yoghurt",
-    "whey",
-    "casein",
-    "ghee",
-  ],
+  milk: ["milk", "cheese", "butter", "cream", "yogurt", "yoghurt", "whey", "casein", "ghee"],
   eggs: ["egg", "eggs", "mayonnaise", "mayo"],
   wheat: ["wheat", "flour", "bread", "pasta", "couscous", "semolina"],
-  gluten: [
-    "wheat",
-    "flour",
-    "bread",
-    "pasta",
-    "barley",
-    "rye",
-    "couscous",
-    "semolina",
-  ],
+  gluten: ["wheat", "flour", "bread", "pasta", "barley", "rye", "couscous", "semolina"],
   soy: ["soy", "soya", "tofu", "tempeh", "edamame", "miso"],
-  fish: [
-    "fish",
-    "salmon",
-    "tuna",
-    "cod",
-    "sardine",
-    "anchovy",
-    "mackerel",
-    "trout",
-  ],
-  shellfish: [
-    "prawn",
-    "shrimp",
-    "crab",
-    "lobster",
-    "mussel",
-    "oyster",
-    "scallop",
-    "clam",
-  ],
+  fish: ["fish", "salmon", "tuna", "cod", "sardine", "anchovy", "mackerel", "trout"],
+  shellfish: ["prawn", "shrimp", "crab", "lobster", "mussel", "oyster", "scallop", "clam"],
   sesame: ["sesame", "tahini"],
   sulphites: ["sulphite", "sulfite"],
 };
@@ -204,28 +156,21 @@ function detectAllergens(names: string[]) {
           / (almond|rice|coconut|corn|chickpea|oat) flour /.test(name)
         )
           return false;
-        return (
-          name.includes(` ${term} `) ||
-          (!term.endsWith("s") && name.includes(` ${term}s `))
-        );
+        return name.includes(` ${term} `) || (!term.endsWith("s") && name.includes(` ${term}s `));
       }),
     ),
   );
 }
 const GREEN = palette.c12ad55;
-const runtimeProcess = (
-  globalThis as { process?: { env?: Record<string, string | undefined> } }
-).process;
+const runtimeProcess = (globalThis as { process?: { env?: Record<string, string | undefined> } })
+  .process;
 
 export function NewRecipeScreen() {
   const { recipeId } = useLocalSearchParams<{ recipeId?: string }>();
   const editing = Boolean(recipeId);
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
-  const api = useMemo(
-    () => createMobileApi(apiBaseUrl, () => user?.getIdToken()),
-    [user],
-  );
+  const api = useMemo(() => createMobileApi(apiBaseUrl, () => user?.getIdToken()), [user]);
   const [photo, setPhoto] = useState<string>();
   const [published, setPublished] = useState(false);
   const [reviews, setReviews] = useState(true);
@@ -266,23 +211,16 @@ export function NewRecipeScreen() {
     setAllergenTags((current) =>
       Array.from(
         new Set([
-          ...current.filter(
-            (item) =>
-              !previous.includes(item) || detectedAllergens.includes(item),
-          ),
+          ...current.filter((item) => !previous.includes(item) || detectedAllergens.includes(item)),
           ...detectedAllergens.filter((item) => !previous.includes(item)),
         ]),
       ),
     );
     const invalidDietary = tags.filter((tag) =>
-      (dietaryAllergenConflicts[tag] ?? []).some((item) =>
-        detectedAllergens.includes(item),
-      ),
+      (dietaryAllergenConflicts[tag] ?? []).some((item) => detectedAllergens.includes(item)),
     );
     if (invalidDietary.length) {
-      setTags((current) =>
-        current.filter((tag) => !invalidDietary.includes(tag)),
-      );
+      setTags((current) => current.filter((tag) => !invalidDietary.includes(tag)));
       setPageMessage({
         title: "Dietary tag removed",
         message: `${invalidDietary.map((tag) => tag.replace(/(^|-)(\w)/g, (_, prefix, letter) => `${prefix}${letter.toUpperCase()}`)).join(", ")} no longer matches the ingredients because a conflicting allergen was detected.`,
@@ -317,9 +255,7 @@ export function NewRecipeScreen() {
         setMinutes(String(recipe.cook_time ?? recipe.total_time));
         setPrepMinutes(String(recipe.prep_time ?? 0));
         setServings(String(recipe.servings ?? 2));
-        const firstMeal = recipe.dietary_tags.find(
-          (item) => recipeTagKind(item) === "meal",
-        );
+        const firstMeal = recipe.dietary_tags.find((item) => recipeTagKind(item) === "meal");
         setTags(
           recipe.dietary_tags
             .filter((item) => recipeTagKind(item) !== "meal")
@@ -365,10 +301,7 @@ export function NewRecipeScreen() {
       else
         setTags((current) =>
           recipeTagKind(next) === "meal"
-            ? [
-                ...current.filter((item) => recipeTagKind(item) !== "meal"),
-                next,
-              ]
+            ? [...current.filter((item) => recipeTagKind(item) !== "meal"), next]
             : [...current, next],
         );
     }
@@ -377,9 +310,7 @@ export function NewRecipeScreen() {
   function toggleMealTag(label: string) {
     const value = label.toLowerCase();
     setTags((current) => {
-      const withoutMeals = current.filter(
-        (item) => recipeTagKind(item) !== "meal",
-      );
+      const withoutMeals = current.filter((item) => recipeTagKind(item) !== "meal");
       return current.includes(value) ? withoutMeals : [...withoutMeals, value];
     });
   }
@@ -426,12 +357,7 @@ export function NewRecipeScreen() {
     }
     setAllergenTags((current) => [...current, item]);
   }
-  function finishEstimate(
-    total: number,
-    matched: number,
-    measurable: number,
-    skipped: number,
-  ) {
+  function finishEstimate(total: number, matched: number, measurable: number, skipped: number) {
     if (!matched) {
       setPageMessage({
         title: "Estimate cancelled",
@@ -456,14 +382,11 @@ export function NewRecipeScreen() {
     });
   }
   function estimateCalories() {
-    const measurable = ingredients.filter(
-      (item) => item.name.trim() && Number(item.amount) > 0,
-    );
+    const measurable = ingredients.filter((item) => item.name.trim() && Number(item.amount) > 0);
     if (!measurable.length) {
       setPageMessage({
         title: "Add ingredient amounts",
-        message:
-          "Enter at least one ingredient and its quantity before estimating calories.",
+        message: "Enter at least one ingredient and its quantity before estimating calories.",
         icon: "information-circle-outline",
       });
       return;
@@ -472,16 +395,12 @@ export function NewRecipeScreen() {
     const values = measurable.map((item) => {
       const name = item.name.toLowerCase();
       const amount = Number(item.amount);
-      const piece = Object.entries(kcalPerPiece).find(([key]) =>
-        name.includes(key),
-      );
+      const piece = Object.entries(kcalPerPiece).find(([key]) => name.includes(key));
       if (piece && item.unit === "pcs") {
         autoFilled++;
         return String(Math.round(piece[1] * amount));
       }
-      const density = Object.entries(kcalPer100).find(([key]) =>
-        name.includes(key),
-      );
+      const density = Object.entries(kcalPer100).find(([key]) => name.includes(key));
       const base =
         item.unit === "kg" || item.unit === "L"
           ? amount * 1000
@@ -506,9 +425,7 @@ export function NewRecipeScreen() {
   }
   function completeManualEstimate() {
     if (!estimateSession) return;
-    const entered = manualCalories.map((value) =>
-      Number(value) > 0 ? Number(value) : 0,
-    );
+    const entered = manualCalories.map((value) => (Number(value) > 0 ? Number(value) : 0));
     const included = entered.filter((value) => value > 0).length;
     const manualTotal = entered.reduce((sum, value) => sum + value, 0);
     setEstimateSession(undefined);
@@ -521,14 +438,11 @@ export function NewRecipeScreen() {
     );
   }
   async function estimateCaloriesWithAI() {
-    const usable = ingredients.filter(
-      (item) => item.name.trim() && item.amount.trim(),
-    );
+    const usable = ingredients.filter((item) => item.name.trim() && item.amount.trim());
     if (!usable.length) {
       setPageMessage({
         title: "Add ingredients first",
-        message:
-          "Enter at least one ingredient and quantity before requesting an AI estimate.",
+        message: "Enter at least one ingredient and quantity before requesting an AI estimate.",
         icon: "information-circle-outline",
       });
       return;
@@ -536,8 +450,7 @@ export function NewRecipeScreen() {
     if (Number(servings) <= 0) {
       setPageMessage({
         title: "Add servings first",
-        message:
-          "Enter a valid number of servings before requesting an AI estimate.",
+        message: "Enter a valid number of servings before requesting an AI estimate.",
         icon: "information-circle-outline",
       });
       return;
@@ -579,10 +492,21 @@ export function NewRecipeScreen() {
     }
   }
   async function publish() {
-    if (!prepMinutes.trim() || !minutes.trim() || !Number.isInteger(Number(prepMinutes)) || !Number.isInteger(Number(minutes)) || Number(prepMinutes) < 0 || Number(minutes) < 0 || Number(prepMinutes) > 1440 || Number(minutes) > 1440 || Number(prepMinutes) + Number(minutes) <= 0) {
+    if (
+      !prepMinutes.trim() ||
+      !minutes.trim() ||
+      !Number.isInteger(Number(prepMinutes)) ||
+      !Number.isInteger(Number(minutes)) ||
+      Number(prepMinutes) < 0 ||
+      Number(minutes) < 0 ||
+      Number(prepMinutes) > 1440 ||
+      Number(minutes) > 1440 ||
+      Number(prepMinutes) + Number(minutes) <= 0
+    ) {
       setPageMessage({
         title: "Add preparation and cooking time",
-        message: "Enter both times as whole minutes, from 0 to 1,440 each. Use 0 if no preparation or cooking is needed. Total time must be at least 1 minute.",
+        message:
+          "Enter both times as whole minutes, from 0 to 1,440 each. Use 0 if no preparation or cooking is needed. Total time must be at least 1 minute.",
         icon: "alert-circle-outline",
       });
       return;
@@ -625,9 +549,16 @@ export function NewRecipeScreen() {
     }));
     setSaving(true);
     try {
-      const validation = await api.validateRecipeIngredients<{ issues: string[] }>(recipeIngredients, Number(servings));
+      const validation = await api.validateRecipeIngredients<{ issues: string[] }>(
+        recipeIngredients,
+        Number(servings),
+      );
       if (validation.issues.length) {
-        setPageMessage({ title: "Check ingredient amounts", message: validation.issues.join("\n\n"), icon: "alert-circle-outline" });
+        setPageMessage({
+          title: "Check ingredient amounts",
+          message: validation.issues.join("\n\n"),
+          icon: "alert-circle-outline",
+        });
         return;
       }
       let imageUrl = photo;
@@ -637,11 +568,7 @@ export function NewRecipeScreen() {
         });
         const extension = photo.split("?")[0].split(".").pop()?.toLowerCase();
         const contentType =
-          extension === "png"
-            ? "image/png"
-            : extension === "webp"
-              ? "image/webp"
-              : "image/jpeg";
+          extension === "png" ? "image/png" : extension === "webp" ? "image/webp" : "image/jpeg";
         const uploaded = await api.uploadRecipeImage<{ image_url: string }>({
           data,
           content_type: contentType,
@@ -678,20 +605,11 @@ export function NewRecipeScreen() {
   return (
     <View style={styles.root}>
       <View style={[styles.header, { paddingTop: insets.top + PAGE_TOP_GAP }]}>
-        <Pressable
-          style={styles.back}
-          onPress={() => goBackOrReplace("/(tabs)/recipes")}
-        >
+        <Pressable style={styles.back} onPress={() => goBackOrReplace("/(tabs)/recipes")}>
           <Ionicons name="chevron-back" size={22} color={palette.c647084} />
         </Pressable>
-        <Text style={styles.headerTitle}>
-          {editing ? "Edit Recipe" : "New Recipe"}
-        </Text>
-        <Pressable
-          disabled={saving}
-          style={styles.publish}
-          onPress={() => void publish()}
-        >
+        <Text style={styles.headerTitle}>{editing ? "Edit Recipe" : "New Recipe"}</Text>
+        <Pressable disabled={saving} style={styles.publish} onPress={() => void publish()}>
           <Text style={styles.publishText}>
             {saving ? "Saving…" : editing ? "Save" : "Publish"}
           </Text>
@@ -707,11 +625,7 @@ export function NewRecipeScreen() {
             <Image source={{ uri: photo }} style={styles.photoImage} />
           ) : (
             <>
-              <Ionicons
-                name="camera-outline"
-                size={30}
-                color={palette.c94a0b2}
-              />
+              <Ionicons name="camera-outline" size={30} color={palette.c94a0b2} />
               <Text style={styles.photoTitle}>Add Photo*</Text>
               <Text style={styles.photoCopy}>Required</Text>
             </>
@@ -721,11 +635,7 @@ export function NewRecipeScreen() {
           <Setting
             icon={published ? "globe-outline" : "lock-closed-outline"}
             title={published ? "Public Recipe" : "Private Recipe"}
-            copy={
-              published
-                ? "Anyone can discover this recipe"
-                : "Only visible to you"
-            }
+            copy={published ? "Anyone can discover this recipe" : "Only visible to you"}
             value={published}
             onChange={setPublished}
           />
@@ -739,11 +649,7 @@ export function NewRecipeScreen() {
           />
         </View>
         <Label text="BASIC INFO" />
-        <Field
-          value={title}
-          onChangeText={setTitle}
-          placeholder="Recipe Title*"
-        />
+        <Field value={title} onChangeText={setTitle} placeholder="Recipe Title*" />
         <TextInput
           value={summary}
           onChangeText={setSummary}
@@ -754,11 +660,38 @@ export function NewRecipeScreen() {
         />
         <Label text="PREPARATION & COOKING" />
         <View style={styles.metrics}>
-          <Metric label="Preparation time *" value={prepMinutes} onChange={value => { if (/^\d*$/.test(value)) setPrepMinutes(value); }} placeholder="0" suffix="min" />
-          <Metric label="Cooking time *" value={minutes} onChange={value => { if (/^\d*$/.test(value)) setMinutes(value); }} placeholder="0" suffix="min" />
+          <Metric
+            label="Preparation time *"
+            value={prepMinutes}
+            onChange={(value) => {
+              if (/^\d*$/.test(value)) setPrepMinutes(value);
+            }}
+            placeholder="0"
+            suffix="min"
+          />
+          <Metric
+            label="Cooking time *"
+            value={minutes}
+            onChange={(value) => {
+              if (/^\d*$/.test(value)) setMinutes(value);
+            }}
+            placeholder="0"
+            suffix="min"
+          />
         </View>
-        <View style={styles.totalTimeRow}><Ionicons name="time-outline" size={20} color={colors.primaryStrong}/><Text style={styles.totalTimeText}>Total time: {prepMinutes.trim() && minutes.trim() ? `${Number(prepMinutes) + Number(minutes)} min` : "Enter both times"}</Text></View>
-        <Text style={styles.timeHint}>Include chopping and mixing in preparation. Enter 0 for cooking time if the recipe needs no cooking.</Text>
+        <View style={styles.totalTimeRow}>
+          <Ionicons name="time-outline" size={20} color={colors.primaryStrong} />
+          <Text style={styles.totalTimeText}>
+            Total time:{" "}
+            {prepMinutes.trim() && minutes.trim()
+              ? `${Number(prepMinutes) + Number(minutes)} min`
+              : "Enter both times"}
+          </Text>
+        </View>
+        <Text style={styles.timeHint}>
+          Include chopping and mixing in preparation. Enter 0 for cooking time if the recipe needs
+          no cooking.
+        </Text>
         <View style={styles.tagRow}>
           <TextInput
             value={tag}
@@ -779,22 +712,10 @@ export function NewRecipeScreen() {
               .map((item) => (
                 <Pressable
                   key={item}
-                  onPress={() =>
-                    setTags((current) =>
-                      current.filter((value) => value !== item),
-                    )
-                  }
-                  style={[
-                    tagChoiceStyles.selected,
-                    tagChoiceStyles.customSelected,
-                  ]}
+                  onPress={() => setTags((current) => current.filter((value) => value !== item))}
+                  style={[tagChoiceStyles.selected, tagChoiceStyles.customSelected]}
                 >
-                  <Text
-                    style={[
-                      tagChoiceStyles.selectedText,
-                      tagChoiceStyles.customSelectedText,
-                    ]}
-                  >
+                  <Text style={[tagChoiceStyles.selectedText, tagChoiceStyles.customSelectedText]}>
                     {item}
                   </Text>
                   <Ionicons name="close" size={12} color={palette.c6b58a5} />
@@ -817,16 +738,11 @@ export function NewRecipeScreen() {
                 ]}
               >
                 <Text
-                  style={[
-                    tagChoiceStyles.optionText,
-                    active && tagChoiceStyles.optionTextActive,
-                  ]}
+                  style={[tagChoiceStyles.optionText, active && tagChoiceStyles.optionTextActive]}
                 >
                   {emoji} {label}
                 </Text>
-                {active && (
-                  <Ionicons name="checkmark" size={13} color={palette.cfff} />
-                )}
+                {active && <Ionicons name="checkmark" size={13} color={palette.cfff} />}
               </Pressable>
             );
           })}
@@ -846,16 +762,11 @@ export function NewRecipeScreen() {
                 ]}
               >
                 <Text
-                  style={[
-                    tagChoiceStyles.optionText,
-                    active && tagChoiceStyles.optionTextActive,
-                  ]}
+                  style={[tagChoiceStyles.optionText, active && tagChoiceStyles.optionTextActive]}
                 >
                   {emoji} {label}
                 </Text>
-                {active && (
-                  <Ionicons name="checkmark" size={13} color={palette.cfff} />
-                )}
+                {active && <Ionicons name="checkmark" size={13} color={palette.cfff} />}
               </Pressable>
             );
           })}
@@ -872,9 +783,7 @@ export function NewRecipeScreen() {
                 value={item.name}
                 onChangeText={(value) =>
                   setIngredients(
-                    ingredients.map((row, i) =>
-                      i === index ? { ...row, name: value } : row,
-                    ),
+                    ingredients.map((row, i) => (i === index ? { ...row, name: value } : row)),
                   )
                 }
                 placeholder={`Ingredient ${index + 1}`}
@@ -884,29 +793,18 @@ export function NewRecipeScreen() {
                 value={item.amount}
                 onChangeText={(value) =>
                   setIngredients(
-                    ingredients.map((row, i) =>
-                      i === index ? { ...row, amount: value } : row,
-                    ),
+                    ingredients.map((row, i) => (i === index ? { ...row, amount: value } : row)),
                   )
                 }
                 placeholder="200"
                 keyboardType="decimal-pad"
                 style={[styles.field, styles.amount]}
               />
-              <Pressable
-                style={styles.unitButton}
-                onPress={() => setUnitPicker(index)}
-              >
+              <Pressable style={styles.unitButton} onPress={() => setUnitPicker(index)}>
                 <Text style={styles.unitText}>
-                  {item.unit === "Custom"
-                    ? item.customUnit || "Custom"
-                    : item.unit}
+                  {item.unit === "Custom" ? item.customUnit || "Custom" : item.unit}
                 </Text>
-                <Ionicons
-                  name="chevron-down"
-                  size={14}
-                  color={palette.c697588}
-                />
+                <Ionicons name="chevron-down" size={14} color={palette.c697588} />
               </Pressable>
             </View>
             {item.unit === "Custom" && (
@@ -928,10 +826,7 @@ export function NewRecipeScreen() {
         <Pressable
           style={styles.addLine}
           onPress={() =>
-            setIngredients([
-              ...ingredients,
-              { name: "", amount: "", unit: "g", customUnit: "" },
-            ])
+            setIngredients([...ingredients, { name: "", amount: "", unit: "g", customUnit: "" }])
           }
         >
           <Ionicons name="add" size={18} color={GREEN} />
@@ -940,17 +835,12 @@ export function NewRecipeScreen() {
         <View style={allergenStyles.card}>
           <View style={allergenStyles.heading}>
             <View style={allergenStyles.icon}>
-              <Ionicons
-                name="warning-outline"
-                size={19}
-                color={palette.cb66a22}
-              />
+              <Ionicons name="warning-outline" size={19} color={palette.cb66a22} />
             </View>
             <View style={styles.flex}>
               <Text style={allergenStyles.title}>Review allergens</Text>
               <Text style={allergenStyles.copy}>
-                Confirm the system suggestions, then review the complete
-                allergen list.
+                Confirm the system suggestions, then review the complete allergen list.
               </Text>
             </View>
           </View>
@@ -981,13 +871,7 @@ export function NewRecipeScreen() {
                       >
                         {item}
                       </Text>
-                      {active && (
-                        <Ionicons
-                          name="checkmark"
-                          size={13}
-                          color={palette.cfff}
-                        />
-                      )}
+                      {active && <Ionicons name="checkmark" size={13} color={palette.cfff} />}
                     </Pressable>
                   );
                 })}
@@ -1001,8 +885,7 @@ export function NewRecipeScreen() {
           <View style={allergenStyles.sectionDivider} />
           <Text style={allergenStyles.sectionLabel}>ALL ALLERGENS</Text>
           <Text style={allergenStyles.sectionCopy}>
-            The selections below stay synchronized with the possible allergens
-            above.
+            The selections below stay synchronized with the possible allergens above.
           </Text>
           <View style={allergenStyles.options}>
             {allergenChoices.map((item) => {
@@ -1011,22 +894,14 @@ export function NewRecipeScreen() {
                 <Pressable
                   key={item}
                   onPress={() => toggleAllergen(item)}
-                  style={[
-                    allergenStyles.option,
-                    active && allergenStyles.optionActive,
-                  ]}
+                  style={[allergenStyles.option, active && allergenStyles.optionActive]}
                 >
                   <Text
-                    style={[
-                      allergenStyles.optionText,
-                      active && allergenStyles.optionTextActive,
-                    ]}
+                    style={[allergenStyles.optionText, active && allergenStyles.optionTextActive]}
                   >
                     {item}
                   </Text>
-                  {active && (
-                    <Ionicons name="checkmark" size={13} color={palette.cfff} />
-                  )}
+                  {active && <Ionicons name="checkmark" size={13} color={palette.cfff} />}
                 </Pressable>
               );
             })}
@@ -1052,8 +927,7 @@ export function NewRecipeScreen() {
             label="Servings"
             value={servings}
             onChange={(value) => {
-              if (value === "" || (/^\d+$/.test(value) && Number(value) > 0))
-                setServings(value);
+              if (value === "" || (/^\d+$/.test(value) && Number(value) > 0)) setServings(value);
             }}
             placeholder="2"
             suffix="pax"
@@ -1065,33 +939,24 @@ export function NewRecipeScreen() {
             onPress={estimateCalories}
           >
             <Ionicons name="calculator-outline" size={17} color={GREEN} />
-            <Text style={styles.estimateText}>
-              Calculate the calories one-by-one
-            </Text>
+            <Text style={styles.estimateText}>Calculate the calories one-by-one</Text>
           </Pressable>
           <Pressable
             disabled={aiEstimating}
-            style={[
-              estimateActionStyles.aiButton,
-              aiEstimating && estimateActionStyles.disabled,
-            ]}
+            style={[estimateActionStyles.aiButton, aiEstimating && estimateActionStyles.disabled]}
             onPress={() => void estimateCaloriesWithAI()}
           >
             <Ionicons name="sparkles" size={17} color={palette.cfff} />
             <Text style={estimateActionStyles.aiText}>
-              {aiEstimating
-                ? "Gemini is estimating…"
-                : "Use AI to perform Calories Estimation"}
+              {aiEstimating ? "Gemini is estimating…" : "Use AI to perform Calories Estimation"}
             </Text>
           </Pressable>
         </View>
         <Text style={styles.estimateNote}>
-          Calories are approximate and may vary by ingredient brand, preparation
-          method, and portion size.
+          Calories are approximate and may vary by ingredient brand, preparation method, and portion
+          size.
         </Text>
-        {estimateCoverage && (
-          <Text style={styles.coverageText}>{estimateCoverage}</Text>
-        )}
+        {estimateCoverage && <Text style={styles.coverageText}>{estimateCoverage}</Text>}
         <Label text="COOKING STEPS*" />
         {steps.map((step, index) => (
           <View key={index} style={styles.stepRow}>
@@ -1100,19 +965,14 @@ export function NewRecipeScreen() {
             </View>
             <TextInput
               value={step}
-              onChangeText={(value) =>
-                setSteps(steps.map((row, i) => (i === index ? value : row)))
-              }
+              onChangeText={(value) => setSteps(steps.map((row, i) => (i === index ? value : row)))}
               placeholder={`Step ${index + 1}…`}
               multiline
               style={[styles.field, styles.stepInput]}
             />
           </View>
         ))}
-        <Pressable
-          style={styles.addLine}
-          onPress={() => setSteps([...steps, ""])}
-        >
+        <Pressable style={styles.addLine} onPress={() => setSteps([...steps, ""])}>
           <Ionicons name="add" size={18} color={GREEN} />
           <Text style={styles.addLineText}>Add Step</Text>
         </Pressable>
@@ -1123,10 +983,7 @@ export function NewRecipeScreen() {
         animationType="fade"
         onRequestClose={() => setUnitPicker(undefined)}
       >
-        <Pressable
-          style={styles.unitOverlay}
-          onPress={() => setUnitPicker(undefined)}
-        >
+        <Pressable style={styles.unitOverlay} onPress={() => setUnitPicker(undefined)}>
           <Animated.View style={[styles.unitSheet, unitSheetMotion]}>
             <Text style={styles.unitTitle}>Choose quantity unit</Text>
             <View style={styles.unitGrid}>
@@ -1142,9 +999,7 @@ export function NewRecipeScreen() {
                   onPress={() => {
                     if (unitPicker !== undefined)
                       setIngredients(
-                        ingredients.map((row, i) =>
-                          i === unitPicker ? { ...row, unit } : row,
-                        ),
+                        ingredients.map((row, i) => (i === unitPicker ? { ...row, unit } : row)),
                       );
                     setUnitPicker(undefined);
                   }}
@@ -1178,8 +1033,8 @@ export function NewRecipeScreen() {
             </View>
             <Text style={dialogStyles.title}>Review ingredient calories</Text>
             <Text style={dialogStyles.message}>
-              Every ingredient is listed below. Review the suggested values, add
-              missing ones, or leave a field empty to skip it.
+              Every ingredient is listed below. Review the suggested values, add missing ones, or
+              leave a field empty to skip it.
             </Text>
             <ScrollView
               style={calorieDialogStyles.list}
@@ -1188,17 +1043,11 @@ export function NewRecipeScreen() {
               showsVerticalScrollIndicator={false}
             >
               {estimateSession?.remaining.map((item, index) => (
-                <View
-                  key={`${item.name}-${index}`}
-                  style={calorieDialogStyles.row}
-                >
+                <View key={`${item.name}-${index}`} style={calorieDialogStyles.row}>
                   <View style={calorieDialogStyles.rowCopy}>
-                    <Text style={calorieDialogStyles.ingredientName}>
-                      {item.name}
-                    </Text>
+                    <Text style={calorieDialogStyles.ingredientName}>{item.name}</Text>
                     <Text style={calorieDialogStyles.quantity}>
-                      {item.amount}{" "}
-                      {item.unit === "Custom" ? item.customUnit : item.unit}
+                      {item.amount} {item.unit === "Custom" ? item.customUnit : item.unit}
                     </Text>
                   </View>
                   <View style={calorieDialogStyles.inputWrap}>
@@ -1207,9 +1056,7 @@ export function NewRecipeScreen() {
                       onChangeText={(value) => {
                         if (value === "" || /^\d*\.?\d*$/.test(value))
                           setManualCalories((current) =>
-                            current.map((entry, i) =>
-                              i === index ? value : entry,
-                            ),
+                            current.map((entry, i) => (i === index ? value : entry)),
                           );
                       }}
                       keyboardType="decimal-pad"
@@ -1224,30 +1071,23 @@ export function NewRecipeScreen() {
             </ScrollView>
             <View style={calorieDialogStyles.total}>
               <View>
-                <Text style={calorieDialogStyles.totalLabel}>
-                  CURRENT RECIPE TOTAL
-                </Text>
+                <Text style={calorieDialogStyles.totalLabel}>CURRENT RECIPE TOTAL</Text>
                 <Text style={calorieDialogStyles.totalHint}>
-                  {estimateSession?.autoFilled ?? 0} of{" "}
-                  {estimateSession?.measurable ?? 0} values prefilled
-                  automatically
+                  {estimateSession?.autoFilled ?? 0} of {estimateSession?.measurable ?? 0} values
+                  prefilled automatically
                 </Text>
               </View>
               <Text style={calorieDialogStyles.totalValue}>
                 {Math.round(
                   manualCalories.reduce(
-                    (sum, value) =>
-                      sum + (Number(value) > 0 ? Number(value) : 0),
+                    (sum, value) => sum + (Number(value) > 0 ? Number(value) : 0),
                     0,
                   ),
                 )}{" "}
                 kcal
               </Text>
             </View>
-            <Pressable
-              style={dialogStyles.button}
-              onPress={completeManualEstimate}
-            >
+            <Pressable style={dialogStyles.button} onPress={completeManualEstimate}>
               <Text style={dialogStyles.buttonText}>Use this estimate</Text>
             </Pressable>
             <Pressable
@@ -1257,9 +1097,7 @@ export function NewRecipeScreen() {
                 setManualCalories([]);
               }}
             >
-              <Text style={calorieDialogStyles.cancelText}>
-                Cancel estimate
-              </Text>
+              <Text style={calorieDialogStyles.cancelText}>Cancel estimate</Text>
             </Pressable>
           </View>
         </View>
@@ -1280,25 +1118,18 @@ export function NewRecipeScreen() {
                 <Text style={aiResultStyles.eyebrow}>GEMINI ESTIMATE</Text>
                 <Text style={aiResultStyles.title}>Calories calculated</Text>
               </View>
-              <Pressable
-                style={aiResultStyles.close}
-                onPress={() => setAiEstimate(undefined)}
-              >
+              <Pressable style={aiResultStyles.close} onPress={() => setAiEstimate(undefined)}>
                 <Ionicons name="close" size={19} color={palette.c657267} />
               </Pressable>
             </View>
             <View style={aiResultStyles.hero}>
-              <Text style={aiResultStyles.heroValue}>
-                {aiEstimate?.caloriesPerServing}
-              </Text>
+              <Text style={aiResultStyles.heroValue}>{aiEstimate?.caloriesPerServing}</Text>
               <Text style={aiResultStyles.heroUnit}>kcal per serving</Text>
             </View>
             <View style={aiResultStyles.summary}>
               <View style={aiResultStyles.summaryItem}>
                 <Text style={aiResultStyles.summaryLabel}>RECIPE TOTAL</Text>
-                <Text style={aiResultStyles.summaryValue}>
-                  {aiEstimate?.totalCalories} kcal
-                </Text>
+                <Text style={aiResultStyles.summaryValue}>{aiEstimate?.totalCalories} kcal</Text>
               </View>
               <View style={aiResultStyles.divider} />
               <View style={aiResultStyles.summaryItem}>
@@ -1310,22 +1141,15 @@ export function NewRecipeScreen() {
             </View>
             {Boolean(aiEstimate?.assumptions.length) && (
               <View style={aiResultStyles.assumptions}>
-                <Text style={aiResultStyles.assumptionTitle}>
-                  What Gemini assumed
-                </Text>
+                <Text style={aiResultStyles.assumptionTitle}>What Gemini assumed</Text>
                 <ScrollView
                   style={aiResultStyles.assumptionList}
                   showsVerticalScrollIndicator={false}
                 >
                   {aiEstimate?.assumptions.map((assumption, index) => (
-                    <View
-                      key={`${index}-${assumption}`}
-                      style={aiResultStyles.assumptionRow}
-                    >
+                    <View key={`${index}-${assumption}`} style={aiResultStyles.assumptionRow}>
                       <View style={aiResultStyles.bullet} />
-                      <Text style={aiResultStyles.assumptionText}>
-                        {assumption}
-                      </Text>
+                      <Text style={aiResultStyles.assumptionText}>{assumption}</Text>
                     </View>
                   ))}
                 </ScrollView>
@@ -1334,10 +1158,7 @@ export function NewRecipeScreen() {
             <Text style={aiResultStyles.disclaimer}>
               This is an approximation and may vary by brand and preparation.
             </Text>
-            <Pressable
-              style={aiResultStyles.done}
-              onPress={() => setAiEstimate(undefined)}
-            >
+            <Pressable style={aiResultStyles.done} onPress={() => setAiEstimate(undefined)}>
               <Text style={aiResultStyles.doneText}>Use this estimate</Text>
             </Pressable>
           </View>
@@ -1360,10 +1181,7 @@ export function NewRecipeScreen() {
             </View>
             <Text style={dialogStyles.title}>{pageMessage?.title}</Text>
             <Text style={dialogStyles.message}>{pageMessage?.message}</Text>
-            <Pressable
-              style={dialogStyles.button}
-              onPress={() => setPageMessage(undefined)}
-            >
+            <Pressable style={dialogStyles.button} onPress={() => setPageMessage(undefined)}>
               <Text style={dialogStyles.buttonText}>Got it</Text>
             </Pressable>
           </View>
@@ -1388,11 +1206,7 @@ function Setting({
   return (
     <View style={styles.setting}>
       <View style={styles.settingIcon}>
-        <Ionicons
-          name={icon}
-          size={18}
-          color={value ? GREEN : palette.c99a4b3}
-        />
+        <Ionicons name={icon} size={18} color={value ? GREEN : palette.c99a4b3} />
       </View>
       <View style={styles.flex}>
         <Text style={styles.settingTitle}>{title}</Text>
@@ -1408,24 +1222,14 @@ function Setting({
   );
 }
 function Label({ text }: { text: string }) {
-  return (
-    <Text style={[styles.label, { marginTop: 34, marginBottom: 12 }]}>
-      {text}
-    </Text>
-  );
+  return <Text style={[styles.label, { marginTop: 34, marginBottom: 12 }]}>{text}</Text>;
 }
 function Field(props: {
   value: string;
   onChangeText: (value: string) => void;
   placeholder: string;
 }) {
-  return (
-    <TextInput
-      {...props}
-      placeholderTextColor={palette.c949caa}
-      style={styles.field}
-    />
-  );
+  return <TextInput {...props} placeholderTextColor={palette.c949caa} style={styles.field} />;
 }
 function Metric({
   label,
@@ -1467,9 +1271,7 @@ function Metric({
           selectionColor={GREEN}
           style={styles.metricInput}
         />
-        {focused && !value && (
-          <View pointerEvents="none" style={styles.centeredCaret} />
-        )}
+        {focused && !value && <View pointerEvents="none" style={styles.centeredCaret} />}
         <Text style={styles.metricSuffix}>{suffix}</Text>
       </View>
       {invalid && <Text style={styles.metricError}>Required</Text>}
@@ -1589,9 +1391,26 @@ const styles = StyleSheet.create({
     textAlignVertical: "top",
   },
   metrics: { flexDirection: "row", gap: 8, marginTop: 11 },
-  totalTimeRow: { flexDirection: "row", alignItems: "center", gap: 8, padding: 12, marginTop: 12, borderRadius: 12, backgroundColor: colors.primarySoft },
-  totalTimeText: { color: colors.primaryStrong, fontSize: typography.mobile.size.bodyInteraction, fontWeight: typography.weight.semibold },
-  timeHint: { marginTop: 8, color: colors.textMuted, fontSize: typography.mobile.size.secondaryInteraction, lineHeight: 20 },
+  totalTimeRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    padding: 12,
+    marginTop: 12,
+    borderRadius: 12,
+    backgroundColor: colors.primarySoft,
+  },
+  totalTimeText: {
+    color: colors.primaryStrong,
+    fontSize: typography.mobile.size.bodyInteraction,
+    fontWeight: typography.weight.semibold,
+  },
+  timeHint: {
+    marginTop: 8,
+    color: colors.textMuted,
+    fontSize: typography.mobile.size.secondaryInteraction,
+    lineHeight: 20,
+  },
   metric: { flex: 1 },
   metricLabel: {
     minHeight: 24,

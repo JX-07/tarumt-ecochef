@@ -21,7 +21,9 @@ PICKUP_ADDRESS = "Customer pickup directly from store"
 
 def ensure_preferences(session: Session, user_id: UUID) -> None:
     session.execute(
-        text("INSERT INTO notification_preferences (user_id) VALUES (:user_id) ON CONFLICT (user_id) DO NOTHING"),
+        text(
+            "INSERT INTO notification_preferences (user_id) VALUES (:user_id) ON CONFLICT (user_id) DO NOTHING"
+        ),
         {"user_id": user_id},
     )
 
@@ -37,7 +39,8 @@ def create_notification(
     action_path: str | None = None,
     metadata: dict | None = None,
 ) -> bool:
-    result = session.execute(text("""
+    result = session.execute(
+        text("""
         INSERT INTO notifications
             (user_id, category, title, message, source_key, action_path, metadata)
         VALUES
@@ -45,15 +48,17 @@ def create_notification(
              CAST(:metadata AS jsonb))
         ON CONFLICT (user_id, source_key) DO NOTHING
         RETURNING id
-    """), {
-        "user_id": user_id,
-        "category": category,
-        "title": title,
-        "message": message,
-        "source_key": source_key,
-        "action_path": action_path,
-        "metadata": json.dumps(metadata or {}),
-    })
+    """),
+        {
+            "user_id": user_id,
+            "category": category,
+            "title": title,
+            "message": message,
+            "source_key": source_key,
+            "action_path": action_path,
+            "metadata": json.dumps(metadata or {}),
+        },
+    )
     return result.scalar_one_or_none() is not None
 
 
@@ -66,20 +71,30 @@ def send_push_notification(
     action_path: str | None = None,
 ) -> None:
     """Best-effort delivery; the saved in-app notification remains authoritative."""
-    tokens = session.execute(text("""
+    tokens = (
+        session.execute(
+            text("""
         SELECT expo_push_token FROM user_push_tokens
         WHERE user_id = :user_id ORDER BY updated_at DESC LIMIT 100
-    """), {"user_id": user_id}).scalars().all()
+    """),
+            {"user_id": user_id},
+        )
+        .scalars()
+        .all()
+    )
     if not tokens:
         return
-    payload = [{
-        "to": token,
-        "title": title,
-        "body": message,
-        "sound": "default",
-        "priority": "high",
-        "data": {"action_path": action_path} if action_path else {},
-    } for token in tokens]
+    payload = [
+        {
+            "to": token,
+            "title": title,
+            "body": message,
+            "sound": "default",
+            "priority": "high",
+            "data": {"action_path": action_path} if action_path else {},
+        }
+        for token in tokens
+    ]
     headers = {"Accept": "application/json", "Content-Type": "application/json"}
     access_token = get_settings().expo_push_access_token
     if access_token:
@@ -100,14 +115,18 @@ def send_push_notification(
 def sync_consumer_notifications(session: Session, user_id: UUID) -> None:
     """Create idempotent alerts from current EcoChef domain data."""
     ensure_preferences(session, user_id)
-    preferences = session.execute(text("""
+    preferences = session.execute(
+        text("""
         SELECT sensor_alerts, ingredient_expiry, meal_reminders,
                payment_updates, delivery_updates
         FROM notification_preferences WHERE user_id = :user_id
-    """), {"user_id": user_id}).one()
+    """),
+        {"user_id": user_id},
+    ).one()
 
     if preferences.ingredient_expiry:
-        rows = session.execute(text("""
+        rows = session.execute(
+            text("""
             SELECT ingredient.id, ingredient.ingredient_name, item.expiry_date,
                    (item.expiry_date::date - CURRENT_DATE) AS days_left
             FROM ingredient_inventories inventory
@@ -116,12 +135,16 @@ def sync_consumer_notifications(session: Session, user_id: UUID) -> None:
             JOIN ingredients ingredient ON ingredient.id = item.ingredient_id
             WHERE inventory.user_id = :user_id
               AND item.expiry_date::date BETWEEN CURRENT_DATE - 1 AND CURRENT_DATE + 3
-        """), {"user_id": user_id}).all()
+        """),
+            {"user_id": user_id},
+        ).all()
         for row in rows:
             days = int(row.days_left)
             if days < 0:
                 title = f"{row.ingredient_name} may have gone bad"
-                message = "Check it before using it and remove it from your Ingredient List if needed."
+                message = (
+                    "Check it before using it and remove it from your Ingredient List if needed."
+                )
             elif days == 0:
                 title = f"{row.ingredient_name} expires today"
                 message = "Use it today to reduce food waste."
@@ -143,7 +166,8 @@ def sync_consumer_notifications(session: Session, user_id: UUID) -> None:
             )
 
     if preferences.meal_reminders:
-        rows = session.execute(text("""
+        rows = session.execute(
+            text("""
             SELECT entry.id, entry.scheduled_date, entry.scheduled_time,
                    recipe.id AS recipe_id, recipe.title
             FROM meal_plan_recipes entry
@@ -154,7 +178,9 @@ def sync_consumer_notifications(session: Session, user_id: UUID) -> None:
               AND (entry.scheduled_date + entry.scheduled_time)
                   BETWEEN (now() AT TIME ZONE 'Asia/Kuala_Lumpur')
                   AND (now() AT TIME ZONE 'Asia/Kuala_Lumpur') + interval '60 minutes'
-        """), {"user_id": user_id}).all()
+        """),
+            {"user_id": user_id},
+        ).all()
         for row in rows:
             display_time = row.scheduled_time.strftime("%I:%M %p").lstrip("0")
             create_notification(
@@ -169,7 +195,8 @@ def sync_consumer_notifications(session: Session, user_id: UUID) -> None:
             )
 
     if preferences.payment_updates:
-        rows = session.execute(text("""
+        rows = session.execute(
+            text("""
             SELECT payment.id, payment.order_id, payment.amount,
                    COALESCE(payment.paid_at, payment.payment_date) AS paid_at
             FROM payments payment
@@ -177,7 +204,9 @@ def sync_consumer_notifications(session: Session, user_id: UUID) -> None:
             JOIN carts cart ON cart.id = orders.cart_id
             WHERE cart.user_id = :user_id AND payment.payment_status = 'paid'
               AND COALESCE(payment.paid_at, payment.payment_date) >= now() - interval '7 days'
-        """), {"user_id": user_id}).all()
+        """),
+            {"user_id": user_id},
+        ).all()
         for row in rows:
             amount = Decimal(row.amount).quantize(Decimal("0.01"))
             create_notification(
@@ -192,7 +221,8 @@ def sync_consumer_notifications(session: Session, user_id: UUID) -> None:
             )
 
     if preferences.delivery_updates:
-        rows = session.execute(text("""
+        rows = session.execute(
+            text("""
             SELECT orders.id, orders.delivery_address, orders.order_status
             FROM orders
             JOIN carts cart ON cart.id = orders.cart_id
@@ -201,22 +231,29 @@ def sync_consumer_notifications(session: Session, user_id: UUID) -> None:
               AND payment.payment_status = 'paid'
               AND orders.order_status = 'ready'
               AND orders.order_date >= now() - interval '2 days'
-        """), {"user_id": user_id}).all()
+        """),
+            {"user_id": user_id},
+        ).all()
         for row in rows:
             pickup = row.delivery_address == PICKUP_ADDRESS
             create_notification(
                 session,
                 user_id=user_id,
                 category="delivery",
-                title="Your order is ready for pickup" if pickup else "Your delivery driver is arriving soon",
+                title="Your order is ready for pickup"
+                if pickup
+                else "Your delivery driver is arriving soon",
                 message=(
                     "Your order is ready. Head to the store when you are ready to collect it."
-                    if pickup else
-                    "Your order is on its final step. Please be ready to receive it."
+                    if pickup
+                    else "Your order is on its final step. Please be ready to receive it."
                 ),
                 source_key=f"order:{row.id}:ready",
                 action_path=f"/marketplace/order?orderId={row.id}&fulfillment={'pickup' if pickup else 'delivery'}",
-                metadata={"order_id": str(row.id), "fulfillment_method": "pickup" if pickup else "delivery"},
+                metadata={
+                    "order_id": str(row.id),
+                    "fulfillment_method": "pickup" if pickup else "delivery",
+                },
             )
 
 
@@ -249,5 +286,10 @@ def record_sensor_alert(
         message=message,
         source_key=f"sensor:{sensor_id}:{alert_code}:{hour}",
         action_path=action_path or "/fridge-sensors",
-        metadata={"sensor_id": sensor_id, "alert_code": alert_code, "reading": reading, "unit": unit},
+        metadata={
+            "sensor_id": sensor_id,
+            "alert_code": alert_code,
+            "reading": reading,
+            "unit": unit,
+        },
     )

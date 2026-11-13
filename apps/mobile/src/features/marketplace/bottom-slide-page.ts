@@ -20,7 +20,10 @@ export function useBottomSlidePageExit(fallbackPath?: string) {
       easing: Easing.inOut(Easing.cubic),
       useNativeDriver: true,
     }).start(({ finished }) => {
-      if (!finished) { closing.current = false; return; }
+      if (!finished) {
+        closing.current = false;
+        return;
+      }
       if (router.canGoBack()) router.back();
       else if (fallbackPath) router.replace(fallbackPath as never);
       else router.replace("/(tabs)/marketplace");

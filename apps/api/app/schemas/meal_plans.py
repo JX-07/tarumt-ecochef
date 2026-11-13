@@ -6,7 +6,9 @@ from pydantic import BaseModel, Field
 
 class MealPlanEntryUpdate(BaseModel):
     scheduled_date: date
-    meal_slot: str = Field(pattern=r"^(breakfast|brunch|lunch|dinner|snacks|dessert|drink|teatime)$")
+    meal_slot: str = Field(
+        pattern=r"^(breakfast|brunch|lunch|dinner|snacks|dessert|drink|teatime)$"
+    )
     scheduled_time: time | None = None
 
 

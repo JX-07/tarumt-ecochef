@@ -10,7 +10,7 @@ export async function getScanHistory(): Promise<ScanHistoryEntry[]> {
     const saved = await AsyncStorage.getItem(STORAGE_KEY);
     if (!saved) return [];
     const parsed: unknown = JSON.parse(saved);
-    return Array.isArray(parsed) ? parsed as ScanHistoryEntry[] : [];
+    return Array.isArray(parsed) ? (parsed as ScanHistoryEntry[]) : [];
   } catch {
     return [];
   }
@@ -18,5 +18,8 @@ export async function getScanHistory(): Promise<ScanHistoryEntry[]> {
 
 export async function saveScanHistory(entry: ScanHistoryEntry) {
   const previous = await getScanHistory();
-  await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify([entry, ...previous].slice(0, HISTORY_LIMIT)));
+  await AsyncStorage.setItem(
+    STORAGE_KEY,
+    JSON.stringify([entry, ...previous].slice(0, HISTORY_LIMIT)),
+  );
 }

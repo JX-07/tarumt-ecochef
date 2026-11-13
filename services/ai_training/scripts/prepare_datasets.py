@@ -63,14 +63,20 @@ def stable_split(group_id: str) -> str:
 
 
 def balanced_group_splits(groups: Iterable[str]) -> dict[str, str]:
-    ordered = sorted(set(groups), key=lambda value: hashlib.sha256(value.encode("utf-8")).hexdigest())
+    ordered = sorted(
+        set(groups), key=lambda value: hashlib.sha256(value.encode("utf-8")).hexdigest()
+    )
     if len(ordered) < 3:
         return {group: "train" for group in ordered}
     validation_count = max(1, round(len(ordered) * 0.1))
     test_count = max(1, round(len(ordered) * 0.1))
     train_count = len(ordered) - validation_count - test_count
     return {
-        group: "train" if index < train_count else "val" if index < train_count + validation_count else "test"
+        group: "train"
+        if index < train_count
+        else "val"
+        if index < train_count + validation_count
+        else "test"
         for index, group in enumerate(ordered)
     }
 
@@ -123,12 +129,16 @@ def zip_image_info(zipped: zipfile.ZipFile, member: str) -> tuple[int, int, str]
     return width, height, visual_hash
 
 
-def valid_yolo_lines(label_path: Path, class_map: dict[int, int] | None = None) -> tuple[list[str], list[tuple[int, float, float, float, float]], list[str]]:
+def valid_yolo_lines(
+    label_path: Path, class_map: dict[int, int] | None = None
+) -> tuple[list[str], list[tuple[int, float, float, float, float]], list[str]]:
     cleaned: list[str] = []
     boxes: list[tuple[int, float, float, float, float]] = []
     problems: list[str] = []
     seen_boxes: set[tuple[int, float, float, float, float]] = set()
-    for line_number, raw in enumerate(label_path.read_text(encoding="utf-8", errors="replace").splitlines(), start=1):
+    for line_number, raw in enumerate(
+        label_path.read_text(encoding="utf-8", errors="replace").splitlines(), start=1
+    ):
         if not raw.strip():
             continue
         fields = raw.split()
@@ -144,14 +154,27 @@ def valid_yolo_lines(label_path: Path, class_map: dict[int, int] | None = None) 
                 x_center, y_center, width, height = values
             elif len(values) >= 6 and len(values) % 2 == 0:
                 x_values, y_values = values[0::2], values[1::2]
-                left, right, top, bottom = min(x_values), max(x_values), min(y_values), max(y_values)
+                left, right, top, bottom = (
+                    min(x_values),
+                    max(x_values),
+                    min(y_values),
+                    max(y_values),
+                )
                 x_center, y_center = (left + right) / 2, (top + bottom) / 2
                 width, height = right - left, bottom - top
             else:
                 raise ValueError("segmentation polygon must contain x/y coordinate pairs")
-            if not all(np.isfinite(values)) or not (0 <= x_center <= 1 and 0 <= y_center <= 1 and 0 < width <= 1 and 0 < height <= 1):
+            if not all(np.isfinite(values)) or not (
+                0 <= x_center <= 1 and 0 <= y_center <= 1 and 0 < width <= 1 and 0 < height <= 1
+            ):
                 raise ValueError("box is outside normalized YOLO bounds")
-            box_key = (output_class, round(x_center, 7), round(y_center, 7), round(width, 7), round(height, 7))
+            box_key = (
+                output_class,
+                round(x_center, 7),
+                round(y_center, 7),
+                round(width, 7),
+                round(height, 7),
+            )
             if box_key in seen_boxes:
                 problems.append(f"line {line_number}: duplicate bounding box removed")
                 continue
@@ -191,11 +214,20 @@ def prepare_detection(vision_root: Path, output: Path, rejected: list[dict]) -> 
         (detection_root / "labels" / split).mkdir(parents=True, exist_ok=True)
 
     sources: list[tuple[str, Path, dict[int, int] | None]] = []
-    comprehensive_parent = vision_root / "Comprehensive Dataset on Ripening Stages of Strawberries and Avocados From Unripe to Rotten"
+    comprehensive_parent = (
+        vision_root
+        / "Comprehensive Dataset on Ripening Stages of Strawberries and Avocados From Unripe to Rotten"
+    )
     comprehensive = find_nested_root(comprehensive_parent, ("images", "labels"))
     sources.append(("comprehensive", comprehensive, None))
     strawberry = find_nested_root(vision_root / "Strawberry Riupeness", ("images", "labels"))
-    sources.append(("strawberry", strawberry, {key: value[0] for key, value in STRAWBERRY_LABELS.items()}))
+    sources.append(
+        (
+            "strawberry",
+            strawberry,
+            {key: value[0] for key, value in STRAWBERRY_LABELS.items()},
+        )
+    )
 
     counts = Counter()
     for source_name, source_root, class_map in sources:
@@ -206,9 +238,23 @@ def prepare_detection(vision_root: Path, output: Path, rejected: list[dict]) -> 
         }
         label_by_stem = {path.stem: path for path in (source_root / "labels").glob("*.txt")}
         for orphan in sorted(set(label_by_stem) - set(image_by_stem)):
-            rejected.append({"dataset": "vision_detection", "source": source_name, "item": orphan, "reason": "label_without_image"})
+            rejected.append(
+                {
+                    "dataset": "vision_detection",
+                    "source": source_name,
+                    "item": orphan,
+                    "reason": "label_without_image",
+                }
+            )
         for orphan in sorted(set(image_by_stem) - set(label_by_stem)):
-            rejected.append({"dataset": "vision_detection", "source": source_name, "item": orphan, "reason": "image_without_label"})
+            rejected.append(
+                {
+                    "dataset": "vision_detection",
+                    "source": source_name,
+                    "item": orphan,
+                    "reason": "image_without_label",
+                }
+            )
         source_samples: list[dict] = []
         for stem in sorted(set(image_by_stem) & set(label_by_stem)):
             image_path, label_path = image_by_stem[stem], label_by_stem[stem]
@@ -217,7 +263,14 @@ def prepare_detection(vision_root: Path, output: Path, rejected: list[dict]) -> 
                 cleaned, boxes, problems = valid_yolo_lines(label_path, class_map)
                 if problems:
                     for problem in problems:
-                        rejected.append({"dataset": "vision_detection", "source": source_name, "item": label_path.name, "reason": problem})
+                        rejected.append(
+                            {
+                                "dataset": "vision_detection",
+                                "source": source_name,
+                                "item": label_path.name,
+                                "reason": problem,
+                            }
+                        )
                 if not cleaned:
                     raise ValueError("no valid bounding boxes")
                 if source_name == "comprehensive":
@@ -227,23 +280,40 @@ def prepare_detection(vision_root: Path, output: Path, rejected: list[dict]) -> 
                     group = f"comprehensive_sequence_{int(match.group(1)) // 2 if match else clean_group_stem(stem)}"
                 else:
                     group = f"strawberry_{clean_group_stem(stem)[:15]}"
-                source_samples.append({
-                    "stem": stem,
-                    "image_path": image_path,
-                    "cleaned": cleaned,
-                    "boxes": boxes,
-                    "classes": [int(line.split()[0]) for line in cleaned],
-                    "group": group,
-                })
+                source_samples.append(
+                    {
+                        "stem": stem,
+                        "image_path": image_path,
+                        "cleaned": cleaned,
+                        "boxes": boxes,
+                        "classes": [int(line.split()[0]) for line in cleaned],
+                        "group": group,
+                    }
+                )
             except (OSError, ValueError, UnidentifiedImageError) as error:
-                rejected.append({"dataset": "vision_detection", "source": source_name, "item": image_path.name, "reason": str(error)})
+                rejected.append(
+                    {
+                        "dataset": "vision_detection",
+                        "source": source_name,
+                        "item": image_path.name,
+                        "reason": str(error),
+                    }
+                )
         split_by_group = stratified_detection_splits(source_samples)
         for sample in source_samples:
             split = split_by_group[sample["group"]]
             destination_stem = f"{source_name}_{sample['stem']}"
             image_path = sample["image_path"]
-            link_or_copy(image_path, detection_root / "images" / split / f"{destination_stem}{image_path.suffix.lower()}")
-            (detection_root / "labels" / split / f"{destination_stem}.txt").write_text("\n".join(sample["cleaned"]) + "\n", encoding="utf-8")
+            link_or_copy(
+                image_path,
+                detection_root
+                / "images"
+                / split
+                / f"{destination_stem}{image_path.suffix.lower()}",
+            )
+            (detection_root / "labels" / split / f"{destination_stem}.txt").write_text(
+                "\n".join(sample["cleaned"]) + "\n", encoding="utf-8"
+            )
             counts[f"images_{split}"] += 1
             counts["boxes"] += len(sample["boxes"])
 
@@ -260,35 +330,63 @@ def prepare_detection(vision_root: Path, output: Path, rejected: list[dict]) -> 
     return dict(counts)
 
 
-def append_file_sample(rows: list[dict], rejected: list[dict], *, source: str, path: Path, ingredient: str, freshness: str, group: str, bbox: tuple[float, float, float, float] | None = None) -> None:
+def append_file_sample(
+    rows: list[dict],
+    rejected: list[dict],
+    *,
+    source: str,
+    path: Path,
+    ingredient: str,
+    freshness: str,
+    group: str,
+    bbox: tuple[float, float, float, float] | None = None,
+) -> None:
     try:
         width, height, visual_hash = image_info(path)
         x_center, y_center, box_width, box_height = bbox or (None, None, None, None)
-        rows.append({
-            "sample_id": hashlib.sha256(f"{source}|{path}|{bbox}".encode()).hexdigest()[:20],
-            "source": source,
-            "path": str(path),
-            "archive_member": "",
-            "ingredient": ingredient,
-            "freshness": freshness,
-            "group_id": f"{source}:{group}",
-            "split": stable_split(f"{source}:{group}"),
-            "width": width,
-            "height": height,
-            "visual_hash": visual_hash,
-            "bbox_x_center": x_center,
-            "bbox_y_center": y_center,
-            "bbox_width": box_width,
-            "bbox_height": box_height,
-        })
+        rows.append(
+            {
+                "sample_id": hashlib.sha256(f"{source}|{path}|{bbox}".encode()).hexdigest()[:20],
+                "source": source,
+                "path": str(path),
+                "archive_member": "",
+                "ingredient": ingredient,
+                "freshness": freshness,
+                "group_id": f"{source}:{group}",
+                "split": stable_split(f"{source}:{group}"),
+                "width": width,
+                "height": height,
+                "visual_hash": visual_hash,
+                "bbox_x_center": x_center,
+                "bbox_y_center": y_center,
+                "bbox_width": box_width,
+                "bbox_height": box_height,
+            }
+        )
     except (OSError, ValueError, UnidentifiedImageError) as error:
-        rejected.append({"dataset": "vision_freshness", "source": source, "item": str(path), "reason": str(error)})
+        rejected.append(
+            {
+                "dataset": "vision_freshness",
+                "source": source,
+                "item": str(path),
+                "reason": str(error),
+            }
+        )
 
 
-def prepare_vision_classification(vision_root: Path, output: Path, rejected: list[dict], max_variants: int) -> dict:
+def prepare_vision_classification(
+    vision_root: Path, output: Path, rejected: list[dict], max_variants: int
+) -> dict:
     rows: list[dict] = []
 
-    canonical = vision_root / "Fruit Ripeness, Unripe, Ripe, Rotten" / "fruit_ripeness_dataset" / "archive (1)" / "dataset" / "dataset"
+    canonical = (
+        vision_root
+        / "Fruit Ripeness, Unripe, Ripe, Rotten"
+        / "fruit_ripeness_dataset"
+        / "archive (1)"
+        / "dataset"
+        / "dataset"
+    )
     for source_split in ("train", "test"):
         for class_dir in sorted((canonical / source_split).iterdir()):
             if not class_dir.is_dir() or class_dir.name.lower() not in FOLDER_LABELS:
@@ -296,23 +394,52 @@ def prepare_vision_classification(vision_root: Path, output: Path, rejected: lis
             ingredient, freshness = FOLDER_LABELS[class_dir.name.lower()]
             for path in sorted(class_dir.iterdir()):
                 if path.suffix.lower() in IMAGE_SUFFIXES:
-                    append_file_sample(rows, rejected, source="fruit_ripeness", path=path, ingredient=ingredient, freshness=freshness, group=clean_group_stem(path.name))
+                    append_file_sample(
+                        rows,
+                        rejected,
+                        source="fruit_ripeness",
+                        path=path,
+                        ingredient=ingredient,
+                        freshness=freshness,
+                        group=clean_group_stem(path.name),
+                    )
 
     asad = vision_root / "Fruit Ripeness Dataset Asad Ullah"
-    asad_labels = {"unripe": "unripe", "ripe": "fresh", "overripe": "overripe", "overipe": "overripe"}
+    asad_labels = {
+        "unripe": "unripe",
+        "ripe": "fresh",
+        "overripe": "overripe",
+        "overipe": "overripe",
+    }
     for path in sorted(asad.rglob("*")):
         if not path.is_file() or path.suffix.lower() not in IMAGE_SUFFIXES:
             continue
         freshness = asad_labels.get(path.parent.name.lower())
         if freshness:
-            append_file_sample(rows, rejected, source="asad_ripeness", path=path, ingredient="unknown_fruit", freshness=freshness, group=clean_group_stem(path.name))
+            append_file_sample(
+                rows,
+                rejected,
+                source="asad_ripeness",
+                path=path,
+                ingredient="unknown_fruit",
+                freshness=freshness,
+                group=clean_group_stem(path.name),
+            )
 
     comprehensive = find_nested_root(
-        vision_root / "Comprehensive Dataset on Ripening Stages of Strawberries and Avocados From Unripe to Rotten",
+        vision_root
+        / "Comprehensive Dataset on Ripening Stages of Strawberries and Avocados From Unripe to Rotten",
         ("images", "labels"),
     )
     for label_path in sorted((comprehensive / "labels").glob("*.txt")):
-        image_path = next((comprehensive / "images" / f"{label_path.stem}{suffix}" for suffix in IMAGE_SUFFIXES if (comprehensive / "images" / f"{label_path.stem}{suffix}").exists()), None)
+        image_path = next(
+            (
+                comprehensive / "images" / f"{label_path.stem}{suffix}"
+                for suffix in IMAGE_SUFFIXES
+                if (comprehensive / "images" / f"{label_path.stem}{suffix}").exists()
+            ),
+            None,
+        )
         if image_path is None:
             continue
         _, boxes, _ = valid_yolo_lines(label_path)
@@ -322,7 +449,16 @@ def prepare_vision_classification(vision_root: Path, output: Path, rejected: lis
             ingredient, freshness = COMPREHENSIVE_LABELS[source_class]
             match = re.search(r"(\d+)$", label_path.stem)
             group = f"sequence_{int(match.group(1)) // 25 if match else clean_group_stem(label_path.name)}"
-            append_file_sample(rows, rejected, source="comprehensive", path=image_path, ingredient=ingredient, freshness=freshness, group=group, bbox=(x_center, y_center, width, height))
+            append_file_sample(
+                rows,
+                rejected,
+                source="comprehensive",
+                path=image_path,
+                ingredient=ingredient,
+                freshness=freshness,
+                group=group,
+                bbox=(x_center, y_center, width, height),
+            )
 
     strawberry = find_nested_root(vision_root / "Strawberry Riupeness", ("images", "labels"))
     for label_path in sorted((strawberry / "labels").glob("*.txt")):
@@ -334,7 +470,16 @@ def prepare_vision_classification(vision_root: Path, output: Path, rejected: lis
             if source_class not in STRAWBERRY_LABELS:
                 continue
             _, ingredient, freshness = STRAWBERRY_LABELS[source_class]
-            append_file_sample(rows, rejected, source="strawberry_ripeness", path=image_path, ingredient=ingredient, freshness=freshness, group=clean_group_stem(label_path.name), bbox=(x_center, y_center, width, height))
+            append_file_sample(
+                rows,
+                rejected,
+                source="strawberry_ripeness",
+                path=image_path,
+                ingredient=ingredient,
+                freshness=freshness,
+                group=clean_group_stem(label_path.name),
+                bbox=(x_center, y_center, width, height),
+            )
 
     grape_root = vision_root / "GrapeNet An Image Dataset for Grape Variety and Qu"
     for archive in sorted(grape_root.rglob("*.zip")):
@@ -342,36 +487,67 @@ def prepare_vision_classification(vision_root: Path, output: Path, rejected: lis
         source = "grapenet"
         try:
             with zipfile.ZipFile(archive) as zipped:
-                members = sorted(member for member in zipped.namelist() if Path(member).suffix.lower() in IMAGE_SUFFIXES)
+                members = sorted(
+                    member
+                    for member in zipped.namelist()
+                    if Path(member).suffix.lower() in IMAGE_SUFFIXES
+                )
                 grouped: dict[str, list[str]] = defaultdict(list)
                 for member in members:
                     grouped[clean_group_stem(Path(member).name)].append(member)
-                selected = [member for group_members in grouped.values() for member in group_members[:max_variants]]
+                selected = [
+                    member
+                    for group_members in grouped.values()
+                    for member in group_members[:max_variants]
+                ]
                 for member in selected:
                     group = clean_group_stem(Path(member).name)
                     try:
                         width, height, visual_hash = zip_image_info(zipped, member)
-                        rows.append({
-                            "sample_id": hashlib.sha256(f"{archive}|{member}".encode()).hexdigest()[:20],
-                            "source": source,
-                            "path": str(archive),
-                            "archive_member": member,
-                            "ingredient": "grape",
-                            "freshness": freshness,
-                            "group_id": f"{source}:{group}",
-                            "split": stable_split(f"{source}:{group}"),
-                            "width": width,
-                            "height": height,
-                            "visual_hash": visual_hash,
-                            "bbox_x_center": "",
-                            "bbox_y_center": "",
-                            "bbox_width": "",
-                            "bbox_height": "",
-                        })
-                    except (OSError, ValueError, UnidentifiedImageError, zipfile.BadZipFile) as error:
-                        rejected.append({"dataset": "vision_freshness", "source": source, "item": f"{archive}!{member}", "reason": str(error)})
+                        rows.append(
+                            {
+                                "sample_id": hashlib.sha256(
+                                    f"{archive}|{member}".encode()
+                                ).hexdigest()[:20],
+                                "source": source,
+                                "path": str(archive),
+                                "archive_member": member,
+                                "ingredient": "grape",
+                                "freshness": freshness,
+                                "group_id": f"{source}:{group}",
+                                "split": stable_split(f"{source}:{group}"),
+                                "width": width,
+                                "height": height,
+                                "visual_hash": visual_hash,
+                                "bbox_x_center": "",
+                                "bbox_y_center": "",
+                                "bbox_width": "",
+                                "bbox_height": "",
+                            }
+                        )
+                    except (
+                        OSError,
+                        ValueError,
+                        UnidentifiedImageError,
+                        zipfile.BadZipFile,
+                    ) as error:
+                        rejected.append(
+                            {
+                                "dataset": "vision_freshness",
+                                "source": source,
+                                "item": f"{archive}!{member}",
+                                "reason": str(error),
+                            }
+                        )
         except zipfile.BadZipFile as error:
-            rejected.append({"dataset": "vision_freshness", "source": source, "item": str(archive), "reason": str(error)})
+            rejected.append(
+                {
+                    "dataset": "vision_freshness",
+                    "source": source,
+                    "item": str(archive),
+                    "reason": str(error),
+                }
+            )
 
     # Keep only a few deterministic augmented variants of the same original capture.
     capped: list[dict] = []
@@ -379,15 +555,37 @@ def prepare_vision_classification(vision_root: Path, output: Path, rejected: lis
     for row in rows:
         grouped_rows[(row["source"], row["group_id"], row["freshness"])].append(row)
     for group_rows in grouped_rows.values():
-        limit = max_variants if group_rows[0]["source"] in {"fruit_ripeness", "grapenet"} else len(group_rows)
+        limit = (
+            max_variants
+            if group_rows[0]["source"] in {"fruit_ripeness", "grapenet"}
+            else len(group_rows)
+        )
         capped.extend(sorted(group_rows, key=lambda row: row["sample_id"])[:limit])
 
     manifest = output / "vision_freshness_manifest.csv"
-    fields = list(capped[0]) if capped else ["sample_id", "source", "path", "archive_member", "ingredient", "freshness", "group_id", "split"]
+    fields = (
+        list(capped[0])
+        if capped
+        else [
+            "sample_id",
+            "source",
+            "path",
+            "archive_member",
+            "ingredient",
+            "freshness",
+            "group_id",
+            "split",
+        ]
+    )
     with manifest.open("w", encoding="utf-8", newline="") as handle:
         writer = csv.DictWriter(handle, fieldnames=fields)
         writer.writeheader()
-        writer.writerows(sorted(capped, key=lambda row: (row["split"], row["freshness"], row["sample_id"])))
+        writer.writerows(
+            sorted(
+                capped,
+                key=lambda row: (row["split"], row["freshness"], row["sample_id"]),
+            )
+        )
     return {
         "samples": len(capped),
         "by_split": dict(Counter(row["split"] for row in capped)),
@@ -406,7 +604,9 @@ def sensor_label(path: Path) -> tuple[str, int | None]:
     return re.sub(r"\s+", " ", words).strip(), None
 
 
-def sensor_window_features(frame: pd.DataFrame, start_tick: float, end_tick: float) -> dict[str, float]:
+def sensor_window_features(
+    frame: pd.DataFrame, start_tick: float, end_tick: float
+) -> dict[str, float]:
     window = frame[(frame["Ticks"] >= start_tick) & (frame["Ticks"] < end_tick)]
     features: dict[str, float] = {"window_rows": float(len(window))}
     relative_seconds = (window["Ticks"].to_numpy(dtype=float) - window["Ticks"].iloc[0]) / 1000.0
@@ -418,21 +618,38 @@ def sensor_window_features(frame: pd.DataFrame, start_tick: float, end_tick: flo
         features[f"{column.lower()}_max"] = float(np.max(values))
         features[f"{column.lower()}_median"] = float(np.median(values))
         features[f"{column.lower()}_delta"] = float(values[-1] - values[0])
-        features[f"{column.lower()}_slope"] = float(np.polyfit(relative_seconds, values, 1)[0]) if len(values) >= 2 and relative_seconds[-1] > 0 else 0.0
+        features[f"{column.lower()}_slope"] = (
+            float(np.polyfit(relative_seconds, values, 1)[0])
+            if len(values) >= 2 and relative_seconds[-1] > 0
+            else 0.0
+        )
     return features
 
 
-def prepare_enose(enose_root: Path, output: Path, rejected: list[dict], window_seconds: int, step_seconds: int, warmup_seconds: int) -> dict:
+def prepare_enose(
+    enose_root: Path,
+    output: Path,
+    rejected: list[dict],
+    window_seconds: int,
+    step_seconds: int,
+    warmup_seconds: int,
+) -> dict:
     csv_files = sorted(enose_root.rglob("*.csv"))
-    labeled_ingredients = sorted({sensor_label(path)[0] for path in csv_files if sensor_label(path)[1] is not None})
+    labeled_ingredients = sorted(
+        {sensor_label(path)[0] for path in csv_files if sensor_label(path)[1] is not None}
+    )
     rng = np.random.default_rng(42)
     shuffled = list(labeled_ingredients)
     rng.shuffle(shuffled)
     train_count = max(1, int(len(shuffled) * 0.7))
     val_count = max(1, int(len(shuffled) * 0.15))
     split_by_ingredient = {ingredient: "train" for ingredient in shuffled[:train_count]}
-    split_by_ingredient.update({ingredient: "val" for ingredient in shuffled[train_count:train_count + val_count]})
-    split_by_ingredient.update({ingredient: "test" for ingredient in shuffled[train_count + val_count:]})
+    split_by_ingredient.update(
+        {ingredient: "val" for ingredient in shuffled[train_count : train_count + val_count]}
+    )
+    split_by_ingredient.update(
+        {ingredient: "test" for ingredient in shuffled[train_count + val_count :]}
+    )
 
     windows: list[dict] = []
     reports: list[dict] = []
@@ -445,7 +662,10 @@ def prepare_enose(enose_root: Path, output: Path, rejected: list[dict], window_s
                 raise ValueError(f"unexpected columns: {list(frame.columns)}")
             for column in frame.columns:
                 frame[column] = pd.to_numeric(frame[column], errors="coerce")
-            invalid_rows = int(frame.isna().any(axis=1).sum() + np.isinf(frame.to_numpy(dtype=float)).any(axis=1).sum())
+            invalid_rows = int(
+                frame.isna().any(axis=1).sum()
+                + np.isinf(frame.to_numpy(dtype=float)).any(axis=1).sum()
+            )
             frame = frame.replace([np.inf, -np.inf], np.nan).dropna()
             duplicate_rows = int(frame.duplicated().sum())
             frame = frame.drop_duplicates().sort_values("Ticks")
@@ -479,20 +699,33 @@ def prepare_enose(enose_root: Path, output: Path, rejected: list[dict], window_s
                 selected = frame[(frame["Ticks"] >= start) & (frame["Ticks"] < end)]
                 if len(selected) >= 20:
                     features = sensor_window_features(frame, start, end)
-                    features.update({
-                        "sample_id": hashlib.sha256(f"{path}|{start}".encode()).hexdigest()[:20],
-                        "recording": path.name,
-                        "ingredient": ingredient,
-                        "freshness_day": freshness_day if freshness_day is not None else "",
-                        "split": split_by_ingredient.get(ingredient, "unlabeled"),
-                        "window_index": window_index,
-                        "window_start_seconds": round((start - float(frame["Ticks"].iloc[0])) / 1000.0, 3),
-                    })
+                    features.update(
+                        {
+                            "sample_id": hashlib.sha256(f"{path}|{start}".encode()).hexdigest()[
+                                :20
+                            ],
+                            "recording": path.name,
+                            "ingredient": ingredient,
+                            "freshness_day": freshness_day if freshness_day is not None else "",
+                            "split": split_by_ingredient.get(ingredient, "unlabeled"),
+                            "window_index": window_index,
+                            "window_start_seconds": round(
+                                (start - float(frame["Ticks"].iloc[0])) / 1000.0, 3
+                            ),
+                        }
+                    )
                     windows.append(features)
                 start += step_seconds * 1000
                 window_index += 1
         except (OSError, ValueError, pd.errors.ParserError) as error:
-            rejected.append({"dataset": "enose", "source": "csv", "item": str(path), "reason": str(error)})
+            rejected.append(
+                {
+                    "dataset": "enose",
+                    "source": "csv",
+                    "item": str(path),
+                    "reason": str(error),
+                }
+            )
 
     report_frame = pd.DataFrame(reports)
     window_frame = pd.DataFrame(windows)
@@ -508,14 +741,24 @@ def prepare_enose(enose_root: Path, output: Path, rejected: list[dict], window_s
         "labeled_recordings": int(report_frame["labeled"].sum()) if not report_frame.empty else 0,
         "labeled_windows": len(labeled),
         "unlabeled_windows": len(unlabeled),
-        "split_ingredients": {split: sorted([key for key, value in split_by_ingredient.items() if value == split]) for split in ("train", "val", "test")},
-        "by_day": {str(key): int(value) for key, value in labeled["freshness_day"].value_counts().sort_index().items()} if not labeled.empty else {},
+        "split_ingredients": {
+            split: sorted([key for key, value in split_by_ingredient.items() if value == split])
+            for split in ("train", "val", "test")
+        },
+        "by_day": {
+            str(key): int(value)
+            for key, value in labeled["freshness_day"].value_counts().sort_index().items()
+        }
+        if not labeled.empty
+        else {},
         "dht_columns_present": False,
     }
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Clean and split EcoChef vision and electronic-nose datasets.")
+    parser = argparse.ArgumentParser(
+        description="Clean and split EcoChef vision and electronic-nose datasets."
+    )
     parser.add_argument("--vision-root", type=Path, required=True)
     parser.add_argument("--enose-root", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
@@ -532,8 +775,17 @@ def main() -> None:
         "vision_source": str(args.vision_root.resolve()),
         "enose_source": str(args.enose_root.resolve()),
         "vision_detection": prepare_detection(args.vision_root, args.output, rejected),
-        "vision_freshness": prepare_vision_classification(args.vision_root, args.output, rejected, args.max_variants_per_group),
-        "enose": prepare_enose(args.enose_root, args.output, rejected, args.window_seconds, args.step_seconds, args.warmup_seconds),
+        "vision_freshness": prepare_vision_classification(
+            args.vision_root, args.output, rejected, args.max_variants_per_group
+        ),
+        "enose": prepare_enose(
+            args.enose_root,
+            args.output,
+            rejected,
+            args.window_seconds,
+            args.step_seconds,
+            args.warmup_seconds,
+        ),
         "excluded_sources": {
             "Food-Freshness-E-Nose-Dataset": "exact duplicate of the separately supplied electronic-nose folder",
             "Fruit Fresh and rotten Classification": "duplicated subset of Fruit Ripeness, Unripe, Ripe, Rotten",

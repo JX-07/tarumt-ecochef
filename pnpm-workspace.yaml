@@ -3,5 +3,5 @@ packages:
   - apps/web
   - packages/*
 allowBuilds:
-  '@firebase/util': false
+  "@firebase/util": false
   protobufjs: false

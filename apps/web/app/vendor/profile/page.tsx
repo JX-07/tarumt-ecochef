@@ -22,8 +22,43 @@ export default function BusinessProfilePage() {
       setMessage("Your Business profile was updated.");
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Your profile could not be updated.");
-    } finally { setSaving(false); }
+    } finally {
+      setSaving(false);
+    }
   };
 
-  return <main className="workspace"><header className="page-head"><div><h1>Edit User Profile</h1></div></header><form className="settings-card business-profile-form" onSubmit={save}><h2><UserRound size={18} /> Business Account</h2><div className="settings-body"><label>Display Name<input required minLength={2} maxLength={50} value={name} onChange={(event) => setName(event.target.value)} /></label><label>Email<input value={ownerEmail} disabled /></label>{message && <p className="vendor-message">{message}</p>}<button className="cta" disabled={saving}><Save size={16} /> {saving ? "Saving…" : "Save Profile"}</button></div></form></main>;
+  return (
+    <main className="workspace">
+      <header className="page-head">
+        <div>
+          <h1>Edit User Profile</h1>
+        </div>
+      </header>
+      <form className="settings-card business-profile-form" onSubmit={save}>
+        <h2>
+          <UserRound size={18} /> Business Account
+        </h2>
+        <div className="settings-body">
+          <label>
+            Display Name
+            <input
+              required
+              minLength={2}
+              maxLength={50}
+              value={name}
+              onChange={(event) => setName(event.target.value)}
+            />
+          </label>
+          <label>
+            Email
+            <input value={ownerEmail} disabled />
+          </label>
+          {message && <p className="vendor-message">{message}</p>}
+          <button className="cta" disabled={saving}>
+            <Save size={16} /> {saving ? "Saving…" : "Save Profile"}
+          </button>
+        </div>
+      </form>
+    </main>
+  );
 }

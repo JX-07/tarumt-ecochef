@@ -2,7 +2,11 @@ import type { MarketplaceCart, MarketplaceProduct } from "@ecochef/contracts";
 import { useEffect, useRef } from "react";
 
 type CartApi = {
-  setMarketplaceCartQuantity<Response>(productId: string, quantity: number, cartId?: string): Promise<Response>;
+  setMarketplaceCartQuantity<Response>(
+    productId: string,
+    quantity: number,
+    cartId?: string,
+  ): Promise<Response>;
   removeMarketplaceCartItem<Response>(productId: string): Promise<Response>;
 };
 type ProductSync = {
@@ -27,7 +31,7 @@ const optimisticCartResetters = new Set<() => void>();
 const optimisticCartFlushers = new Set<() => Promise<void>>();
 
 export async function flushMarketplaceCartOptimisticUpdates() {
-  await Promise.all([...optimisticCartFlushers].map(flush => flush()));
+  await Promise.all([...optimisticCartFlushers].map((flush) => flush()));
 }
 
 /** Cancel delayed catalogue writes before checkout retires the active cart. */
@@ -57,7 +61,7 @@ export function useOptimisticStoreCart(api: CartApi, callbacks: Callbacks) {
     };
     optimisticCartResetters.add(reset);
     const flushAll = async () => {
-      await Promise.all([...productsRef.current.keys()].map(id => flush(id)));
+      await Promise.all([...productsRef.current.keys()].map((id) => flush(id)));
     };
     optimisticCartFlushers.add(flushAll);
     return () => {
@@ -80,7 +84,11 @@ export function useOptimisticStoreCart(api: CartApi, callbacks: Callbacks) {
     if (state.desired === state.confirmed) return;
     const pending = performFlush(productId, state);
     state.pending = pending;
-    try { await pending; } finally { state.pending = undefined; }
+    try {
+      await pending;
+    } finally {
+      state.pending = undefined;
+    }
     if (!state.cancelled && state.desired !== state.confirmed) await flush(productId);
   };
 
@@ -89,9 +97,14 @@ export function useOptimisticStoreCart(api: CartApi, callbacks: Callbacks) {
     state.timer = undefined;
     const quantity = state.desired;
     try {
-      const cart = quantity > 0
-        ? await api.setMarketplaceCartQuantity<MarketplaceCart>(productId, quantity, cartIdRef.current)
-        : await api.removeMarketplaceCartItem<MarketplaceCart>(productId);
+      const cart =
+        quantity > 0
+          ? await api.setMarketplaceCartQuantity<MarketplaceCart>(
+              productId,
+              quantity,
+              cartIdRef.current,
+            )
+          : await api.removeMarketplaceCartItem<MarketplaceCart>(productId);
       if (state.cancelled) return;
       state.confirmed = quantity;
       if (state.desired === quantity) {
@@ -100,7 +113,9 @@ export function useOptimisticStoreCart(api: CartApi, callbacks: Callbacks) {
       }
     } catch (reason) {
       if (state.cancelled) return;
-      callbacksRef.current.showError(reason instanceof Error ? reason.message : "The cart could not be updated.");
+      callbacksRef.current.showError(
+        reason instanceof Error ? reason.message : "The cart could not be updated.",
+      );
       if (state.desired === quantity) {
         const rollback = state.confirmed;
         const delta = rollback - state.desired;
@@ -123,13 +138,18 @@ export function useOptimisticStoreCart(api: CartApi, callbacks: Callbacks) {
       if (current && (current.inFlight || current.timer || current.desired !== current.confirmed)) {
         callbacksRef.current.updateProduct(product.id, current.desired);
       }
-      next.set(product.id, current && (current.inFlight || current.timer || current.desired !== current.confirmed) ? current : {
-        desired: product.cart_quantity,
-        confirmed: product.cart_quantity,
-        price: Number(product.price),
-        inFlight: false,
-        cancelled: false,
-      });
+      next.set(
+        product.id,
+        current && (current.inFlight || current.timer || current.desired !== current.confirmed)
+          ? current
+          : {
+              desired: product.cart_quantity,
+              confirmed: product.cart_quantity,
+              price: Number(product.price),
+              inFlight: false,
+              cancelled: false,
+            },
+      );
     });
     productsRef.current = next;
   };
@@ -152,7 +172,9 @@ export function useOptimisticStoreCart(api: CartApi, callbacks: Callbacks) {
     if (state.visualCommitTimer) clearTimeout(state.visualCommitTimer);
     callbacksRef.current.updateProduct(product.id, quantity);
     if (state.timer) clearTimeout(state.timer);
-    state.timer = setTimeout(() => { void flush(product.id).catch(() => undefined); }, CART_SYNC_IDLE_MS);
+    state.timer = setTimeout(() => {
+      void flush(product.id).catch(() => undefined);
+    }, CART_SYNC_IDLE_MS);
   };
 
   return { seed, changeQuantity };

@@ -25,17 +25,12 @@ import { useAuth } from "../../auth/auth-provider";
 import { createMobileApi } from "../../../lib/api";
 import { PAGE_TOP_GAP } from "../../../shared/components/page-header";
 import { goBackOrReplace } from "../../../shared/navigation";
-import {
-  ingredientEmojiFor,
-  selectableIngredientIcons,
-} from "../../../shared/ingredient-icons";
+import { ingredientEmojiFor, selectableIngredientIcons } from "../../../shared/ingredient-icons";
 import { requestShoppingReturn } from "../../meal-planning/shopping-return";
 
 const GREEN = palette.c16a957;
-const runtimeProcess = (
-  globalThis as { process?: { env?: Record<string, string | undefined> } }
-).process;
-
+const runtimeProcess = (globalThis as { process?: { env?: Record<string, string | undefined> } })
+  .process;
 
 type InventoryItemSource = "manual" | "scanned" | "shopping";
 type InventoryItemInput = {
@@ -54,18 +49,7 @@ type InventoryList = {
 };
 
 const selectableIcons = selectableIngredientIcons;
-const quantityUnits = [
-  "pcs",
-  "g",
-  "kg",
-  "ml",
-  "L",
-  "bunch",
-  "head",
-  "slices",
-  "packs",
-  "Custom",
-];
+const quantityUnits = ["pcs", "g", "kg", "ml", "L", "bunch", "head", "slices", "packs", "Custom"];
 
 const unitRules: Array<{ terms: string[]; unit: string }> = [
   { terms: ["milk", "juice", "water", "oil", "sauce"], unit: "ml" },
@@ -98,31 +82,18 @@ function itemEmoji(name: string) {
 
 function defaultUnitForName(name: string) {
   const lower = name.toLowerCase();
-  return (
-    unitRules.find(({ terms }) => terms.some((term) => lower.includes(term)))
-      ?.unit ?? "pcs"
-  );
+  return unitRules.find(({ terms }) => terms.some((term) => lower.includes(term)))?.unit ?? "pcs";
 }
 
 function splitQuantity(quantity: string) {
   const match = quantity.trim().match(/^(.+?)\s+([^\s]+)$/);
-  return match
-    ? { amount: match[1], unit: match[2] }
-    : { amount: quantity, unit: "pcs" };
+  return match ? { amount: match[1], unit: match[2] } : { amount: quantity, unit: "pcs" };
 }
 
 function expiryDateFromText(value: string) {
   const match = value.trim().match(/^(\d{4})-(\d{2})-(\d{2})$/);
   if (!match) return undefined;
-  const result = new Date(
-    Number(match[1]),
-    Number(match[2]) - 1,
-    Number(match[3]),
-    12,
-    0,
-    0,
-    0,
-  );
+  const result = new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]), 12, 0, 0, 0);
   if (
     result.getFullYear() !== Number(match[1]) ||
     result.getMonth() !== Number(match[2]) - 1 ||
@@ -140,16 +111,16 @@ function formatLocalDate(date: Date) {
 }
 
 export function InventoryScreen() {
-  const { returnTo, date: returnDate } = useLocalSearchParams<{ returnTo?: string; date?: string }>();
+  const { returnTo, date: returnDate } = useLocalSearchParams<{
+    returnTo?: string;
+    date?: string;
+  }>();
   const { user } = useAuth();
   const navigation = useNavigation();
   const listRef = useRef<FlatList<InventoryItem>>(null);
   const hasLoadedInventory = useRef(false);
   const insets = useSafeAreaInsets();
-  const api = useMemo(
-    () => createMobileApi(apiBaseUrl, () => user?.getIdToken()),
-    [user],
-  );
+  const api = useMemo(() => createMobileApi(apiBaseUrl, () => user?.getIdToken()), [user]);
   const [items, setItems] = useState<InventoryItem[]>([]);
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(true);
@@ -180,22 +151,40 @@ export function InventoryScreen() {
     goBackOrReplace("/(tabs)");
   };
 
-  useEffect(() => (navigation as unknown as { addListener: (name: "beforeRemove", listener: (event: { preventDefault: () => void }) => void) => () => void }).addListener("beforeRemove", (event) => {
-    if (returnTo !== "shopping" || !allowShoppingReturn.current || returningToShopping.current) return;
-    event.preventDefault();
-    leaveInventory();
-  }), [navigation, returnTo, returnDate]);
-  useEffect(() => navigation.addListener("blur", () => {
-    if (!returningToShopping.current) allowShoppingReturn.current = false;
-  }), [navigation]);
-  useFocusEffect(useCallback(() => {
-    if (returnTo !== "shopping") return;
-    const subscription = BackHandler.addEventListener("hardwareBackPress", () => {
-      leaveInventory();
-      return true;
-    });
-    return () => subscription.remove();
-  }, [returnTo, returnDate]));
+  useEffect(
+    () =>
+      (
+        navigation as unknown as {
+          addListener: (
+            name: "beforeRemove",
+            listener: (event: { preventDefault: () => void }) => void,
+          ) => () => void;
+        }
+      ).addListener("beforeRemove", (event) => {
+        if (returnTo !== "shopping" || !allowShoppingReturn.current || returningToShopping.current)
+          return;
+        event.preventDefault();
+        leaveInventory();
+      }),
+    [navigation, returnTo, returnDate],
+  );
+  useEffect(
+    () =>
+      navigation.addListener("blur", () => {
+        if (!returningToShopping.current) allowShoppingReturn.current = false;
+      }),
+    [navigation],
+  );
+  useFocusEffect(
+    useCallback(() => {
+      if (returnTo !== "shopping") return;
+      const subscription = BackHandler.addEventListener("hardwareBackPress", () => {
+        leaveInventory();
+        return true;
+      });
+      return () => subscription.remove();
+    }, [returnTo, returnDate]),
+  );
 
   async function loadInventory(refresh = false) {
     refresh ? setRefreshing(true) : setLoading(true);
@@ -254,9 +243,7 @@ export function InventoryScreen() {
     setDeleting(true);
     try {
       await api.removeInventoryItem(pendingDelete.id);
-      setItems((current) =>
-        current.filter((candidate) => candidate.id !== pendingDelete.id),
-      );
+      setItems((current) => current.filter((candidate) => candidate.id !== pendingDelete.id));
       setPendingDelete(undefined);
     } catch (nextError) {
       Alert.alert(
@@ -304,10 +291,10 @@ export function InventoryScreen() {
       ? await api.updateInventoryItem<InventoryItem>(editingItem.id, input)
       : await api.addInventoryItem<InventoryItem>(input);
     setItems((current) => {
-      const withoutSaved = current.filter((item) => item.id !== saved.id && item.id !== editingItem?.id);
-      return [...withoutSaved, saved].sort((a, b) =>
-        a.expiry_date.localeCompare(b.expiry_date),
+      const withoutSaved = current.filter(
+        (item) => item.id !== saved.id && item.id !== editingItem?.id,
       );
+      return [...withoutSaved, saved].sort((a, b) => a.expiry_date.localeCompare(b.expiry_date));
     });
     setEditorOpen(false);
   }
@@ -315,11 +302,7 @@ export function InventoryScreen() {
   const header = (
     <>
       <View style={styles.header}>
-        <Pressable
-          accessibilityLabel="Go back"
-          style={styles.roundButton}
-          onPress={leaveInventory}
-        >
+        <Pressable accessibilityLabel="Go back" style={styles.roundButton} onPress={leaveInventory}>
           <Ionicons name="chevron-back" size={20} color={palette.c687586} />
         </Pressable>
         <Text style={styles.title}>Ingredient List</Text>
@@ -353,10 +336,7 @@ export function InventoryScreen() {
           returnKeyType="search"
         />
         {!!query && (
-          <Pressable
-            accessibilityLabel="Clear search"
-            onPress={() => setQuery("")}
-          >
+          <Pressable accessibilityLabel="Clear search" onPress={() => setQuery("")}>
             <Ionicons name="close-circle" size={18} color={palette.ca4adba} />
           </Pressable>
         )}
@@ -386,8 +366,17 @@ export function InventoryScreen() {
         ]}
         onPress={() => setBulkDeleteOpen(true)}
       >
-        <Ionicons name="trash-bin-outline" size={18} color={expiredItems.length ? palette.cd9505b : palette.caab2bd} />
-        <Text style={[styles.removeExpiredText, expiredItems.length === 0 && styles.removeExpiredTextDisabled]}>
+        <Ionicons
+          name="trash-bin-outline"
+          size={18}
+          color={expiredItems.length ? palette.cd9505b : palette.caab2bd}
+        />
+        <Text
+          style={[
+            styles.removeExpiredText,
+            expiredItems.length === 0 && styles.removeExpiredTextDisabled,
+          ]}
+        >
           Remove all expired{expiredItems.length ? ` (${expiredItems.length})` : ""}
         </Text>
       </Pressable>
@@ -405,7 +394,10 @@ export function InventoryScreen() {
 
   return (
     <View style={[styles.root, { paddingTop: insets.top + PAGE_TOP_GAP }]}>
-      <View pointerEvents="none" style={[styles.safeHeaderBackground,{height:insets.top+PAGE_TOP_GAP}]} />
+      <View
+        pointerEvents="none"
+        style={[styles.safeHeaderBackground, { height: insets.top + PAGE_TOP_GAP }]}
+      />
       <FlatList
         ref={listRef}
         data={filteredItems}
@@ -435,10 +427,7 @@ export function InventoryScreen() {
                   : "Add your first ingredient to start tracking what is available.")}
             </Text>
             {error && (
-              <Pressable
-                style={styles.retryButton}
-                onPress={() => void loadInventory()}
-              >
+              <Pressable style={styles.retryButton} onPress={() => void loadInventory()}>
                 <Text style={styles.retryText}>Try again</Text>
               </Pressable>
             )}
@@ -496,11 +485,7 @@ function SummaryCard({
       <Ionicons name={icon} size={20} color={warning ? palette.cf39a17 : palette.cb6774c} />
       <View>
         <Text style={styles.summaryLabel}>{label}</Text>
-        <Text
-          style={[styles.summaryValue, warning && styles.summaryWarningText]}
-        >
-          {value}
-        </Text>
+        <Text style={[styles.summaryValue, warning && styles.summaryWarningText]}>{value}</Text>
       </View>
     </View>
   );
@@ -530,14 +515,8 @@ function IngredientCard({
         </View>
         <Text style={styles.itemQuantity}>{item.quantity}</Text>
       </View>
-      <Text style={[styles.daysBadge, urgent && styles.daysBadgeUrgent]}>
-        {daysLabel}
-      </Text>
-      <Pressable
-        accessibilityLabel={`Edit ${item.name}`}
-        hitSlop={8}
-        onPress={onEdit}
-      >
+      <Text style={[styles.daysBadge, urgent && styles.daysBadgeUrgent]}>{daysLabel}</Text>
+      <Pressable accessibilityLabel={`Edit ${item.name}`} hitSlop={8} onPress={onEdit}>
         <Ionicons name="pencil-outline" size={18} color={palette.c9aa5b1} />
       </Pressable>
       <Pressable
@@ -634,9 +613,7 @@ function IngredientEditor({
       });
     } catch (nextError) {
       setMessage(
-        nextError instanceof Error
-          ? nextError.message
-          : "The ingredient could not be saved.",
+        nextError instanceof Error ? nextError.message : "The ingredient could not be saved.",
       );
     } finally {
       setSaving(false);
@@ -644,12 +621,7 @@ function IngredientEditor({
   }
 
   return (
-    <Modal
-      visible={visible}
-      transparent
-      animationType="fade"
-      onRequestClose={onClose}
-    >
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <KeyboardAvoidingView
         style={styles.modalRoot}
         behavior={Platform.OS === "ios" ? "padding" : undefined}
@@ -657,14 +629,8 @@ function IngredientEditor({
         <Pressable style={styles.modalBackdrop} onPress={onClose} />
         <Animated.View style={[styles.editor, sheetMotion]}>
           <View style={styles.editorHeader}>
-            <Text style={styles.editorTitle}>
-              {item ? "Edit Ingredient" : "Add Ingredient"}
-            </Text>
-            <Pressable
-              accessibilityLabel="Close"
-              style={styles.closeButton}
-              onPress={onClose}
-            >
+            <Text style={styles.editorTitle}>{item ? "Edit Ingredient" : "Add Ingredient"}</Text>
+            <Pressable accessibilityLabel="Close" style={styles.closeButton} onPress={onClose}>
               <Ionicons name="close" size={20} color={palette.c4c5865} />
             </Pressable>
           </View>
@@ -675,10 +641,7 @@ function IngredientEditor({
               onPress={() => setIconPickerOpen((current) => !current)}
             >
               <Text
-                style={[
-                  styles.editorEmoji,
-                  !name.trim() && !selectedIcon && styles.questionIcon,
-                ]}
+                style={[styles.editorEmoji, !name.trim() && !selectedIcon && styles.questionIcon]}
               >
                 {selectedIcon ?? itemEmoji(name)}
               </Text>
@@ -698,10 +661,7 @@ function IngredientEditor({
           {iconPickerOpen && (
             <View style={styles.pickerPanel}>
               <Pressable
-                style={[
-                  styles.autoIconChoice,
-                  !selectedIcon && styles.pickerChoiceActive,
-                ]}
+                style={[styles.autoIconChoice, !selectedIcon && styles.pickerChoiceActive]}
                 onPress={() => {
                   setSelectedIcon(undefined);
                   setCustomIcon("");
@@ -715,10 +675,7 @@ function IngredientEditor({
                 {selectableIcons.map((icon) => (
                   <Pressable
                     key={icon}
-                    style={[
-                      styles.iconChoice,
-                      selectedIcon === icon && styles.pickerChoiceActive,
-                    ]}
+                    style={[styles.iconChoice, selectedIcon === icon && styles.pickerChoiceActive]}
                     onPress={() => {
                       setSelectedIcon(icon);
                       setCustomIcon("");
@@ -778,8 +735,7 @@ function IngredientEditor({
                     key={choice}
                     style={[
                       styles.unitChoice,
-                      (unit === choice ||
-                        (choice === "Custom" && customUnitOpen)) &&
+                      (unit === choice || (choice === "Custom" && customUnitOpen)) &&
                         styles.unitChoiceActive,
                     ]}
                     onPress={() => {
@@ -796,8 +752,7 @@ function IngredientEditor({
                     <Text
                       style={[
                         styles.unitChoiceText,
-                        (unit === choice ||
-                          (choice === "Custom" && customUnitOpen)) &&
+                        (unit === choice || (choice === "Custom" && customUnitOpen)) &&
                           styles.unitChoiceTextActive,
                       ]}
                     >
@@ -810,9 +765,7 @@ function IngredientEditor({
                     <TextInput
                       style={[styles.input, styles.customUnitInput]}
                       value={customUnit}
-                      onChangeText={(value) =>
-                        setCustomUnit(value.slice(0, 12))
-                      }
+                      onChangeText={(value) => setCustomUnit(value.slice(0, 12))}
                       placeholder="Enter unit"
                       placeholderTextColor={palette.c9aa4b1}
                       autoFocus
@@ -857,10 +810,7 @@ function IngredientEditor({
                 >
                   <Ionicons name="calendar-outline" size={17} color={GREEN} />
                   <Text
-                    style={[
-                      styles.datePickerText,
-                      !expiryDate && styles.datePickerPlaceholder,
-                    ]}
+                    style={[styles.datePickerText, !expiryDate && styles.datePickerPlaceholder]}
                   >
                     {expiryDate || "Select date"}
                   </Text>
@@ -868,34 +818,18 @@ function IngredientEditor({
               )}
               <View style={styles.modeSwitch}>
                 <Pressable
-                  style={[
-                    styles.modeChoice,
-                    expiryMode === "days" && styles.modeChoiceActive,
-                  ]}
+                  style={[styles.modeChoice, expiryMode === "days" && styles.modeChoiceActive]}
                   onPress={() => setExpiryMode("days")}
                 >
-                  <Text
-                    style={[
-                      styles.modeText,
-                      expiryMode === "days" && styles.modeTextActive,
-                    ]}
-                  >
+                  <Text style={[styles.modeText, expiryMode === "days" && styles.modeTextActive]}>
                     Days
                   </Text>
                 </Pressable>
                 <Pressable
-                  style={[
-                    styles.modeChoice,
-                    expiryMode === "date" && styles.modeChoiceActive,
-                  ]}
+                  style={[styles.modeChoice, expiryMode === "date" && styles.modeChoiceActive]}
                   onPress={() => setExpiryMode("date")}
                 >
-                  <Text
-                    style={[
-                      styles.modeText,
-                      expiryMode === "date" && styles.modeTextActive,
-                    ]}
-                  >
+                  <Text style={[styles.modeText, expiryMode === "date" && styles.modeTextActive]}>
                     Date
                   </Text>
                 </Pressable>
@@ -911,9 +845,7 @@ function IngredientEditor({
             {saving ? (
               <ActivityIndicator color={palette.cffffff} />
             ) : (
-              <Text style={styles.saveText}>
-                {item ? "Save Changes" : "Add to List"}
-              </Text>
+              <Text style={styles.saveText}>{item ? "Save Changes" : "Add to List"}</Text>
             )}
           </Pressable>
         </Animated.View>
@@ -974,12 +906,7 @@ function CalendarPicker({
   });
 
   return (
-    <Modal
-      visible={visible}
-      transparent
-      animationType="fade"
-      onRequestClose={onClose}
-    >
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <View style={styles.calendarRoot}>
         <Pressable style={styles.confirmBackdrop} onPress={onClose} />
         <View style={styles.calendarCard}>
@@ -989,8 +916,7 @@ function CalendarPicker({
               style={styles.calendarNav}
               onPress={() =>
                 setVisibleMonth(
-                  (current) =>
-                    new Date(current.getFullYear(), current.getMonth() - 1, 1),
+                  (current) => new Date(current.getFullYear(), current.getMonth() - 1, 1),
                 )
               }
             >
@@ -1002,8 +928,7 @@ function CalendarPicker({
               style={styles.calendarNav}
               onPress={() =>
                 setVisibleMonth(
-                  (current) =>
-                    new Date(current.getFullYear(), current.getMonth() + 1, 1),
+                  (current) => new Date(current.getFullYear(), current.getMonth() + 1, 1),
                 )
               }
             >
@@ -1019,16 +944,8 @@ function CalendarPicker({
           </View>
           <View style={styles.calendarGrid}>
             {calendarDays.map((day, index) => {
-              if (!day)
-                return (
-                  <View key={`empty-${index}`} style={styles.calendarDay} />
-                );
-              const date = new Date(
-                visibleMonth.getFullYear(),
-                visibleMonth.getMonth(),
-                day,
-                12,
-              );
+              if (!day) return <View key={`empty-${index}`} style={styles.calendarDay} />;
+              const date = new Date(visibleMonth.getFullYear(), visibleMonth.getMonth(), day, 12);
               const isPast = date.getTime() < today.getTime();
               const isSelected =
                 !!selected &&
@@ -1039,10 +956,7 @@ function CalendarPicker({
                 <Pressable
                   key={day}
                   disabled={isPast}
-                  style={[
-                    styles.calendarDay,
-                    isSelected && styles.calendarDaySelected,
-                  ]}
+                  style={[styles.calendarDay, isSelected && styles.calendarDaySelected]}
                   onPress={() => onSelect(date)}
                 >
                   <Text
@@ -1079,12 +993,7 @@ function DeleteConfirmation({
   onConfirm: () => void;
 }) {
   return (
-    <Modal
-      visible={!!item}
-      transparent
-      animationType="fade"
-      onRequestClose={onCancel}
-    >
+    <Modal visible={!!item} transparent animationType="fade" onRequestClose={onCancel}>
       <View style={styles.confirmRoot}>
         <Pressable style={styles.confirmBackdrop} onPress={onCancel} />
         <View style={styles.confirmCard}>
@@ -1093,15 +1002,11 @@ function DeleteConfirmation({
           </View>
           <Text style={styles.confirmTitle}>Remove ingredient?</Text>
           <Text style={styles.confirmCopy}>
-            <Text style={styles.confirmName}>{item?.name}</Text> will be removed
-            from your ingredient list. This action cannot be undone.
+            <Text style={styles.confirmName}>{item?.name}</Text> will be removed from your
+            ingredient list. This action cannot be undone.
           </Text>
           <View style={styles.confirmActions}>
-            <Pressable
-              style={styles.cancelButton}
-              disabled={deleting}
-              onPress={onCancel}
-            >
+            <Pressable style={styles.cancelButton} disabled={deleting} onPress={onCancel}>
               <Text style={styles.cancelButtonText}>Keep item</Text>
             </Pressable>
             <Pressable
@@ -1148,17 +1053,26 @@ function BulkDeleteConfirmation({
           </View>
           <Text style={styles.confirmTitle}>Remove all expired items?</Text>
           <Text style={styles.confirmCopy}>
-            {count} expired {count === 1 ? "ingredient" : "ingredients"} will be permanently removed from your ingredient list. This action cannot be undone.
+            {count} expired {count === 1 ? "ingredient" : "ingredients"} will be permanently removed
+            from your ingredient list. This action cannot be undone.
           </Text>
           <View style={styles.confirmActions}>
             <Pressable style={styles.cancelButton} disabled={deleting} onPress={onCancel}>
               <Text style={styles.cancelButtonText}>Keep items</Text>
             </Pressable>
-            <Pressable style={[styles.removeButton, deleting && styles.disabledButton]} disabled={deleting} onPress={onConfirm}>
-              {deleting ? <ActivityIndicator color={palette.cffffff} /> : <>
-                <Ionicons name="trash-outline" size={16} color={palette.cffffff} />
-                <Text style={styles.removeButtonText}>Remove all</Text>
-              </>}
+            <Pressable
+              style={[styles.removeButton, deleting && styles.disabledButton]}
+              disabled={deleting}
+              onPress={onConfirm}
+            >
+              {deleting ? (
+                <ActivityIndicator color={palette.cffffff} />
+              ) : (
+                <>
+                  <Ionicons name="trash-outline" size={16} color={palette.cffffff} />
+                  <Text style={styles.removeButtonText}>Remove all</Text>
+                </>
+              )}
             </Pressable>
           </View>
         </View>
@@ -1169,7 +1083,13 @@ function BulkDeleteConfirmation({
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.consumerCanvas },
-  safeHeaderBackground:{position:"absolute",left:0,right:0,top:0,backgroundColor:colors.consumerCanvas},
+  safeHeaderBackground: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    top: 0,
+    backgroundColor: colors.consumerCanvas,
+  },
   listContent: { flexGrow: 1, paddingBottom: 112 },
   header: {
     minHeight: 72,
@@ -1179,7 +1099,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     backgroundColor: palette.cffffff,
   },
-  title: { color: palette.c101828, fontSize: typography.mobile.rawSize.s20, fontWeight: typography.weight.extrabold },
+  title: {
+    color: palette.c101828,
+    fontSize: typography.mobile.rawSize.s20,
+    fontWeight: typography.weight.extrabold,
+  },
   headerActions: { flexDirection: "row", gap: 10 },
   roundButton: {
     width: 38,
@@ -1250,7 +1174,11 @@ const styles = StyleSheet.create({
     backgroundColor: palette.cfff1f1,
   },
   removeExpiredButtonDisabled: { borderColor: palette.ce4e5e2, backgroundColor: palette.cf2f3f5 },
-  removeExpiredText: { color: palette.cd9505b, fontSize: typography.mobile.rawSize.s12, fontWeight: typography.weight.extrabold },
+  removeExpiredText: {
+    color: palette.cd9505b,
+    fontSize: typography.mobile.rawSize.s12,
+    fontWeight: typography.weight.extrabold,
+  },
   removeExpiredTextDisabled: { color: palette.caab2bd },
   itemCard: {
     minHeight: 68,
@@ -1359,7 +1287,11 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     marginBottom: 16,
   },
-  editorTitle: { color: palette.c111d2c, fontSize: typography.mobile.rawSize.s20, fontWeight: typography.weight.extrabold },
+  editorTitle: {
+    color: palette.c111d2c,
+    fontSize: typography.mobile.rawSize.s20,
+    fontWeight: typography.weight.extrabold,
+  },
   closeButton: {
     width: 34,
     height: 34,
@@ -1380,7 +1312,11 @@ const styles = StyleSheet.create({
     backgroundColor: palette.cf5f6f7,
   },
   editorEmoji: { fontSize: typography.mobile.rawSize.s25 },
-  questionIcon: { color: palette.caab2bd, fontSize: typography.mobile.rawSize.s25, fontWeight: typography.weight.extrabold },
+  questionIcon: {
+    color: palette.caab2bd,
+    fontSize: typography.mobile.rawSize.s25,
+    fontWeight: typography.weight.extrabold,
+  },
   iconEditBadge: {
     position: "absolute",
     right: -3,
@@ -1433,7 +1369,11 @@ const styles = StyleSheet.create({
     fontWeight: typography.weight.extrabold,
     textAlign: "center",
   },
-  autoIconText: { color: palette.c506057, fontSize: typography.mobile.rawSize.s12, fontWeight: typography.weight.bold },
+  autoIconText: {
+    color: palette.c506057,
+    fontSize: typography.mobile.rawSize.s12,
+    fontWeight: typography.weight.bold,
+  },
   iconGrid: { flexDirection: "row", flexWrap: "wrap", gap: 7 },
   iconChoice: {
     width: 38,
@@ -1456,7 +1396,11 @@ const styles = StyleSheet.create({
     borderRadius: 11,
     backgroundColor: palette.c263746,
   },
-  useIconText: { color: palette.cffffff, fontSize: typography.mobile.rawSize.s12, fontWeight: typography.weight.extrabold },
+  useIconText: {
+    color: palette.cffffff,
+    fontSize: typography.mobile.rawSize.s12,
+    fontWeight: typography.weight.extrabold,
+  },
   formGroup: { marginTop: 14 },
   fieldLabel: {
     marginBottom: 7,
@@ -1477,7 +1421,12 @@ const styles = StyleSheet.create({
     borderRadius: 11,
     backgroundColor: palette.cffffff,
   },
-  unitText: { minWidth: 42, color: palette.c35443c, fontSize: typography.mobile.rawSize.s13, fontWeight: typography.weight.bold },
+  unitText: {
+    minWidth: 42,
+    color: palette.c35443c,
+    fontSize: typography.mobile.rawSize.s13,
+    fontWeight: typography.weight.bold,
+  },
   unitGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 9 },
   unitChoice: {
     width: 68,
@@ -1491,7 +1440,11 @@ const styles = StyleSheet.create({
     backgroundColor: palette.cffffff,
   },
   unitChoiceActive: { borderColor: GREEN, backgroundColor: palette.ceaf8ef },
-  unitChoiceText: { color: palette.c66736c, fontSize: typography.mobile.rawSize.s11, fontWeight: typography.weight.bold },
+  unitChoiceText: {
+    color: palette.c66736c,
+    fontSize: typography.mobile.rawSize.s11,
+    fontWeight: typography.weight.bold,
+  },
   unitChoiceTextActive: { color: palette.c118247 },
   customUnitRow: { width: "100%", flexDirection: "row", gap: 8, marginTop: 2 },
   customUnitInput: { flex: 1, height: 44 },
@@ -1512,7 +1465,11 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 8,
   },
-  datePickerText: { color: palette.c35443c, fontSize: typography.mobile.rawSize.s13, fontWeight: typography.weight.bold },
+  datePickerText: {
+    color: palette.c35443c,
+    fontSize: typography.mobile.rawSize.s13,
+    fontWeight: typography.weight.bold,
+  },
   datePickerPlaceholder: { color: palette.c9aa4b1, fontWeight: typography.weight.regular },
   modeSwitch: {
     flexDirection: "row",
@@ -1535,7 +1492,11 @@ const styles = StyleSheet.create({
     shadowRadius: 3,
     elevation: 1,
   },
-  modeText: { color: palette.c89958e, fontSize: typography.mobile.rawSize.s10, fontWeight: typography.weight.bold },
+  modeText: {
+    color: palette.c89958e,
+    fontSize: typography.mobile.rawSize.s10,
+    fontWeight: typography.weight.bold,
+  },
   modeTextActive: { color: GREEN },
   formError: { marginTop: 10, color: palette.cd14343, fontSize: typography.mobile.rawSize.s12 },
   saveButton: {
@@ -1547,7 +1508,11 @@ const styles = StyleSheet.create({
     backgroundColor: GREEN,
   },
   disabledButton: { opacity: 0.65 },
-  saveText: { color: palette.cffffff, fontSize: typography.mobile.rawSize.s14, fontWeight: typography.weight.extrabold },
+  saveText: {
+    color: palette.cffffff,
+    fontSize: typography.mobile.rawSize.s14,
+    fontWeight: typography.weight.extrabold,
+  },
   confirmRoot: {
     flex: 1,
     alignItems: "center",
@@ -1608,7 +1573,11 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     backgroundColor: palette.cf7f9f7,
   },
-  cancelButtonText: { color: palette.c3d5d51, fontSize: typography.mobile.rawSize.s13, fontWeight: typography.weight.extrabold },
+  cancelButtonText: {
+    color: palette.c3d5d51,
+    fontSize: typography.mobile.rawSize.s13,
+    fontWeight: typography.weight.extrabold,
+  },
   removeButton: {
     flex: 1,
     minHeight: 45,
@@ -1619,7 +1588,11 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     backgroundColor: palette.cd9505b,
   },
-  removeButtonText: { color: palette.cffffff, fontSize: typography.mobile.rawSize.s13, fontWeight: typography.weight.extrabold },
+  removeButtonText: {
+    color: palette.cffffff,
+    fontSize: typography.mobile.rawSize.s13,
+    fontWeight: typography.weight.extrabold,
+  },
   calendarRoot: {
     flex: 1,
     alignItems: "center",
@@ -1654,7 +1627,11 @@ const styles = StyleSheet.create({
     borderRadius: 13,
     backgroundColor: palette.cf0f4f1,
   },
-  calendarTitle: { color: palette.c1e372f, fontSize: typography.mobile.rawSize.s17, fontWeight: typography.weight.extrabold },
+  calendarTitle: {
+    color: palette.c1e372f,
+    fontSize: typography.mobile.rawSize.s17,
+    fontWeight: typography.weight.extrabold,
+  },
   weekRow: { flexDirection: "row", marginBottom: 5 },
   weekDay: {
     width: "14.2857%",
@@ -1672,7 +1649,11 @@ const styles = StyleSheet.create({
     borderRadius: 20,
   },
   calendarDaySelected: { backgroundColor: GREEN },
-  calendarDayText: { color: palette.c36483f, fontSize: typography.mobile.rawSize.s13, fontWeight: typography.weight.bold },
+  calendarDayText: {
+    color: palette.c36483f,
+    fontSize: typography.mobile.rawSize.s13,
+    fontWeight: typography.weight.bold,
+  },
   calendarDayDisabled: { color: palette.cc8cfca },
   calendarDayTextSelected: { color: palette.cffffff },
   calendarCancel: {
@@ -1683,5 +1664,9 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     backgroundColor: palette.cf3f6f4,
   },
-  calendarCancelText: { color: palette.c3d5d51, fontSize: typography.mobile.rawSize.s13, fontWeight: typography.weight.extrabold },
+  calendarCancelText: {
+    color: palette.c3d5d51,
+    fontSize: typography.mobile.rawSize.s13,
+    fontWeight: typography.weight.extrabold,
+  },
 });

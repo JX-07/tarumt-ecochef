@@ -9,13 +9,72 @@ from app.services.recipe_ingredient_validation import ingredient_quantity_issues
 
 MEAL_TAGS = {"breakfast", "brunch", "lunch", "dinner", "snack", "dessert", "drink", "teatime"}
 DIETARY_FORBIDDEN = {
-    "vegan": {"beef", "chicken", "pork", "lamb", "mutton", "fish", "salmon", "tuna", "prawn", "shrimp", "crab", "egg", "milk", "cheese", "butter", "cream", "yogurt", "honey", "gelatin"},
-    "vegetarian": {"beef", "chicken", "pork", "lamb", "mutton", "fish", "salmon", "tuna", "prawn", "shrimp", "crab", "gelatin"},
+    "vegan": {
+        "beef",
+        "chicken",
+        "pork",
+        "lamb",
+        "mutton",
+        "fish",
+        "salmon",
+        "tuna",
+        "prawn",
+        "shrimp",
+        "crab",
+        "egg",
+        "milk",
+        "cheese",
+        "butter",
+        "cream",
+        "yogurt",
+        "honey",
+        "gelatin",
+    },
+    "vegetarian": {
+        "beef",
+        "chicken",
+        "pork",
+        "lamb",
+        "mutton",
+        "fish",
+        "salmon",
+        "tuna",
+        "prawn",
+        "shrimp",
+        "crab",
+        "gelatin",
+    },
     "gluten-free": {"wheat", "barley", "rye", "bread", "pasta", "noodle", "soy sauce"},
     "dairy-free": {"milk", "cheese", "butter", "cream", "yogurt", "whey", "casein"},
     "keto": {"sugar", "rice", "bread", "pasta", "potato", "flour", "corn", "oat"},
-    "paleo": {"milk", "cheese", "butter", "yogurt", "wheat", "rice", "bread", "pasta", "bean", "lentil", "soy"},
-    "nut-free": {"nut", "nuts", "peanut", "groundnut", "almond", "cashew", "walnut", "pecan", "pistachio", "hazelnut", "macadamia", "brazil nut", "nut butter"},
+    "paleo": {
+        "milk",
+        "cheese",
+        "butter",
+        "yogurt",
+        "wheat",
+        "rice",
+        "bread",
+        "pasta",
+        "bean",
+        "lentil",
+        "soy",
+    },
+    "nut-free": {
+        "nut",
+        "nuts",
+        "peanut",
+        "groundnut",
+        "almond",
+        "cashew",
+        "walnut",
+        "pecan",
+        "pistachio",
+        "hazelnut",
+        "macadamia",
+        "brazil nut",
+        "nut butter",
+    },
 }
 DIETARY_ALLERGEN_CONFLICTS = {
     "nut-free": {"nuts", "peanuts", "tree nuts"},
@@ -24,7 +83,25 @@ DIETARY_ALLERGEN_CONFLICTS = {
     "vegan": {"milk", "eggs", "fish", "shellfish"},
     "vegetarian": {"fish", "shellfish"},
 }
-HIGH_PROTEIN_INGREDIENTS = {"chicken", "beef", "pork", "lamb", "fish", "salmon", "tuna", "prawn", "shrimp", "egg", "tofu", "tempeh", "bean", "lentil", "chickpea", "yogurt", "cheese"}
+HIGH_PROTEIN_INGREDIENTS = {
+    "chicken",
+    "beef",
+    "pork",
+    "lamb",
+    "fish",
+    "salmon",
+    "tuna",
+    "prawn",
+    "shrimp",
+    "egg",
+    "tofu",
+    "tempeh",
+    "bean",
+    "lentil",
+    "chickpea",
+    "yogurt",
+    "cheese",
+}
 
 
 def _clean_terms(values: list[str]) -> list[str]:
@@ -186,15 +263,21 @@ class RecipeCreate(BaseModel):
         for diet, forbidden in DIETARY_FORBIDDEN.items():
             if diet not in self.dietary_tags:
                 continue
-            conflicts = sorted({name for name in ingredient_names if any(term in name for term in forbidden)})
+            conflicts = sorted(
+                {name for name in ingredient_names if any(term in name for term in forbidden)}
+            )
             if conflicts:
                 raise ValueError(f"The {diet} tag conflicts with: {', '.join(conflicts)}.")
         selected_allergens = set(self.allergen_tags)
         for diet, forbidden_allergens in DIETARY_ALLERGEN_CONFLICTS.items():
             conflicts = sorted(selected_allergens.intersection(forbidden_allergens))
             if diet in self.dietary_tags and conflicts:
-                raise ValueError(f"The {diet} tag conflicts with the selected allergens: {', '.join(conflicts)}.")
-        if "high-protein" in self.dietary_tags and not any(any(term in name for term in HIGH_PROTEIN_INGREDIENTS) for name in ingredient_names):
+                raise ValueError(
+                    f"The {diet} tag conflicts with the selected allergens: {', '.join(conflicts)}."
+                )
+        if "high-protein" in self.dietary_tags and not any(
+            any(term in name for term in HIGH_PROTEIN_INGREDIENTS) for name in ingredient_names
+        ):
             raise ValueError("The high-protein tag requires a clear protein-rich ingredient.")
         return self
 
@@ -202,7 +285,9 @@ class RecipeCreate(BaseModel):
 class RecipeScheduleInput(BaseModel):
     shared_group_id: UUID | None = None
     scheduled_date: date
-    meal_slot: str = Field(pattern=r"^(breakfast|brunch|lunch|dinner|snacks|dessert|drink|teatime)$")
+    meal_slot: str = Field(
+        pattern=r"^(breakfast|brunch|lunch|dinner|snacks|dessert|drink|teatime)$"
+    )
     scheduled_time: time | None = None
 
 

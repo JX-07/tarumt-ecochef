@@ -77,8 +77,7 @@ export function AdminShell({ children }: { children: ReactNode }) {
     const close = (event: PointerEvent) => {
       if (!menuRoot.current?.contains(event.target as Node)) setMenuOpen(false);
     };
-    const updateName = (event: Event) =>
-      setAccountName((event as CustomEvent<string>).detail);
+    const updateName = (event: Event) => setAccountName((event as CustomEvent<string>).detail);
     document.addEventListener("pointerdown", close);
     window.addEventListener("ecochef:admin-profile-updated", updateName);
     return () => {
@@ -109,11 +108,7 @@ export function AdminShell({ children }: { children: ReactNode }) {
           <nav key={group.label}>
             <p>{group.label}</p>
             {group.items.map(([href, label, Icon]) => (
-              <Link
-                key={href}
-                href={href}
-                className={path === href ? "active" : ""}
-              >
+              <Link key={href} href={href} className={path === href ? "active" : ""}>
                 <Icon size={17} /> <span>{label}</span>
               </Link>
             ))}
@@ -143,10 +138,7 @@ export function AdminShell({ children }: { children: ReactNode }) {
               </button>
               {menuOpen && (
                 <section className="admin-profile-menu">
-                  <Link
-                    href="/admin/profile"
-                    onClick={() => setMenuOpen(false)}
-                  >
+                  <Link href="/admin/profile" onClick={() => setMenuOpen(false)}>
                     <UserPen size={16} /> Edit profile
                   </Link>
                   <button
@@ -185,11 +177,7 @@ export function AdminShell({ children }: { children: ReactNode }) {
               >
                 Stay Signed In
               </button>
-              <button
-                className="danger-button"
-                disabled={signingOut}
-                onClick={() => void logout()}
-              >
+              <button className="danger-button" disabled={signingOut} onClick={() => void logout()}>
                 {signingOut ? "Signing Out…" : "Sign Out"}
               </button>
             </footer>

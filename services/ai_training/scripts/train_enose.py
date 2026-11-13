@@ -15,7 +15,14 @@ from sklearn.metrics import accuracy_score, classification_report, f1_score
 from sklearn.preprocessing import StandardScaler
 
 
-META_COLUMNS = {"sample_id", "recording", "fillet_id", "storage_day", "freshness_label", "split"}
+META_COLUMNS = {
+    "sample_id",
+    "recording",
+    "fillet_id",
+    "storage_day",
+    "freshness_label",
+    "split",
+}
 
 
 LABELS = ["excellent", "good", "acceptable", "spoiled"]
@@ -30,12 +37,16 @@ def metrics(model, scaler: StandardScaler | None, frame: pd.DataFrame, features:
     return {
         "accuracy": float(accuracy_score(truth, predictions)),
         "macro_f1": float(f1_score(truth, predictions, average="macro", zero_division=0)),
-        "classification_report": classification_report(truth, predictions, output_dict=True, zero_division=0),
+        "classification_report": classification_report(
+            truth, predictions, output_dict=True, zero_division=0
+        ),
     }
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Train EcoChef's electronic-nose freshness-day model.")
+    parser = argparse.ArgumentParser(
+        description="Train EcoChef's electronic-nose freshness-day model."
+    )
     parser.add_argument("--data", type=Path, required=True)
     parser.add_argument("--run-dir", type=Path, required=True)
     parser.add_argument("--epochs", type=int, default=80)
@@ -60,11 +71,17 @@ def main() -> None:
     x_train = train[features].to_numpy(dtype=float)
     y_train = train["freshness_label"].to_numpy(dtype=str)
     present_labels = set(frame["freshness_label"].astype(str))
-    classes = np.array([label for label in LABELS if label in present_labels] + sorted(present_labels - set(LABELS)))
+    classes = np.array(
+        [label for label in LABELS if label in present_labels]
+        + sorted(present_labels - set(LABELS))
+    )
 
     if args.estimator == "extra-trees":
         if args.resume:
-            print("Extra Trees is a one-pass estimator; rebuilding the deterministic model.", flush=True)
+            print(
+                "Extra Trees is a one-pass estimator; rebuilding the deterministic model.",
+                flush=True,
+            )
         scaler = None
         model = ExtraTreesClassifier(
             n_estimators=600,
@@ -76,12 +93,40 @@ def main() -> None:
         )
         model.fit(x_train, y_train)
         validation_metrics = metrics(model, scaler, validation, features)
-        history = [{"epoch": 1, "validation_accuracy": validation_metrics["accuracy"], "validation_macro_f1": validation_metrics["macro_f1"]}]
+        history = [
+            {
+                "epoch": 1,
+                "validation_accuracy": validation_metrics["accuracy"],
+                "validation_macro_f1": validation_metrics["macro_f1"],
+            }
+        ]
         (args.run_dir / "history.json").write_text(json.dumps(history, indent=2), encoding="utf-8")
-        joblib.dump({"model": model, "scaler": scaler, "epoch": 1, "features": features, "classes": classes.tolist(), "history": history}, checkpoint_path)
-        print(f"fit=extra-trees val_accuracy={validation_metrics['accuracy']:.4f} val_macro_f1={validation_metrics['macro_f1']:.4f}", flush=True)
+        joblib.dump(
+            {
+                "model": model,
+                "scaler": scaler,
+                "epoch": 1,
+                "features": features,
+                "classes": classes.tolist(),
+                "history": history,
+            },
+            checkpoint_path,
+        )
+        print(
+            f"fit=extra-trees val_accuracy={validation_metrics['accuracy']:.4f} val_macro_f1={validation_metrics['macro_f1']:.4f}",
+            flush=True,
+        )
     else:
-        train_sgd(args, checkpoint_path, stop_file, x_train, y_train, classes, validation, features)
+        train_sgd(
+            args,
+            checkpoint_path,
+            stop_file,
+            x_train,
+            y_train,
+            classes,
+            validation,
+            features,
+        )
         state = joblib.load(checkpoint_path)
         model, scaler, history = state["model"], state["scaler"], state["history"]
 
@@ -93,22 +138,54 @@ def main() -> None:
         "split_unit": "fillet_id" if "fillet_id" in frame.columns else "recording",
         "warning": "Predictions are screening estimates and are not a substitute for food-safety testing.",
     }
-    joblib.dump({"model": model, "scaler": scaler, "features": features, "classes": classes.tolist(), "estimator": args.estimator}, args.run_dir / "enose_model.joblib")
-    (args.run_dir / "metrics.json").write_text(json.dumps(final_metrics, indent=2), encoding="utf-8")
+    joblib.dump(
+        {
+            "model": model,
+            "scaler": scaler,
+            "features": features,
+            "classes": classes.tolist(),
+            "estimator": args.estimator,
+        },
+        args.run_dir / "enose_model.joblib",
+    )
+    (args.run_dir / "metrics.json").write_text(
+        json.dumps(final_metrics, indent=2), encoding="utf-8"
+    )
     print(json.dumps(final_metrics, indent=2), flush=True)
 
 
-def train_sgd(args, checkpoint_path: Path, stop_file: Path, x_train: np.ndarray, y_train: np.ndarray, classes: np.ndarray, validation: pd.DataFrame, features: list[str]) -> None:
+def train_sgd(
+    args,
+    checkpoint_path: Path,
+    stop_file: Path,
+    x_train: np.ndarray,
+    y_train: np.ndarray,
+    classes: np.ndarray,
+    validation: pd.DataFrame,
+    features: list[str],
+) -> None:
 
     if args.resume and checkpoint_path.exists():
         state = joblib.load(checkpoint_path)
-        model, scaler, start_epoch = state["model"], state["scaler"], int(state["epoch"]) + 1
+        model, scaler, start_epoch = (
+            state["model"],
+            state["scaler"],
+            int(state["epoch"]) + 1,
+        )
         history = state.get("history", [])
         if state["features"] != features:
-            raise RuntimeError("Feature columns changed since the checkpoint was created. Start a new run.")
+            raise RuntimeError(
+                "Feature columns changed since the checkpoint was created. Start a new run."
+            )
     else:
         scaler = StandardScaler().fit(x_train)
-        model = SGDClassifier(loss="log_loss", penalty="elasticnet", alpha=0.0001, random_state=42, average=True)
+        model = SGDClassifier(
+            loss="log_loss",
+            penalty="elasticnet",
+            alpha=0.0001,
+            random_state=42,
+            average=True,
+        )
         start_epoch = 1
         history = []
 
@@ -125,11 +202,29 @@ def train_sgd(args, checkpoint_path: Path, stop_file: Path, x_train: np.ndarray,
         else:
             model.partial_fit(x_epoch, y_epoch)
         validation_metrics = metrics(model, scaler, validation, features)
-        history.append({"epoch": epoch, "validation_accuracy": validation_metrics["accuracy"], "validation_macro_f1": validation_metrics["macro_f1"]})
-        joblib.dump({"model": model, "scaler": scaler, "epoch": epoch, "features": features, "classes": classes.tolist(), "history": history}, checkpoint_path)
+        history.append(
+            {
+                "epoch": epoch,
+                "validation_accuracy": validation_metrics["accuracy"],
+                "validation_macro_f1": validation_metrics["macro_f1"],
+            }
+        )
+        joblib.dump(
+            {
+                "model": model,
+                "scaler": scaler,
+                "epoch": epoch,
+                "features": features,
+                "classes": classes.tolist(),
+                "history": history,
+            },
+            checkpoint_path,
+        )
         (args.run_dir / "history.json").write_text(json.dumps(history, indent=2), encoding="utf-8")
-        print(f"epoch={epoch} val_accuracy={validation_metrics['accuracy']:.4f} val_macro_f1={validation_metrics['macro_f1']:.4f}", flush=True)
-
+        print(
+            f"epoch={epoch} val_accuracy={validation_metrics['accuracy']:.4f} val_macro_f1={validation_metrics['macro_f1']:.4f}",
+            flush=True,
+        )
 
 
 if __name__ == "__main__":

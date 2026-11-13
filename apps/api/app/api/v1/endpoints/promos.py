@@ -12,8 +12,12 @@ CurrentConsumer = Depends(require_roles(AccountRole.consumer))
 
 
 @router.get("/me", response_model=PromoList)
-def get_my_promos(current_user: AuthenticatedUser = CurrentConsumer, session: Session = Depends(get_db_session)) -> PromoList:
-    rows = session.execute(text("""
+def get_my_promos(
+    current_user: AuthenticatedUser = CurrentConsumer, session: Session = Depends(get_db_session)
+) -> PromoList:
+    rows = (
+        session.execute(
+            text("""
         SELECT p.id, p.code, p.title, p.description, p.discount_percent,
                p.discount_amount, p.audience, p.end_date
         FROM promo_codes p
@@ -27,5 +31,10 @@ def get_my_promos(current_user: AuthenticatedUser = CurrentConsumer, session: Se
             OR (p.audience = 'gift' AND up.user_id IS NOT NULL)
           )
         ORDER BY CASE p.audience WHEN 'available' THEN 1 WHEN 'new_account' THEN 2 ELSE 3 END, p.end_date
-    """), {"user_id": current_user.id}).mappings().all()
+    """),
+            {"user_id": current_user.id},
+        )
+        .mappings()
+        .all()
+    )
     return PromoList(promos=[PromoCode(**row) for row in rows])

@@ -6,7 +6,14 @@ from pydantic import BaseModel, Field
 
 
 NotificationCategory = Literal[
-    "sensor_alert", "ingredient_expiry", "meal_reminder", "payment", "delivery", "order", "promotion", "moderation"
+    "sensor_alert",
+    "ingredient_expiry",
+    "meal_reminder",
+    "payment",
+    "delivery",
+    "order",
+    "promotion",
+    "moderation",
 ]
 
 

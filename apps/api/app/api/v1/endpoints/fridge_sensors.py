@@ -90,10 +90,16 @@ def list_fridge_sensors(
     current_user: AuthenticatedUser = CurrentConsumer,
     session: Session = Depends(get_db_session),
 ) -> FridgeSensorList:
-    rows = session.execute(text(LATEST_READING_SELECT + """
+    rows = session.execute(
+        text(
+            LATEST_READING_SELECT
+            + """
         WHERE sensor.user_id = :user_id
         ORDER BY sensor.created_at
-    """), {"user_id": current_user.id}).all()
+    """
+        ),
+        {"user_id": current_user.id},
+    ).all()
     return FridgeSensorList(items=[_summary(row) for row in rows])
 
 
@@ -105,32 +111,45 @@ def pair_fridge_sensor(
 ) -> PairFridgeSensorResponse:
     ingest_key = secrets.token_urlsafe(32)
     try:
-        sensor_id = session.execute(text("""
+        sensor_id = session.execute(
+            text("""
             INSERT INTO fridge_sensors
                 (user_id, device_code, sensor_name, fridge_name, ingest_token_hash)
             VALUES
                 (:user_id, :device_code, :sensor_name, :fridge_name, :ingest_token_hash)
             RETURNING id
-        """), {
-            "user_id": current_user.id,
-            "device_code": request.device_code,
-            "sensor_name": request.sensor_name,
-            "fridge_name": request.fridge_name,
-            "ingest_token_hash": _hash_ingest_key(ingest_key),
-        }).scalar_one()
+        """),
+            {
+                "user_id": current_user.id,
+                "device_code": request.device_code,
+                "sensor_name": request.sensor_name,
+                "fridge_name": request.fridge_name,
+                "ingest_token_hash": _hash_ingest_key(ingest_key),
+            },
+        ).scalar_one()
         session.commit()
     except IntegrityError as exc:
         session.rollback()
-        raise HTTPException(status.HTTP_409_CONFLICT, "That device code is already linked.") from exc
+        raise HTTPException(
+            status.HTTP_409_CONFLICT, "That device code is already linked."
+        ) from exc
 
-    row = session.execute(text(LATEST_READING_SELECT + """
+    row = session.execute(
+        text(
+            LATEST_READING_SELECT
+            + """
         WHERE sensor.id = :sensor_id AND sensor.user_id = :user_id
-    """), {"sensor_id": sensor_id, "user_id": current_user.id}).one()
+    """
+        ),
+        {"sensor_id": sensor_id, "user_id": current_user.id},
+    ).one()
     summary = _summary(row)
     return PairFridgeSensorResponse(**summary.model_dump(), ingest_key=ingest_key)
 
 
-@router.post("/claim", response_model=ClaimFridgeSensorResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/claim", response_model=ClaimFridgeSensorResponse, status_code=status.HTTP_201_CREATED
+)
 def claim_fridge_sensor(
     request: ClaimFridgeSensorRequest,
     current_user: AuthenticatedUser = CurrentConsumer,
@@ -138,48 +157,81 @@ def claim_fridge_sensor(
 ) -> ClaimFridgeSensorResponse:
     """Claim a factory-provisioned sensor using the one-time secret in its QR label."""
     setup_code_hash = _hash_ingest_key(request.setup_code) if request.setup_code else None
-    device = session.execute(text("""
+    device = session.execute(
+        text("""
         SELECT device_code, claim_secret_hash, setup_code_hash, ble_name, claimed_at
         FROM sensor_provisioning_devices
         WHERE (:device_code IS NOT NULL AND device_code = :device_code)
            OR (:setup_code_hash IS NOT NULL AND setup_code_hash = :setup_code_hash)
         FOR UPDATE
-    """), {"device_code": request.device_code, "setup_code_hash": setup_code_hash}).one_or_none()
-    supplied_hash = _hash_ingest_key(request.claim_secret) if request.claim_secret else setup_code_hash
-    expected_hash = device.claim_secret_hash if device is not None and request.claim_secret else device.setup_code_hash if device is not None else ""
-    if device is None or supplied_hash is None or not secrets.compare_digest(expected_hash, supplied_hash):
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, "That EcoChef sensor setup code is invalid.")
+    """),
+        {"device_code": request.device_code, "setup_code_hash": setup_code_hash},
+    ).one_or_none()
+    supplied_hash = (
+        _hash_ingest_key(request.claim_secret) if request.claim_secret else setup_code_hash
+    )
+    expected_hash = (
+        device.claim_secret_hash
+        if device is not None and request.claim_secret
+        else device.setup_code_hash
+        if device is not None
+        else ""
+    )
+    if (
+        device is None
+        or supplied_hash is None
+        or not secrets.compare_digest(expected_hash, supplied_hash)
+    ):
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST, "That EcoChef sensor setup code is invalid."
+        )
     if device.claimed_at is not None:
-        raise HTTPException(status.HTTP_409_CONFLICT, "That EcoChef sensor is already connected to an account.")
+        raise HTTPException(
+            status.HTTP_409_CONFLICT, "That EcoChef sensor is already connected to an account."
+        )
 
     ingest_key = secrets.token_urlsafe(32)
     try:
-        sensor_id = session.execute(text("""
+        sensor_id = session.execute(
+            text("""
             INSERT INTO fridge_sensors
                 (user_id, device_code, sensor_name, fridge_name, ingest_token_hash)
             VALUES
                 (:user_id, :device_code, :sensor_name, :fridge_name, :ingest_token_hash)
             RETURNING id
-        """), {
-            "user_id": current_user.id,
-            "device_code": device.device_code,
-            "sensor_name": request.sensor_name,
-            "fridge_name": request.fridge_name,
-            "ingest_token_hash": _hash_ingest_key(ingest_key),
-        }).scalar_one()
-        session.execute(text("""
+        """),
+            {
+                "user_id": current_user.id,
+                "device_code": device.device_code,
+                "sensor_name": request.sensor_name,
+                "fridge_name": request.fridge_name,
+                "ingest_token_hash": _hash_ingest_key(ingest_key),
+            },
+        ).scalar_one()
+        session.execute(
+            text("""
             UPDATE sensor_provisioning_devices
             SET claimed_at = now(), claimed_user_id = :user_id, claimed_sensor_id = :sensor_id
             WHERE device_code = :device_code
-        """), {"user_id": current_user.id, "sensor_id": sensor_id, "device_code": device.device_code})
+        """),
+            {"user_id": current_user.id, "sensor_id": sensor_id, "device_code": device.device_code},
+        )
         session.commit()
     except IntegrityError as exc:
         session.rollback()
-        raise HTTPException(status.HTTP_409_CONFLICT, "That EcoChef sensor is already connected.") from exc
+        raise HTTPException(
+            status.HTTP_409_CONFLICT, "That EcoChef sensor is already connected."
+        ) from exc
 
-    row = session.execute(text(LATEST_READING_SELECT + """
+    row = session.execute(
+        text(
+            LATEST_READING_SELECT
+            + """
         WHERE sensor.id = :sensor_id AND sensor.user_id = :user_id
-    """), {"sensor_id": sensor_id, "user_id": current_user.id}).one()
+    """
+        ),
+        {"sensor_id": sensor_id, "user_id": current_user.id},
+    ).one()
     summary = _summary(row)
     return ClaimFridgeSensorResponse(
         **summary.model_dump(), ingest_key=ingest_key, ble_name=device.ble_name
@@ -193,14 +245,21 @@ def resolve_fridge_sensor_setup(
     session: Session = Depends(get_db_session),
 ) -> ResolveFridgeSensorSetupResponse:
     """Resolve the printed fallback code to non-secret BLE discovery information."""
-    device = session.execute(text("""
+    device = session.execute(
+        text("""
         SELECT device_code, ble_name
         FROM sensor_provisioning_devices
         WHERE setup_code_hash = :setup_code_hash AND claimed_at IS NULL
-    """), {"setup_code_hash": _hash_ingest_key(request.setup_code)}).one_or_none()
+    """),
+        {"setup_code_hash": _hash_ingest_key(request.setup_code)},
+    ).one_or_none()
     if device is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "That EcoChef sensor setup code was not found.")
-    return ResolveFridgeSensorSetupResponse(device_code=device.device_code, ble_name=device.ble_name)
+        raise HTTPException(
+            status.HTTP_404_NOT_FOUND, "That EcoChef sensor setup code was not found."
+        )
+    return ResolveFridgeSensorSetupResponse(
+        device_code=device.device_code, ble_name=device.ble_name
+    )
 
 
 @router.post("/readings", response_model=FridgeSensorReadingAccepted)
@@ -209,16 +268,20 @@ def ingest_fridge_sensor_reading(
     x_sensor_key: str = Header(min_length=20, max_length=200),
     session: Session = Depends(get_db_session),
 ) -> FridgeSensorReadingAccepted:
-    sensor = session.execute(text("""
+    sensor = session.execute(
+        text("""
         SELECT id, user_id, sensor_name, fridge_name
         FROM fridge_sensors WHERE ingest_token_hash = :token_hash FOR UPDATE
-    """), {"token_hash": _hash_ingest_key(x_sensor_key)}).one_or_none()
+    """),
+        {"token_hash": _hash_ingest_key(x_sensor_key)},
+    ).one_or_none()
     if sensor is None:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "The sensor key is invalid.")
 
     received_at = datetime.now(timezone.utc)
     captured_at = request.captured_at or received_at
-    reading_id = session.execute(text("""
+    reading_id = session.execute(
+        text("""
         INSERT INTO fridge_sensor_readings
             (sensor_id, captured_at, mq3, mq135, mq136, mq137,
              temperature_c, humidity_percent, freshness_status, confidence, model_version)
@@ -226,13 +289,23 @@ def ingest_fridge_sensor_reading(
             (:sensor_id, :captured_at, :mq3, :mq135, :mq136, :mq137,
              :temperature_c, :humidity_percent, :freshness_status, :confidence, :model_version)
         RETURNING id
-    """), {"sensor_id": sensor.id, "captured_at": captured_at, **request.model_dump(exclude={"captured_at"})}).scalar_one()
-    session.execute(text("""
+    """),
+        {
+            "sensor_id": sensor.id,
+            "captured_at": captured_at,
+            **request.model_dump(exclude={"captured_at"}),
+        },
+    ).scalar_one()
+    session.execute(
+        text("""
         UPDATE fridge_sensors SET last_seen_at = :received_at, updated_at = now()
         WHERE id = :sensor_id
-    """), {"received_at": received_at, "sensor_id": sensor.id})
+    """),
+        {"received_at": received_at, "sensor_id": sensor.id},
+    )
 
-    recent_high_risk = session.execute(text("""
+    recent_high_risk = session.execute(
+        text("""
         SELECT COUNT(DISTINCT captured_at) FROM (
             SELECT captured_at, freshness_status, confidence
             FROM fridge_sensor_readings
@@ -240,7 +313,13 @@ def ingest_fridge_sensor_reading(
             ORDER BY captured_at DESC, id DESC LIMIT 2
         ) recent
         WHERE freshness_status = 'spoiled' AND confidence >= 0.85
-    """), {"sensor_id": sensor.id, "cutoff": received_at - timedelta(minutes=30), "latest": received_at + timedelta(minutes=5)}).scalar_one()
+    """),
+        {
+            "sensor_id": sensor.id,
+            "cutoff": received_at - timedelta(minutes=30),
+            "latest": received_at + timedelta(minutes=5),
+        },
+    ).scalar_one()
 
     alert_created = False
     if captured_at >= received_at - timedelta(minutes=5) and should_create_spoilage_alert(
@@ -284,12 +363,19 @@ def get_fridge_sensor(
     current_user: AuthenticatedUser = CurrentConsumer,
     session: Session = Depends(get_db_session),
 ) -> FridgeSensorDetail:
-    row = session.execute(text(LATEST_READING_SELECT + """
+    row = session.execute(
+        text(
+            LATEST_READING_SELECT
+            + """
         WHERE sensor.id = :sensor_id AND sensor.user_id = :user_id
-    """), {"sensor_id": sensor_id, "user_id": current_user.id}).one_or_none()
+    """
+        ),
+        {"sensor_id": sensor_id, "user_id": current_user.id},
+    ).one_or_none()
     if row is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Fridge Sensor not found.")
-    readings = session.execute(text("""
+    readings = session.execute(
+        text("""
         SELECT recent.* FROM (
             SELECT id, captured_at, mq3, mq135, mq136, mq137,
                    temperature_c, humidity_percent, freshness_status, confidence, model_version
@@ -298,7 +384,9 @@ def get_fridge_sensor(
             ORDER BY captured_at DESC, id DESC
             LIMIT 500
         ) recent ORDER BY captured_at, id
-    """), {"sensor_id": sensor_id, "hours": hours}).all()
+    """),
+        {"sensor_id": sensor_id, "hours": hours},
+    ).all()
     summary = _summary(row)
     return FridgeSensorDetail(
         **summary.model_dump(),
@@ -312,14 +400,20 @@ def remove_fridge_sensor(
     current_user: AuthenticatedUser = CurrentConsumer,
     session: Session = Depends(get_db_session),
 ) -> None:
-    session.execute(text("""
+    session.execute(
+        text("""
         UPDATE sensor_provisioning_devices
         SET claimed_at = NULL, claimed_user_id = NULL, claimed_sensor_id = NULL
         WHERE claimed_sensor_id = :sensor_id AND claimed_user_id = :user_id
-    """), {"sensor_id": sensor_id, "user_id": current_user.id})
-    result = session.execute(text("""
+    """),
+        {"sensor_id": sensor_id, "user_id": current_user.id},
+    )
+    result = session.execute(
+        text("""
         DELETE FROM fridge_sensors WHERE id = :sensor_id AND user_id = :user_id
-    """), {"sensor_id": sensor_id, "user_id": current_user.id})
+    """),
+        {"sensor_id": sensor_id, "user_id": current_user.id},
+    )
     if result.rowcount != 1:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Fridge Sensor not found.")
     session.commit()

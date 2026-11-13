@@ -28,10 +28,8 @@ import { markMealCooked } from "../../meal-planning/cooking-history";
 import type { RecipeDetail } from "../types";
 
 const GREEN = palette.c12ad55;
-const runtimeProcess = (
-  globalThis as { process?: { env?: Record<string, string | undefined> } }
-).process;
-
+const runtimeProcess = (globalThis as { process?: { env?: Record<string, string | undefined> } })
+  .process;
 
 type StepTimer = { key: string; label: string; duration: number };
 type TimerState = StepTimer & {
@@ -98,17 +96,14 @@ const quantityText = (amount: number, unit: string, factor: number) =>
 
 function extractTimers(instruction: string, stepIndex: number): StepTimer[] {
   const timers: StepTimer[] = [];
-  const pattern =
-    /(\d+(?:\.\d+)?)\s*(hours?|hrs?|minutes?|mins?|seconds?|secs?)/gi;
+  const pattern = /(\d+(?:\.\d+)?)\s*(hours?|hrs?|minutes?|mins?|seconds?|secs?)/gi;
   let match: RegExpExecArray | null;
   while ((match = pattern.exec(instruction)) !== null) {
     const amount = Number(match[1]);
     const unit = match[2].toLowerCase();
     const seconds = Math.max(
       1,
-      Math.round(
-        amount * (unit.startsWith("h") ? 3600 : unit.startsWith("m") ? 60 : 1),
-      ),
+      Math.round(amount * (unit.startsWith("h") ? 3600 : unit.startsWith("m") ? 60 : 1)),
     );
     timers.push({
       key: `${stepIndex}-${timers.length}`,
@@ -161,11 +156,7 @@ function createChimeBase64() {
         0.45 * Math.sin(2 * Math.PI * 783.99 * t)) *
       0.18 *
       envelope;
-    view.setInt16(
-      44 + index * 2,
-      Math.max(-1, Math.min(1, wave)) * 32767,
-      true,
-    );
+    view.setInt16(44 + index * 2, Math.max(-1, Math.min(1, wave)) * 32767, true);
   }
   let binary = "";
   for (let start = 0; start < bytes.length; start += 4096)
@@ -174,17 +165,18 @@ function createChimeBase64() {
 }
 
 export function CookingModeScreen() {
-  const { recipeId, plannedDate, deductIngredients: deductIngredientsParam } = useLocalSearchParams<{
+  const {
+    recipeId,
+    plannedDate,
+    deductIngredients: deductIngredientsParam,
+  } = useLocalSearchParams<{
     recipeId: string;
     plannedDate?: string;
     deductIngredients?: string;
   }>();
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
-  const api = useMemo(
-    () => createMobileApi(apiBaseUrl, () => user?.getIdToken()),
-    [user],
-  );
+  const api = useMemo(() => createMobileApi(apiBaseUrl, () => user?.getIdToken()), [user]);
   const [recipe, setRecipe] = useState<RecipeDetail>();
   const [error, setError] = useState<string>();
   const [step, setStep] = useState(0);
@@ -201,8 +193,8 @@ export function CookingModeScreen() {
     title: string;
     message: string;
   }>();
-  const [chimeUri,setChimeUri]=useState<string>();
-  const chimePlayer=useAudioPlayer(chimeUri);
+  const [chimeUri, setChimeUri] = useState<string>();
+  const chimePlayer = useAudioPlayer(chimeUri);
   const notifiedRef = useRef(new Set<string>());
   const voicePackageRef = useRef<VoicePackage | undefined>(undefined);
   const voiceSubscriptionsRef = useRef<Array<{ remove: () => void }>>([]);
@@ -244,11 +236,7 @@ export function CookingModeScreen() {
       })
       .catch((next) => {
         if (active)
-          setError(
-            next instanceof Error
-              ? next.message
-              : "Cooking mode could not be loaded.",
-          );
+          setError(next instanceof Error ? next.message : "Cooking mode could not be loaded.");
       });
     return () => {
       active = false;
@@ -263,10 +251,10 @@ export function CookingModeScreen() {
         await FileSystem.writeAsStringAsync(uri, createChimeBase64(), {
           encoding: FileSystem.EncodingType.Base64,
         });
-        await setAudioModeAsync({playsInSilentMode:true,interruptionMode:"duckOthers"});
-        if(active)setChimeUri(uri);
+        await setAudioModeAsync({ playsInSilentMode: true, interruptionMode: "duckOthers" });
+        if (active) setChimeUri(uri);
       } catch {
-        if(active)setChimeUri(undefined);
+        if (active) setChimeUri(undefined);
       }
     };
     void prepare();
@@ -275,9 +263,7 @@ export function CookingModeScreen() {
     };
   }, []);
   useEffect(() => {
-    const running = (Object.values(timers) as TimerState[]).some(
-      (timer) => timer.running,
-    );
+    const running = (Object.values(timers) as TimerState[]).some((timer) => timer.running);
     if (!running) return;
     const interval = setInterval(
       () =>
@@ -285,24 +271,19 @@ export function CookingModeScreen() {
           let changed = false;
           const now = Date.now();
           const next = { ...current };
-          (Object.entries(current) as Array<[string, TimerState]>).forEach(
-            ([key, timer]) => {
-              if (!timer.running || !timer.endAt) return;
-              const remaining = Math.max(
-                0,
-                Math.ceil((timer.endAt - now) / 1000),
-              );
-              if (remaining !== timer.remaining) {
-                changed = true;
-                next[key] = {
-                  ...timer,
-                  remaining,
-                  running: remaining > 0,
-                  paused: false,
-                };
-              }
-            },
-          );
+          (Object.entries(current) as Array<[string, TimerState]>).forEach(([key, timer]) => {
+            if (!timer.running || !timer.endAt) return;
+            const remaining = Math.max(0, Math.ceil((timer.endAt - now) / 1000));
+            if (remaining !== timer.remaining) {
+              changed = true;
+              next[key] = {
+                ...timer,
+                remaining,
+                running: remaining > 0,
+                paused: false,
+              };
+            }
+          });
           return changed ? next : current;
         }),
       250,
@@ -317,14 +298,12 @@ export function CookingModeScreen() {
         if (chimeUri)
           void chimePlayer
             .seekTo(0)
-            .then(()=>chimePlayer.play())
-            .catch(() =>
-              Speech.speak("Timer complete", { rate: 0.85, pitch: 1.05 }),
-            );
+            .then(() => chimePlayer.play())
+            .catch(() => Speech.speak("Timer complete", { rate: 0.85, pitch: 1.05 }));
         else Speech.speak("Timer complete", { rate: 0.85, pitch: 1.05 });
       }
     });
-  }, [timers,chimeUri,chimePlayer]);
+  }, [timers, chimeUri, chimePlayer]);
   useEffect(
     () => () => {
       void Speech.stop();
@@ -333,9 +312,7 @@ export function CookingModeScreen() {
       try {
         voicePackageRef.current?.ExpoSpeechRecognitionModule.abort();
       } catch {}
-      voiceSubscriptionsRef.current.forEach((subscription) =>
-        subscription.remove(),
-      );
+      voiceSubscriptionsRef.current.forEach((subscription) => subscription.remove());
     },
     [],
   );
@@ -351,10 +328,7 @@ export function CookingModeScreen() {
     void Speech.stop();
     setReading(false);
     setStep((current) =>
-      Math.max(
-        0,
-        Math.min(recipe.instructions.length - 1, current + direction),
-      ),
+      Math.max(0, Math.min(recipe.instructions.length - 1, current + direction)),
     );
   };
   const readAloud = () => {
@@ -373,10 +347,8 @@ export function CookingModeScreen() {
       onError: () => setReading(false),
     });
   };
-  const updateTimer = (
-    key: string,
-    change: (timer: TimerState) => TimerState,
-  ) => setTimers((current) => ({ ...current, [key]: change(current[key]) }));
+  const updateTimer = (key: string, change: (timer: TimerState) => TimerState) =>
+    setTimers((current) => ({ ...current, [key]: change(current[key]) }));
   const toggleTimer = (key: string) =>
     updateTimer(key, (timer) =>
       timer.remaining === 0
@@ -438,11 +410,7 @@ export function CookingModeScreen() {
           const remaining = Math.max(0, available.amount - needed.amount);
           await api.updateInventoryItem(stocked.id, {
             name: stocked.name,
-            quantity: quantityText(
-              remaining,
-              available.displayUnit,
-              available.factor,
-            ),
+            quantity: quantityText(remaining, available.displayUnit, available.factor),
             expiry_date: stocked.expiry_date,
             category: stocked.category,
             source: stocked.source,
@@ -456,9 +424,7 @@ export function CookingModeScreen() {
       setVoiceNotice({
         title: "Could not finish cooking",
         message:
-          next instanceof Error
-            ? next.message
-            : "EcoChef could not update your Ingredient List.",
+          next instanceof Error ? next.message : "EcoChef could not update your Ingredient List.",
       });
       setFinishing(false);
     }
@@ -466,17 +432,11 @@ export function CookingModeScreen() {
   const handleVoiceCommand = (transcript: string) => {
     const command = transcript.toLowerCase().trim();
     const now = Date.now();
-    if (
-      !command ||
-      (command === commandRef.current.text &&
-        now - commandRef.current.time < 1800)
-    )
+    if (!command || (command === commandRef.current.text && now - commandRef.current.time < 1800))
       return;
     commandRef.current = { text: command, time: now };
     if (/\b(next|forward)\b/.test(command)) {
-      setStep((current) =>
-        Math.min(instructionsRef.current.length - 1, current + 1),
-      );
+      setStep((current) => Math.min(instructionsRef.current.length - 1, current + 1));
       setVoiceMessage("Next step");
     } else if (/\b(previous|back|return)\b/.test(command)) {
       setStep((current) => Math.max(0, current - 1));
@@ -544,8 +504,7 @@ export function CookingModeScreen() {
         });
         return;
       }
-      const permission =
-        await voicePackage.ExpoSpeechRecognitionModule.requestPermissionsAsync();
+      const permission = await voicePackage.ExpoSpeechRecognitionModule.requestPermissionsAsync();
       if (!permission.granted) {
         setVoiceNotice({
           title: "Microphone permission needed",
@@ -556,48 +515,36 @@ export function CookingModeScreen() {
       }
       if (!voiceSubscriptionsRef.current.length) {
         voiceSubscriptionsRef.current = [
-          voicePackage.ExpoSpeechRecognitionModule.addListener("start", () =>
-            setListening(true),
-          ),
+          voicePackage.ExpoSpeechRecognitionModule.addListener("start", () => setListening(true)),
           voicePackage.ExpoSpeechRecognitionModule.addListener("end", () => {
             setListening(false);
             if (voiceWantedRef.current)
-              restartingRef.current = setTimeout(
-                () => startRecognizer(voicePackage),
-                500,
-              );
+              restartingRef.current = setTimeout(() => startRecognizer(voicePackage), 500);
           }),
-          voicePackage.ExpoSpeechRecognitionModule.addListener(
-            "result",
-            (event) => {
-              const transcript = event.results[0]?.transcript ?? "";
-              if (transcript) handleVoiceCommand(transcript);
-            },
-          ),
-          voicePackage.ExpoSpeechRecognitionModule.addListener(
-            "error",
-            (event) => {
-              if (event.error === "aborted" || event.error === "no-speech")
-                return;
-              setVoiceMessage(event.message || "Voice recognition paused.");
-              if (
-                event.error === "not-allowed" ||
-                event.error === "service-not-allowed" ||
-                event.error === "language-not-supported" ||
-                event.error === "audio-capture"
-              ) {
-                voiceWantedRef.current = false;
-                setVoiceEnabled(false);
-                setListening(false);
-                setVoiceNotice({
-                  title: "Speaking mode stopped",
-                  message:
-                    event.message ||
-                    "EcoChef could not access this device’s speech-recognition service.",
-                });
-              }
-            },
-          ),
+          voicePackage.ExpoSpeechRecognitionModule.addListener("result", (event) => {
+            const transcript = event.results[0]?.transcript ?? "";
+            if (transcript) handleVoiceCommand(transcript);
+          }),
+          voicePackage.ExpoSpeechRecognitionModule.addListener("error", (event) => {
+            if (event.error === "aborted" || event.error === "no-speech") return;
+            setVoiceMessage(event.message || "Voice recognition paused.");
+            if (
+              event.error === "not-allowed" ||
+              event.error === "service-not-allowed" ||
+              event.error === "language-not-supported" ||
+              event.error === "audio-capture"
+            ) {
+              voiceWantedRef.current = false;
+              setVoiceEnabled(false);
+              setListening(false);
+              setVoiceNotice({
+                title: "Speaking mode stopped",
+                message:
+                  event.message ||
+                  "EcoChef could not access this device’s speech-recognition service.",
+              });
+            }
+          }),
         ];
       }
       voiceWantedRef.current = true;
@@ -683,35 +630,21 @@ export function CookingModeScreen() {
         <Text style={styles.instruction}>{recipe.instructions[step]}</Text>
         {stepTimers.map((timer) => (
           <View key={timer.key} style={styles.timerCard}>
-            <Text style={styles.timerLabel}>
-              {timer.label.toUpperCase()} TIMER
-            </Text>
+            <Text style={styles.timerLabel}>{timer.label.toUpperCase()} TIMER</Text>
             <Pressable
               accessibilityRole="button"
               accessibilityLabel={
-                timer.running
-                  ? "Timer running"
-                  : timer.paused
-                    ? "Resume timer"
-                    : "Start timer"
+                timer.running ? "Timer running" : timer.paused ? "Resume timer" : "Start timer"
               }
               onPress={() => toggleTimer(timer.key)}
-              style={[
-                styles.timerFace,
-                timer.running && styles.timerFaceRunning,
-              ]}
+              style={[styles.timerFace, timer.running && styles.timerFaceRunning]}
             >
               <Ionicons
                 name="timer-outline"
                 size={19}
                 color={timer.remaining === 0 ? GREEN : palette.cff7a1a}
               />
-              <Text
-                style={[
-                  styles.timerValue,
-                  timer.remaining === 0 && styles.timerDone,
-                ]}
-              >
+              <Text style={[styles.timerValue, timer.remaining === 0 && styles.timerDone]}>
                 {formatDuration(timer.remaining)}
               </Text>
               <Text style={styles.tapHint}>
@@ -726,34 +659,22 @@ export function CookingModeScreen() {
             </Pressable>
             {timer.running ? (
               <View style={styles.timerActions}>
-                <Pressable
-                  style={styles.timerSecondary}
-                  onPress={() => flagTimer(timer.key)}
-                >
+                <Pressable style={styles.timerSecondary} onPress={() => flagTimer(timer.key)}>
                   <Ionicons name="flag-outline" size={15} color={palette.cd7dfeb} />
                   <Text style={styles.timerSecondaryText}>Flag</Text>
                 </Pressable>
-                <Pressable
-                  style={styles.timerPrimary}
-                  onPress={() => pauseTimer(timer.key)}
-                >
+                <Pressable style={styles.timerPrimary} onPress={() => pauseTimer(timer.key)}>
                   <Ionicons name="pause" size={15} color={palette.cfff} />
                   <Text style={styles.timerPrimaryText}>Pause</Text>
                 </Pressable>
               </View>
             ) : timer.paused ? (
-              <Pressable
-                style={styles.reset}
-                onPress={() => resetTimer(timer.key)}
-              >
+              <Pressable style={styles.reset} onPress={() => resetTimer(timer.key)}>
                 <Ionicons name="refresh" size={15} color={palette.cfff} />
                 <Text style={styles.timerPrimaryText}>Reset timer</Text>
               </Pressable>
             ) : timer.remaining === 0 ? (
-              <Pressable
-                style={styles.reset}
-                onPress={() => resetTimer(timer.key)}
-              >
+              <Pressable style={styles.reset} onPress={() => resetTimer(timer.key)}>
                 <Ionicons name="refresh" size={15} color={palette.cfff} />
                 <Text style={styles.timerPrimaryText}>Reset timer</Text>
               </Pressable>
@@ -765,9 +686,7 @@ export function CookingModeScreen() {
                   <View key={`${flag}-${index}`} style={styles.flagRow}>
                     <View style={styles.flagDot} />
                     <Text style={styles.flagName}>Flag {index + 1}</Text>
-                    <Text style={styles.flagTime}>
-                      {formatDuration(flag)} elapsed
-                    </Text>
+                    <Text style={styles.flagTime}>{formatDuration(flag)} elapsed</Text>
                   </View>
                 ))}
               </View>
@@ -784,9 +703,7 @@ export function CookingModeScreen() {
               size={18}
               color={reading ? palette.cfff : GREEN}
             />
-            <Text
-              style={[styles.assistText, reading && styles.assistTextActive]}
-            >
+            <Text style={[styles.assistText, reading && styles.assistTextActive]}>
               {reading ? "Stop reading" : "Read Aloud"}
             </Text>
           </Pressable>
@@ -799,23 +716,12 @@ export function CookingModeScreen() {
               size={19}
               color={voiceEnabled ? palette.cfff : GREEN}
             />
-            <Text
-              style={[
-                styles.assistText,
-                voiceEnabled && styles.assistTextActive,
-              ]}
-            >
-              {voiceEnabled
-                ? listening
-                  ? "Listening"
-                  : "Voice on"
-                : "Speaking Mode"}
+            <Text style={[styles.assistText, voiceEnabled && styles.assistTextActive]}>
+              {voiceEnabled ? (listening ? "Listening" : "Voice on") : "Speaking Mode"}
             </Text>
           </Pressable>
         </View>
-        {voiceMessage && (
-          <Text style={styles.voiceMessage}>{voiceMessage}</Text>
-        )}
+        {voiceMessage && <Text style={styles.voiceMessage}>{voiceMessage}</Text>}
       </ScrollView>
       <View style={styles.navigation}>
         <Pressable
@@ -833,9 +739,7 @@ export function CookingModeScreen() {
             onPress={() => void finishCooking()}
           >
             <Ionicons name="checkmark" size={18} color={palette.cfff} />
-            <Text style={styles.nextText}>
-              {finishing ? "Updating…" : "Finish"}
-            </Text>
+            <Text style={styles.nextText}>{finishing ? "Updating…" : "Finish"}</Text>
           </Pressable>
         ) : (
           <Pressable style={styles.next} onPress={() => move(1)}>
@@ -855,50 +759,34 @@ export function CookingModeScreen() {
         visible={recipe !== undefined && deductIngredients === undefined}
         transparent
         animationType="fade"
-        onRequestClose={() => goBackOrReplace({ pathname: "/recipes/[recipeId]", params: { recipeId } })}
+        onRequestClose={() =>
+          goBackOrReplace({ pathname: "/recipes/[recipeId]", params: { recipeId } })
+        }
       >
         <View style={choiceStyles.overlay}>
           <View style={choiceStyles.card}>
             <View style={choiceStyles.icon}>
-              <MaterialCommunityIcons
-                name="basket-check-outline"
-                size={28}
-                color={GREEN}
-              />
+              <MaterialCommunityIcons name="basket-check-outline" size={28} color={GREEN} />
             </View>
-            <Text style={choiceStyles.title}>
-              Update ingredients after cooking?
-            </Text>
+            <Text style={choiceStyles.title}>Update ingredients after cooking?</Text>
             <Text style={choiceStyles.copy}>
-              Choose whether EcoChef should deduct compatible recipe quantities
-              from your Ingredient List when you finish. Ambiguous conversions,
-              such as slices versus whole pieces, will not be guessed.
+              Choose whether EcoChef should deduct compatible recipe quantities from your Ingredient
+              List when you finish. Ambiguous conversions, such as slices versus whole pieces, will
+              not be guessed.
             </Text>
-            <Pressable
-              style={choiceStyles.primary}
-              onPress={() => setDeductIngredients(true)}
-            >
-              <Ionicons
-                name="checkmark-circle-outline"
-                size={18}
-                color={palette.cfff}
-              />
-              <Text style={choiceStyles.primaryText}>
-                Automatically deduct ingredients
-              </Text>
+            <Pressable style={choiceStyles.primary} onPress={() => setDeductIngredients(true)}>
+              <Ionicons name="checkmark-circle-outline" size={18} color={palette.cfff} />
+              <Text style={choiceStyles.primaryText}>Automatically deduct ingredients</Text>
             </Pressable>
-            <Pressable
-              style={choiceStyles.secondary}
-              onPress={() => setDeductIngredients(false)}
-            >
+            <Pressable style={choiceStyles.secondary} onPress={() => setDeductIngredients(false)}>
               <Ionicons name="eye-outline" size={18} color={palette.c486258} />
-              <Text style={choiceStyles.secondaryText}>
-                View cooking mode only
-              </Text>
+              <Text style={choiceStyles.secondaryText}>View cooking mode only</Text>
             </Pressable>
             <Pressable
               style={choiceStyles.cancel}
-              onPress={() => goBackOrReplace({ pathname: "/recipes/[recipeId]", params: { recipeId } })}
+              onPress={() =>
+                goBackOrReplace({ pathname: "/recipes/[recipeId]", params: { recipeId } })
+              }
             >
               <Text style={choiceStyles.cancelText}>Cancel cooking</Text>
             </Pressable>
@@ -958,7 +846,11 @@ const choiceStyles = StyleSheet.create({
     borderRadius: 14,
     backgroundColor: GREEN,
   },
-  primaryText: { color: palette.cfff, fontSize: typography.mobile.rawSize.s12, fontWeight: typography.weight.black },
+  primaryText: {
+    color: palette.cfff,
+    fontSize: typography.mobile.rawSize.s12,
+    fontWeight: typography.weight.black,
+  },
   secondary: {
     width: "100%",
     height: 46,
@@ -970,9 +862,17 @@ const choiceStyles = StyleSheet.create({
     borderRadius: 14,
     backgroundColor: palette.ceef7f1,
   },
-  secondaryText: { color: palette.c315b47, fontSize: typography.mobile.rawSize.s12, fontWeight: typography.weight.black },
+  secondaryText: {
+    color: palette.c315b47,
+    fontSize: typography.mobile.rawSize.s12,
+    fontWeight: typography.weight.black,
+  },
   cancel: { padding: 11, marginTop: 3 },
-  cancelText: { color: palette.c89968f, fontSize: typography.mobile.rawSize.s11, fontWeight: typography.weight.bold },
+  cancelText: {
+    color: palette.c89968f,
+    fontSize: typography.mobile.rawSize.s11,
+    fontWeight: typography.weight.bold,
+  },
 });
 
 const styles = StyleSheet.create({
@@ -985,7 +885,12 @@ const styles = StyleSheet.create({
     backgroundColor: colors.consumerCanvasDark,
   },
   loadingText: { marginTop: 12, color: palette.caab5c5 },
-  errorTitle: { marginTop: 12, color: palette.cfff, fontSize: typography.mobile.rawSize.s19, fontWeight: typography.weight.black },
+  errorTitle: {
+    marginTop: 12,
+    color: palette.cfff,
+    fontSize: typography.mobile.rawSize.s19,
+    fontWeight: typography.weight.black,
+  },
   errorCopy: { marginTop: 7, color: palette.c9eabbd, textAlign: "center" },
   retry: {
     marginTop: 18,
@@ -1106,7 +1011,11 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     backgroundColor: palette.c2c394d,
   },
-  timerSecondaryText: { color: palette.cd7dfeb, fontSize: typography.mobile.rawSize.s10, fontWeight: typography.weight.black },
+  timerSecondaryText: {
+    color: palette.cd7dfeb,
+    fontSize: typography.mobile.rawSize.s10,
+    fontWeight: typography.weight.black,
+  },
   timerPrimary: {
     height: 36,
     flexDirection: "row",
@@ -1117,7 +1026,11 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     backgroundColor: GREEN,
   },
-  timerPrimaryText: { color: palette.cfff, fontSize: typography.mobile.rawSize.s10, fontWeight: typography.weight.black },
+  timerPrimaryText: {
+    color: palette.cfff,
+    fontSize: typography.mobile.rawSize.s10,
+    fontWeight: typography.weight.black,
+  },
   reset: {
     height: 36,
     alignSelf: "center",
@@ -1151,7 +1064,11 @@ const styles = StyleSheet.create({
     fontSize: typography.mobile.rawSize.s10,
     fontWeight: typography.weight.extrabold,
   },
-  flagTime: { color: palette.c8e9aaf, fontSize: typography.mobile.rawSize.s10, fontVariant: ["tabular-nums"] },
+  flagTime: {
+    color: palette.c8e9aaf,
+    fontSize: typography.mobile.rawSize.s10,
+    fontVariant: ["tabular-nums"],
+  },
   assistance: {
     flexDirection: "row",
     gap: 9,
@@ -1174,7 +1091,11 @@ const styles = StyleSheet.create({
   },
   assistActive: { borderColor: GREEN, backgroundColor: GREEN },
   voiceActive: { borderColor: palette.c2b8b67, backgroundColor: palette.c237754 },
-  assistText: { color: palette.c8fd8b0, fontSize: typography.mobile.rawSize.s10, fontWeight: typography.weight.black },
+  assistText: {
+    color: palette.c8fd8b0,
+    fontSize: typography.mobile.rawSize.s10,
+    fontWeight: typography.weight.black,
+  },
   assistTextActive: { color: palette.cfff },
   voiceMessage: {
     marginTop: 9,
@@ -1195,7 +1116,11 @@ const styles = StyleSheet.create({
     gap: 3,
     paddingHorizontal: 5,
   },
-  previousText: { color: palette.ce5eaf1, fontSize: typography.mobile.rawSize.s11, fontWeight: typography.weight.black },
+  previousText: {
+    color: palette.ce5eaf1,
+    fontSize: typography.mobile.rawSize.s11,
+    fontWeight: typography.weight.black,
+  },
   disabled: { opacity: 0.28 },
   next: {
     height: 46,
@@ -1217,5 +1142,9 @@ const styles = StyleSheet.create({
     borderRadius: 23,
     backgroundColor: palette.cff781a,
   },
-  nextText: { color: palette.cfff, fontSize: typography.mobile.rawSize.s11, fontWeight: typography.weight.black },
+  nextText: {
+    color: palette.cfff,
+    fontSize: typography.mobile.rawSize.s11,
+    fontWeight: typography.weight.black,
+  },
 });

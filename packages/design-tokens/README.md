@@ -9,14 +9,14 @@ This package is the visual source of truth for EcoChef applications.
 
 Use only one body context per screen:
 
-| Context | Mobile | Desktop |
-| --- | ---: | ---: |
-| Page title | 32px | 40px |
-| Text-heavy body | 18px | 20px |
-| Interaction-heavy body | 16px | 16px |
-| Secondary text-heavy | 16px | 18px |
-| Secondary interaction-heavy | 14px | 14px |
-| Caption | 12px | 12px |
+| Context                     | Mobile | Desktop |
+| --------------------------- | -----: | ------: |
+| Page title                  |   32px |    40px |
+| Text-heavy body             |   18px |    20px |
+| Interaction-heavy body      |   16px |    16px |
+| Secondary text-heavy        |   16px |    18px |
+| Secondary interaction-heavy |   14px |    14px |
+| Caption                     |   12px |    12px |
 
 The secondary size is always 2px below its matching body size. Use text-heavy sizes for reading-focused screens such as recipe details, and interaction-heavy sizes for forms, dashboards, navigation, and controls. New screens should use these tokens rather than adding one-off colours or font sizes.
 
@@ -34,4 +34,4 @@ Web line-height variants are declared in both `typography.lineHeight` and matchi
 
 PDF order slips use `typography.print.fontFamily` (the standard PDF Helvetica font) and point sizes under `typography.print.size`. Convert semantic `colors` tokens to PDF RGB channels rather than declaring a separate print palette.
 
-Run `node scripts/check-theme-usage.mjs` from the repository root to check app source, and `node --test scripts/check-theme-usage.test.mjs` to verify that the checker rejects representative violations. These checks validate source usage; they do not replace visual or accessibility testing on devices and browsers.
+Run `node scripts/check-theme-usage.mjs` from the repository root to check app source. This check validates source usage; it does not replace visual or accessibility review on devices and browsers.

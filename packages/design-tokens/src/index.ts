@@ -47,7 +47,11 @@ export const colors = {
 
 export const typography = {
   fontFamily: "Arial, Helvetica, sans-serif",
-  nativeFontFamily: { ios: "System", android: "sans-serif", default: "Arial, Helvetica, sans-serif" },
+  nativeFontFamily: {
+    ios: "System",
+    android: "sans-serif",
+    default: "Arial, Helvetica, sans-serif",
+  },
   monospace: { ios: "Menlo", default: "monospace" },
   // Standard PDF font and point sizes for order slips; no external font embedding is required.
   print: {
@@ -145,7 +149,6 @@ export const webGrid = {
   marginMin: 32,
   marginMax: 60,
 } as const;
-
 
 /** Compatibility palette for legacy screens. Prefer semantic `colors` tokens in new code. */
 export const palette = {

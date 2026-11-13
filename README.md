@@ -1,25 +1,43 @@
 # EcoChef
 
-EcoChef is a food-management platform with a consumer mobile app and role-based web portals for administrators and vendors.
+EcoChef has a consumer mobile app, vendor and administrator web portals, and a FastAPI backend.
 
-This repository is intentionally a foundation only. It establishes ownership boundaries and feature locations before interface work begins.
+## Repository map
 
-## Applications
+| Path                     | Purpose                                                                                            |
+| ------------------------ | -------------------------------------------------------------------------------------------------- |
+| `apps/mobile`            | Expo Router app for Android and iOS. Routes live in `app/`; feature code lives in `src/features/`. |
+| `apps/web`               | Next.js vendor and administrator portals.                                                          |
+| `apps/api`               | FastAPI endpoints, domain services, and database access.                                           |
+| `packages/contracts`     | Shared TypeScript API types.                                                                       |
+| `packages/api-client`    | Typed client helpers.                                                                              |
+| `packages/design-tokens` | Shared colours, typography, and spacing.                                                           |
+| `services/ai_training`   | Model training and dataset preparation.                                                            |
+| `services/ml`            | Model inference services.                                                                          |
+| `services/iot_gateway`   | Refrigerator sensor integration.                                                                   |
+| `infra`                  | Railway deployment, scripts, and database migrations.                                              |
 
-- `apps/mobile` — React Native consumer app for Android and iOS.
-- `apps/web` — web portal with separate admin and vendor experiences after role-aware sign-in.
-- `apps/api` — FastAPI application, business modules, jobs, and real-time APIs.
+## Local development
 
-## Supporting services
+Install JavaScript dependencies with `pnpm install`, then set up the API with `powershell -ExecutionPolicy Bypass -File .\infra\scripts\Setup-Api.ps1`. Configure each app using its `.env.example` file.
 
-- `services/ml` — independently deployable model-serving boundaries for spoilage, ingredient detection, and recommendations.
-- `services/iot_gateway` — boundary for refrigerator sensor ingestion and event normalization.
-- `packages/contracts` — shared API contracts and domain-safe types.
-- `packages/api-client` — generated or handwritten typed API client for TypeScript apps.
-- `infra` — deployment, container, and database migration concerns.
+From the repository root, start the API and web portal in separate PowerShell terminals:
 
-Read `docs/architecture/project-structure.md` before adding a feature.
+```powershell
+powershell -ExecutionPolicy Bypass -File .\infra\scripts\Start-Api.ps1
+powershell -ExecutionPolicy Bypass -File .\infra\scripts\Start-Web.ps1
+```
 
-Read `CONTRIBUTING.md` before making a change.
+For mobile development, run `pnpm dev:mobile`. See [mobile setup](apps/mobile/README.md) for emulator and device networking. See [Railway setup](infra/RAILWAY.md) for hosted services.
 
-Read `docs/architecture/api-contracts.md` before adding or consuming an API endpoint.
+## Formatting and checks
+
+Prettier formats the web app, mobile app, shared packages, JSON, CSS, and Markdown. Ruff formats Python; Prettier does not support Python. Existing database migrations remain as applied SQL history.
+
+```powershell
+pnpm format
+pnpm format:check
+apps/api/.venv/Scripts/ruff.exe format .
+apps/api/.venv/Scripts/ruff.exe format --check .
+pnpm check
+```

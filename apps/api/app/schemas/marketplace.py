@@ -258,7 +258,9 @@ class CheckoutRequest(BaseModel):
                 raise ValueError("Scheduled delivery times must include a timezone.")
             now = datetime.now(self.arrival_at.tzinfo)
             if self.arrival_at < now + timedelta(minutes=30):
-                raise ValueError("Schedule at least 30 minutes in the future for preparation and travel.")
+                raise ValueError(
+                    "Schedule at least 30 minutes in the future for preparation and travel."
+                )
             if self.arrival_at > now + timedelta(days=7):
                 raise ValueError("Orders can only be scheduled up to 7 days ahead.")
         return self

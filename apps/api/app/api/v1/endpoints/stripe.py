@@ -24,7 +24,9 @@ MONEY = Decimal("0.01")
 def _push_order_cancellation(session: Session, user_id: UUID, order_id: UUID | str) -> None:
     try:
         send_push_notification(
-            session, user_id=user_id, title="Order cancelled and refunded",
+            session,
+            user_id=user_id,
+            title="Order cancelled and refunded",
             message=f"Your order #{str(order_id)[:8].upper()} was cancelled by the shop. A full refund was issued to your original payment method.",
             action_path=f"/marketplace/order?orderId={order_id}",
         )
@@ -169,16 +171,26 @@ def _identifier(value: Any) -> str | None:
 
 def _complete_checkout(checkout: Any, session: Session) -> None:
     lock_checkout_cart(session, checkout.id)
-    payment = session.execute(text("""
+    payment = session.execute(
+        text("""
         SELECT p.id, p.order_id, p.payment_status, p.inventory_deducted_at, o.order_status
         FROM payments p JOIN orders o ON o.id = p.order_id
         WHERE p.stripe_checkout_session_id = :checkout_session_id
         FOR UPDATE OF p, o
-    """), {"checkout_session_id": checkout.id}).one_or_none()
-    if payment is None or payment.payment_status in {"paid", "partially_refunded", "refunded", "disputed"}:
+    """),
+        {"checkout_session_id": checkout.id},
+    ).one_or_none()
+    if payment is None or payment.payment_status in {
+        "paid",
+        "partially_refunded",
+        "refunded",
+        "disputed",
+    }:
         return
     if payment.payment_status != "pending" or payment.order_status != "pending_payment":
-        raise stripe_payments.StripeOperationError("A late successful payment needs manual reconciliation; its order is no longer awaiting payment.")
+        raise stripe_payments.StripeOperationError(
+            "A late successful payment needs manual reconciliation; its order is no longer awaiting payment."
+        )
     payment_intent_id = _identifier(checkout.payment_intent)
     if not payment_intent_id:
         raise stripe_payments.StripeOperationError("The completed Checkout Session has no payment.")
@@ -188,14 +200,17 @@ def _complete_checkout(checkout: Any, session: Session) -> None:
         raise stripe_payments.StripeOperationError("The completed payment has no charge.")
 
     if payment.inventory_deducted_at is None:
-        inventory = session.execute(text("""
+        inventory = session.execute(
+            text("""
             SELECT product.id, product.product_name, product.stock_quantity, item.quantity
             FROM order_items item
             JOIN products product ON product.id = item.product_id
             WHERE item.order_id = :order_id
             ORDER BY product.id
             FOR UPDATE OF product
-        """), {"order_id": payment.order_id}).all()
+        """),
+            {"order_id": payment.order_id},
+        ).all()
         unavailable = next(
             (item for item in inventory if item.stock_quantity < item.quantity),
             None,
@@ -204,12 +219,15 @@ def _complete_checkout(checkout: Any, session: Session) -> None:
             raise stripe_payments.StripeOperationError(
                 f"{unavailable.product_name} no longer has enough stock for the paid order."
             )
-        session.execute(text("""
+        session.execute(
+            text("""
             UPDATE products product
             SET stock_quantity = product.stock_quantity - item.quantity
             FROM order_items item
             WHERE item.order_id = :order_id AND item.product_id = product.id
-        """), {"order_id": payment.order_id})
+        """),
+            {"order_id": payment.order_id},
+        )
 
     invoice_id = _identifier(checkout.invoice)
     hosted_invoice_url = None
@@ -219,14 +237,18 @@ def _complete_checkout(checkout: Any, session: Session) -> None:
         hosted_invoice_url = getattr(invoice, "hosted_invoice_url", None)
         invoice_pdf_url = getattr(invoice, "invoice_pdf", None)
 
-    session.execute(text("""
+    session.execute(
+        text("""
         UPDATE payment_vendor_allocations
         SET transfer_status = 'transferred', transferred_at = now(),
             settlement_method = 'simulated'
         WHERE payment_id = :payment_id AND transfer_status = 'pending'
-    """), {"payment_id": payment.id})
+    """),
+        {"payment_id": payment.id},
+    )
 
-    session.execute(text("""
+    session.execute(
+        text("""
         UPDATE payments
         SET payment_status = 'paid', stripe_payment_intent_id = :payment_intent_id,
             stripe_charge_id = :charge_id, stripe_invoice_id = :invoice_id,
@@ -235,14 +257,16 @@ def _complete_checkout(checkout: Any, session: Session) -> None:
             inventory_deducted_at = COALESCE(inventory_deducted_at, now()),
             failure_reason = NULL
         WHERE id = :payment_id
-    """), {
-        "payment_id": payment.id,
-        "payment_intent_id": payment_intent_id,
-        "charge_id": charge_id,
-        "invoice_id": invoice_id,
-        "hosted_invoice_url": hosted_invoice_url,
-        "invoice_pdf_url": invoice_pdf_url,
-    })
+    """),
+        {
+            "payment_id": payment.id,
+            "payment_intent_id": payment_intent_id,
+            "charge_id": charge_id,
+            "invoice_id": invoice_id,
+            "hosted_invoice_url": hosted_invoice_url,
+            "invoice_pdf_url": invoice_pdf_url,
+        },
+    )
     session.execute(
         text("UPDATE orders SET order_status = 'placed' WHERE id = :order_id"),
         {"order_id": payment.order_id},
@@ -251,28 +275,37 @@ def _complete_checkout(checkout: Any, session: Session) -> None:
 
 
 def _fail_checkout(checkout: Any, failure_reason: str, session: Session) -> None:
-    payment = session.execute(text("""
+    payment = session.execute(
+        text("""
         SELECT p.id, p.order_id, p.payment_status, p.inventory_deducted_at,
                p.inventory_released_at
         FROM payments p
         WHERE p.stripe_checkout_session_id = :checkout_session_id
         FOR UPDATE
-    """), {"checkout_session_id": checkout.id}).one_or_none()
+    """),
+        {"checkout_session_id": checkout.id},
+    ).one_or_none()
     if payment is None or payment.payment_status != "pending":
         return
     if payment.inventory_deducted_at is not None and payment.inventory_released_at is None:
-        session.execute(text("""
+        session.execute(
+            text("""
             UPDATE products product
             SET stock_quantity = product.stock_quantity + item.quantity
             FROM order_items item
             WHERE item.order_id = :order_id AND item.product_id = product.id
-        """), {"order_id": payment.order_id})
-    session.execute(text("""
+        """),
+            {"order_id": payment.order_id},
+        )
+    session.execute(
+        text("""
         UPDATE payments
         SET payment_status = 'failed', failure_reason = :failure_reason,
             inventory_released_at = COALESCE(inventory_released_at, now())
         WHERE id = :payment_id
-    """), {"payment_id": payment.id, "failure_reason": failure_reason[:500]})
+    """),
+        {"payment_id": payment.id, "failure_reason": failure_reason[:500]},
+    )
     session.execute(
         text("UPDATE orders SET order_status = 'cancelled' WHERE id = :order_id"),
         {"order_id": payment.order_id},
@@ -282,13 +315,16 @@ def _fail_checkout(checkout: Any, failure_reason: str, session: Session) -> None
 def _reverse_allocations(
     *, payment_id: UUID, refunded_fraction: Decimal, reason: str, session: Session
 ) -> None:
-    allocations = session.execute(text("""
+    allocations = session.execute(
+        text("""
         SELECT id, stripe_transfer_id, transfer_amount, reversed_amount
         FROM payment_vendor_allocations
         WHERE payment_id = :payment_id
         ORDER BY id
         FOR UPDATE
-    """), {"payment_id": payment_id}).all()
+    """),
+        {"payment_id": payment_id},
+    ).all()
     for allocation in allocations:
         target = min(
             _money(allocation.transfer_amount),
@@ -307,21 +343,25 @@ def _reverse_allocations(
             reversal_id = reversal.id
         total_reversed = _money(Decimal(allocation.reversed_amount) + delta)
         transfer_status = (
-            "reversed" if total_reversed >= _money(allocation.transfer_amount)
+            "reversed"
+            if total_reversed >= _money(allocation.transfer_amount)
             else "partially_reversed"
         )
-        session.execute(text("""
+        session.execute(
+            text("""
             UPDATE payment_vendor_allocations
             SET stripe_transfer_reversal_id = :reversal_id,
                 reversed_amount = :reversed_amount, transfer_status = :transfer_status,
                 reversed_at = now()
             WHERE id = :allocation_id
-        """), {
-            "reversal_id": reversal_id,
-            "reversed_amount": total_reversed,
-            "transfer_status": transfer_status,
-            "allocation_id": allocation.id,
-        })
+        """),
+            {
+                "reversal_id": reversal_id,
+                "reversed_amount": total_reversed,
+                "transfer_status": transfer_status,
+                "allocation_id": allocation.id,
+            },
+        )
 
 
 def _handle_order_cancellation_refund(refund: Any, session: Session) -> bool:
@@ -331,73 +371,115 @@ def _handle_order_cancellation_refund(refund: Any, session: Session) -> bool:
     order_id = metadata.get("ecochef_order_id")
     if not order_id:
         return False
-    payment = session.execute(text("""
+    payment = session.execute(
+        text("""
         SELECT p.id, p.inventory_deducted_at, p.inventory_released_at, o.order_status, cart.user_id
         FROM payments p JOIN orders o ON o.id = p.order_id JOIN carts cart ON cart.id=o.cart_id
         WHERE o.id = :order_id AND p.stripe_payment_intent_id = :payment_intent_id
         FOR UPDATE OF p, o
-    """), {"order_id": order_id, "payment_intent_id": _identifier(refund.payment_intent)}).one_or_none()
+    """),
+        {"order_id": order_id, "payment_intent_id": _identifier(refund.payment_intent)},
+    ).one_or_none()
     if payment is None or payment.order_status != "cancellation_pending":
         return False
     if refund.status in {"failed", "canceled"}:
-        session.execute(text("UPDATE orders SET order_status='cancellation_failed' WHERE id=:order_id"), {"order_id": order_id})
-        session.execute(text("UPDATE payments SET payment_status='paid' WHERE id=:payment_id"), {"payment_id": payment.id})
+        session.execute(
+            text("UPDATE orders SET order_status='cancellation_failed' WHERE id=:order_id"),
+            {"order_id": order_id},
+        )
+        session.execute(
+            text("UPDATE payments SET payment_status='paid' WHERE id=:payment_id"),
+            {"payment_id": payment.id},
+        )
         return False
     if refund.status != "succeeded":
         return False
-    _reverse_allocations(payment_id=payment.id, refunded_fraction=Decimal("1"), reason="refund", session=session)
+    _reverse_allocations(
+        payment_id=payment.id, refunded_fraction=Decimal("1"), reason="refund", session=session
+    )
     if payment.inventory_deducted_at is not None and payment.inventory_released_at is None:
-        session.execute(text("""
+        session.execute(
+            text("""
             UPDATE products product SET stock_quantity = product.stock_quantity + item.quantity,
                 status = CASE WHEN product.status='sold_out' THEN 'active' ELSE product.status END
             FROM order_items item WHERE item.order_id = :order_id AND item.product_id = product.id
-        """), {"order_id": order_id})
-    session.execute(text("""
+        """),
+            {"order_id": order_id},
+        )
+    session.execute(
+        text("""
         UPDATE payments SET payment_status='refunded', inventory_released_at=COALESCE(inventory_released_at, now())
         WHERE id=:payment_id
-    """), {"payment_id": payment.id})
-    session.execute(text("""
+    """),
+        {"payment_id": payment.id},
+    )
+    session.execute(
+        text("""
         UPDATE orders SET order_status='cancelled', cancelled_at=now() WHERE id=:order_id
-    """), {"order_id": order_id})
-    create_notification(session, user_id=payment.user_id, category="order", title="Order cancelled and refunded",
+    """),
+        {"order_id": order_id},
+    )
+    create_notification(
+        session,
+        user_id=payment.user_id,
+        category="order",
+        title="Order cancelled and refunded",
         message=f"Your order #{str(order_id)[:8].upper()} was cancelled by the shop. A full refund was issued to your original payment method.",
-        source_key=f"vendor-order-cancelled:{order_id}", action_path=f"/marketplace/order?orderId={order_id}")
+        source_key=f"vendor-order-cancelled:{order_id}",
+        action_path=f"/marketplace/order?orderId={order_id}",
+    )
     return True
 
 
 def _handle_charge_refund(charge: Any, session: Session) -> None:
-    payment = session.execute(text("""
+    payment = session.execute(
+        text("""
         SELECT p.id, p.order_id, o.order_status FROM payments p
         JOIN orders o ON o.id=p.order_id
         WHERE p.stripe_charge_id = :charge_id OR p.stripe_payment_intent_id = :payment_intent_id
         FOR UPDATE OF p, o
-    """), {
-        "charge_id": charge.id,
-        "payment_intent_id": _identifier(charge.payment_intent),
-    }).one_or_none()
+    """),
+        {
+            "charge_id": charge.id,
+            "payment_intent_id": _identifier(charge.payment_intent),
+        },
+    ).one_or_none()
     if payment is None or not charge.amount:
         return
     fraction = min(Decimal("1"), Decimal(charge.amount_refunded) / Decimal(charge.amount))
     _reverse_allocations(
         payment_id=payment.id, refunded_fraction=fraction, reason="refund", session=session
     )
-    session.execute(text("""
+    session.execute(
+        text("""
         UPDATE payments SET payment_status = :payment_status WHERE id = :payment_id
-    """), {
-        "payment_status": "refunded" if fraction == 1 else "partially_refunded",
-        "payment_id": payment.id,
-    })
+    """),
+        {
+            "payment_status": "refunded" if fraction == 1 else "partially_refunded",
+            "payment_id": payment.id,
+        },
+    )
     if fraction == 1 and getattr(payment, "order_status", None) == "cancellation_pending":
-        _handle_order_cancellation_refund(SimpleNamespace(
-            payment_intent=charge.payment_intent, status="succeeded",
-            metadata={"ecochef_order_cancellation": "true", "ecochef_order_id": str(payment.order_id)},
-        ), session)
+        _handle_order_cancellation_refund(
+            SimpleNamespace(
+                payment_intent=charge.payment_intent,
+                status="succeeded",
+                metadata={
+                    "ecochef_order_cancellation": "true",
+                    "ecochef_order_id": str(payment.order_id),
+                },
+            ),
+            session,
+        )
 
 
 def _handle_dispute(dispute: Any, session: Session) -> None:
-    payment = session.execute(text("""
+    payment = session.execute(
+        text("""
         SELECT id FROM payments WHERE stripe_charge_id = :charge_id FOR UPDATE
-    """), {"charge_id": _identifier(dispute.charge)}).one_or_none()
+    """),
+        {"charge_id": _identifier(dispute.charge)},
+    ).one_or_none()
     if payment is None:
         return
     _reverse_allocations(
@@ -422,7 +504,9 @@ async def stripe_webhook(
             payload, request.headers.get("stripe-signature")
         )
     except (ValueError, stripe.SignatureVerificationError) as error:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Invalid Stripe webhook signature.") from error
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST, "Invalid Stripe webhook signature."
+        ) from error
     except stripe_payments.StripeConfigurationError as error:
         raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, str(error)) from error
 
@@ -444,22 +528,30 @@ async def stripe_webhook(
             _handle_charge_refund(stripe_object, session)
         elif event.type in {"refund.created", "refund.updated", "refund.failed"}:
             if _handle_order_cancellation_refund(stripe_object, session):
-                refund_completed_order_id = (getattr(stripe_object, "metadata", None) or {}).get("ecochef_order_id")
+                refund_completed_order_id = (getattr(stripe_object, "metadata", None) or {}).get(
+                    "ecochef_order_id"
+                )
         elif event.type == "charge.dispute.created":
             _handle_dispute(stripe_object, session)
-        session.execute(text("""
+        session.execute(
+            text("""
             INSERT INTO stripe_webhook_events (event_id, event_type)
             VALUES (:event_id, :event_type)
-        """), {"event_id": event.id, "event_type": event.type})
+        """),
+            {"event_id": event.id, "event_type": event.type},
+        )
         session.commit()
     except Exception:
         session.rollback()
         raise
     if refund_completed_order_id:
         try:
-            customer_id = session.execute(text("""
+            customer_id = session.execute(
+                text("""
                 SELECT cart.user_id FROM orders o JOIN carts cart ON cart.id=o.cart_id WHERE o.id=:order_id
-            """), {"order_id": refund_completed_order_id}).scalar_one_or_none()
+            """),
+                {"order_id": refund_completed_order_id},
+            ).scalar_one_or_none()
             if customer_id:
                 _push_order_cancellation(session, customer_id, refund_completed_order_id)
         except Exception:

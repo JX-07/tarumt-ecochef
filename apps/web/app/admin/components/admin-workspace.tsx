@@ -27,13 +27,7 @@ import {
   X,
 } from "lucide-react";
 import Link from "next/link";
-import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useState,
-  type ReactNode,
-} from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { createAuthenticatedWebApi } from "../../../src/lib/api";
 import { sendPasswordReset } from "../../../src/lib/auth";
 import { AdminActionLog } from "./admin-action-log";
@@ -185,42 +179,24 @@ type AdminData = {
 
 const number = (value: Count | undefined) => Number(value ?? 0);
 const date = (value: string) =>
-  new Intl.DateTimeFormat("en-MY", { dateStyle: "medium" }).format(
-    new Date(value),
-  );
+  new Intl.DateTimeFormat("en-MY", { dateStyle: "medium" }).format(new Date(value));
 const dateTime = (value: string) =>
   new Intl.DateTimeFormat("en-MY", {
     dateStyle: "medium",
     timeStyle: "short",
   }).format(new Date(value));
 const money = (value: Count) =>
-  new Intl.NumberFormat("en-MY", { style: "currency", currency: "MYR" }).format(
-    number(value),
-  );
+  new Intl.NumberFormat("en-MY", { style: "currency", currency: "MYR" }).format(number(value));
 const shortId = (value: string) => value.slice(0, 8).toUpperCase();
 const label = (value: string | null) =>
   value
-    ? value
-        .replaceAll("_", " ")
-        .replace(/\b\w/g, (letter) => letter.toUpperCase())
+    ? value.replaceAll("_", " ").replace(/\b\w/g, (letter) => letter.toUpperCase())
     : "Not configured";
 const toneFor = (value: string | null): Tone => {
   const normalized = value?.toLowerCase() ?? "";
-  if (
-    ["active", "approved", "completed", "published", "paid"].includes(
-      normalized,
-    )
-  )
-    return "green";
-  if (
-    ["pending", "pending_approval", "placed", "preparing"].includes(normalized)
-  )
-    return "amber";
-  if (
-    ["suspended", "revoked", "rejected", "failed", "cancelled"].includes(
-      normalized,
-    )
-  )
+  if (["active", "approved", "completed", "published", "paid"].includes(normalized)) return "green";
+  if (["pending", "pending_approval", "placed", "preparing"].includes(normalized)) return "amber";
+  if (["suspended", "revoked", "rejected", "failed", "cancelled"].includes(normalized))
     return "red";
   if (["ready", "scheduled"].includes(normalized)) return "blue";
   return "gray";
@@ -228,13 +204,9 @@ const toneFor = (value: string | null): Tone => {
 const matches = (query: string, values: Array<unknown>) =>
   values.join(" ").toLowerCase().includes(query.toLowerCase());
 
-const Pill = ({
-  children,
-  tone = "gray",
-}: {
-  children: ReactNode;
-  tone?: Tone;
-}) => <span className={`admin-pill ${tone}`}>{children}</span>;
+const Pill = ({ children, tone = "gray" }: { children: ReactNode; tone?: Tone }) => (
+  <span className={`admin-pill ${tone}`}>{children}</span>
+);
 const Stat = ({
   label: title,
   value,
@@ -279,16 +251,8 @@ const Heading = ({
     </div>
   </header>
 );
-const Card = ({
-  children,
-  className = "",
-}: {
-  children: ReactNode;
-  className?: string;
-}) => (
-  <section className={`admin-card${className ? ` ${className}` : ""}`}>
-    {children}
-  </section>
+const Card = ({ children, className = "" }: { children: ReactNode; className?: string }) => (
+  <section className={`admin-card${className ? ` ${className}` : ""}`}>{children}</section>
 );
 const SearchBar = ({
   value,
@@ -322,9 +286,7 @@ export function AdminWorkspace({ page }: { page: AdminPage }) {
   const loadWorkspace = useCallback(async () => {
     try {
       const workspace =
-        await createAuthenticatedWebApi(
-          "/api/ecochef",
-        ).getAdminWorkspace<AdminData>();
+        await createAuthenticatedWebApi("/api/ecochef").getAdminWorkspace<AdminData>();
       setData(workspace);
       window.dispatchEvent(
         new CustomEvent("ecochef:admin-profile-updated", {
@@ -333,9 +295,7 @@ export function AdminWorkspace({ page }: { page: AdminPage }) {
       );
     } catch (reason) {
       setError(
-        reason instanceof Error
-          ? reason.message
-          : "Administrator data could not be loaded.",
+        reason instanceof Error ? reason.message : "Administrator data could not be loaded.",
       );
     }
   }, []);
@@ -343,9 +303,7 @@ export function AdminWorkspace({ page }: { page: AdminPage }) {
     void loadWorkspace();
   }, [loadWorkspace]);
   const approveStore = useCallback(async (storeId: string) => {
-    const approved = await createAuthenticatedWebApi(
-      "/api/ecochef",
-    ).approveAdminStore<{
+    const approved = await createAuthenticatedWebApi("/api/ecochef").approveAdminStore<{
       id: string;
       store_name: string;
       status: string;
@@ -357,10 +315,7 @@ export function AdminWorkspace({ page }: { page: AdminPage }) {
             ...current,
             overview: {
               ...current.overview,
-              pending_stores: Math.max(
-                0,
-                number(current.overview.pending_stores) - 1,
-              ),
+              pending_stores: Math.max(0, number(current.overview.pending_stores) - 1),
             },
             vendors: current.vendors.map((vendor) =>
               vendor.store_id === approved.id
@@ -377,42 +332,35 @@ export function AdminWorkspace({ page }: { page: AdminPage }) {
     setActionLogVersion((version) => version + 1);
     return approved.store_name;
   }, []);
-  const issueStoreStrike = useCallback(
-    async (storeId: string, reason: string) => {
-      const result = await createAuthenticatedWebApi(
-        "/api/ecochef",
-      ).issueAdminStoreStrike<{
-        id: string;
-        store_name: string;
-        status: string;
-        strike_count: number;
-        strikes_remaining: number;
-      }>(storeId, reason);
-      setData((current) =>
-        current
-          ? {
-              ...current,
-              vendors: current.vendors.map((vendor) =>
-                vendor.store_id === result.id
-                  ? {
-                      ...vendor,
-                      status: result.status,
-                      strike_count: result.strike_count,
-                    }
-                  : vendor,
-              ),
-            }
-          : current,
-      );
-      setActionLogVersion((version) => version + 1);
-      return result;
-    },
-    [],
-  );
+  const issueStoreStrike = useCallback(async (storeId: string, reason: string) => {
+    const result = await createAuthenticatedWebApi("/api/ecochef").issueAdminStoreStrike<{
+      id: string;
+      store_name: string;
+      status: string;
+      strike_count: number;
+      strikes_remaining: number;
+    }>(storeId, reason);
+    setData((current) =>
+      current
+        ? {
+            ...current,
+            vendors: current.vendors.map((vendor) =>
+              vendor.store_id === result.id
+                ? {
+                    ...vendor,
+                    status: result.status,
+                    strike_count: result.strike_count,
+                  }
+                : vendor,
+            ),
+          }
+        : current,
+    );
+    setActionLogVersion((version) => version + 1);
+    return result;
+  }, []);
   const revokeStore = useCallback(async (storeId: string) => {
-    const result = await createAuthenticatedWebApi(
-      "/api/ecochef",
-    ).revokeAdminStore<{
+    const result = await createAuthenticatedWebApi("/api/ecochef").revokeAdminStore<{
       id: string;
       store_name: string;
       status: string;
@@ -438,9 +386,9 @@ export function AdminWorkspace({ page }: { page: AdminPage }) {
     return result;
   }, []);
   const inviteAdministrator = useCallback(async (email: string) => {
-    const administrator = await createAuthenticatedWebApi(
-      "/api/ecochef",
-    ).inviteAdministrator<AdminData["administrators"][number]>({ email });
+    const administrator = await createAuthenticatedWebApi("/api/ecochef").inviteAdministrator<
+      AdminData["administrators"][number]
+    >({ email });
     setData((current) =>
       current
         ? {
@@ -479,15 +427,7 @@ export function AdminWorkspace({ page }: { page: AdminPage }) {
             inviteAdministrator,
           )
         : null,
-    [
-      approveStore,
-      data,
-      inviteAdministrator,
-      issueStoreStrike,
-      page,
-      query,
-      revokeStore,
-    ],
+    [approveStore, data, inviteAdministrator, issueStoreStrike, page, query, revokeStore],
   );
   if (error)
     return (
@@ -506,16 +446,9 @@ export function AdminWorkspace({ page }: { page: AdminPage }) {
         </div>
       </main>
     );
-  const isStoreManagement = [
-    "vendors",
-    "products",
-    "orders",
-    "promotions",
-  ].includes(page);
+  const isStoreManagement = ["vendors", "products", "orders", "promotions"].includes(page);
   return (
-    <main
-      className={`admin-workspace${isStoreManagement ? " store-management-workspace" : ""}`}
-    >
+    <main className={`admin-workspace${isStoreManagement ? " store-management-workspace" : ""}`}>
       {content}
       {page !== "dashboard" && (
         <AdminActionLog
@@ -569,9 +502,7 @@ function renderPage(
 
 function Dashboard({ data }: { data: AdminData }) {
   const o = data.overview;
-  const approvedStores = data.vendors.filter(
-    (row) => row.status === "approved",
-  ).length;
+  const approvedStores = data.vendors.filter((row) => row.status === "approved").length;
   return (
     <>
       <Heading
@@ -614,10 +545,7 @@ function Dashboard({ data }: { data: AdminData }) {
           <header className="trend-card-heading">
             <div>
               <h2>Weekly platform activity</h2>
-              <p>
-                New records created each week. The current week may be
-                incomplete.
-              </p>
+              <p>New records created each week. The current week may be incomplete.</p>
             </div>
           </header>
           <WeeklyActivityChart rows={data.weekly_activity} />
@@ -699,9 +627,9 @@ const activityTone = (category: string) =>
         ? "green"
         : "amber";
 function WeeklyActivityChart({ rows }: { rows: AdminData["weekly_activity"] }) {
-  const [active,setActive]=useState<number>();
-  const index=active===undefined?undefined:Math.min(active,rows.length-1);
-  const selected=index===undefined?undefined:rows[index];
+  const [active, setActive] = useState<number>();
+  const index = active === undefined ? undefined : Math.min(active, rows.length - 1);
+  const selected = index === undefined ? undefined : rows[index];
   const series = [
     {
       key: "household_signups" as const,
@@ -724,21 +652,14 @@ function WeeklyActivityChart({ rows }: { rows: AdminData["weekly_activity"] }) {
     ...rows.flatMap((row) => series.map((item) => number(row[item.key]))),
   );
   const chart = { left: 48, top: 16, width: 696, height: 184 };
-  const x = (index: number) =>
-    chart.left + index * (chart.width / Math.max(1, rows.length - 1));
-  const y = (value: number) =>
-    chart.top + chart.height - (value / maximum) * chart.height;
-  const ticks = Array.from(new Set([0, Math.ceil(maximum / 2), maximum])).sort(
-    (a, b) => b - a,
-  );
+  const x = (index: number) => chart.left + index * (chart.width / Math.max(1, rows.length - 1));
+  const y = (value: number) => chart.top + chart.height - (value / maximum) * chart.height;
+  const ticks = Array.from(new Set([0, Math.ceil(maximum / 2), maximum])).sort((a, b) => b - a);
   return (
     <div className="weekly-activity">
       <div className="trend-legend">
         {series.map((item) => {
-          const total = rows.reduce(
-            (sum, row) => sum + number(row[item.key]),
-            0,
-          );
+          const total = rows.reduce((sum, row) => sum + number(row[item.key]), 0);
           const latest = number(rows.at(-1)?.[item.key]);
           return (
             <div key={item.key}>
@@ -746,8 +667,8 @@ function WeeklyActivityChart({ rows }: { rows: AdminData["weekly_activity"] }) {
               <span>
                 {item.label}
                 <small>
-                  {total.toLocaleString("en-MY")} over 4 weeks ·{" "}
-                  {latest.toLocaleString("en-MY")} this week
+                  {total.toLocaleString("en-MY")} over 4 weeks · {latest.toLocaleString("en-MY")}{" "}
+                  this week
                 </small>
               </span>
             </div>
@@ -760,20 +681,68 @@ function WeeklyActivityChart({ rows }: { rows: AdminData["weekly_activity"] }) {
           role="group"
           tabIndex={0}
           aria-label="Weekly platform activity. Hover or tap for values, or use arrow keys."
-          onPointerMove={event=>{const bounds=event.currentTarget.getBoundingClientRect();if(bounds.width && rows.length)setActive(Math.max(0,Math.min(rows.length-1,Math.round(((event.clientX-bounds.left)/bounds.width*760-chart.left)/chart.width*(rows.length-1)))));}}
-          onPointerDown={event=>{const bounds=event.currentTarget.getBoundingClientRect();if(bounds.width && rows.length)setActive(Math.max(0,Math.min(rows.length-1,Math.round(((event.clientX-bounds.left)/bounds.width*760-chart.left)/chart.width*(rows.length-1)))));}}
-          onPointerLeave={()=>setActive(undefined)} onBlur={()=>setActive(undefined)} onFocus={()=>{if(rows.length)setActive(0);}}
-          onKeyDown={event=>{if(!rows.length || !["ArrowLeft","ArrowRight","Home","End","Escape"].includes(event.key))return;event.preventDefault();if(event.key==="Escape")setActive(undefined);else if(event.key==="Home")setActive(0);else if(event.key==="End")setActive(rows.length-1);else setActive(value=>Math.max(0,Math.min(rows.length-1,(value??0)+(event.key==="ArrowRight"?1:-1))));}}
+          onPointerMove={(event) => {
+            const bounds = event.currentTarget.getBoundingClientRect();
+            if (bounds.width && rows.length)
+              setActive(
+                Math.max(
+                  0,
+                  Math.min(
+                    rows.length - 1,
+                    Math.round(
+                      ((((event.clientX - bounds.left) / bounds.width) * 760 - chart.left) /
+                        chart.width) *
+                        (rows.length - 1),
+                    ),
+                  ),
+                ),
+              );
+          }}
+          onPointerDown={(event) => {
+            const bounds = event.currentTarget.getBoundingClientRect();
+            if (bounds.width && rows.length)
+              setActive(
+                Math.max(
+                  0,
+                  Math.min(
+                    rows.length - 1,
+                    Math.round(
+                      ((((event.clientX - bounds.left) / bounds.width) * 760 - chart.left) /
+                        chart.width) *
+                        (rows.length - 1),
+                    ),
+                  ),
+                ),
+              );
+          }}
+          onPointerLeave={() => setActive(undefined)}
+          onBlur={() => setActive(undefined)}
+          onFocus={() => {
+            if (rows.length) setActive(0);
+          }}
+          onKeyDown={(event) => {
+            if (
+              !rows.length ||
+              !["ArrowLeft", "ArrowRight", "Home", "End", "Escape"].includes(event.key)
+            )
+              return;
+            event.preventDefault();
+            if (event.key === "Escape") setActive(undefined);
+            else if (event.key === "Home") setActive(0);
+            else if (event.key === "End") setActive(rows.length - 1);
+            else
+              setActive((value) =>
+                Math.max(
+                  0,
+                  Math.min(rows.length - 1, (value ?? 0) + (event.key === "ArrowRight" ? 1 : -1)),
+                ),
+              );
+          }}
         >
           <g className="trend-grid">
             {ticks.map((tick) => (
               <g key={tick}>
-                <line
-                  x1={chart.left}
-                  y1={y(tick)}
-                  x2={chart.left + chart.width}
-                  y2={y(tick)}
-                />
+                <line x1={chart.left} y1={y(tick)} x2={chart.left + chart.width} y2={y(tick)} />
                 <text x={chart.left - 12} y={y(tick) + 4}>
                   {tick}
                 </text>
@@ -785,18 +754,12 @@ function WeeklyActivityChart({ rows }: { rows: AdminData["weekly_activity"] }) {
               <path
                 d={rows
                   .map(
-                    (row, index) =>
-                      `${index ? "L" : "M"}${x(index)} ${y(number(row[item.key]))}`,
+                    (row, index) => `${index ? "L" : "M"}${x(index)} ${y(number(row[item.key]))}`,
                   )
                   .join(" ")}
               />
               {rows.map((row, index) => (
-                <circle
-                  key={row.week}
-                  cx={x(index)}
-                  cy={y(number(row[item.key]))}
-                  r="4"
-                >
+                <circle key={row.week} cx={x(index)} cy={y(number(row[item.key]))} r="4">
                   <title>{`${item.label}: ${number(row[item.key])} during week of ${date(row.week)}`}</title>
                 </circle>
               ))}
@@ -810,16 +773,43 @@ function WeeklyActivityChart({ rows }: { rows: AdminData["weekly_activity"] }) {
               }).format(new Date(row.week))}
             </text>
           ))}
-          {selected && index!==undefined ? <g pointerEvents="none">
-            <line className="activity-hover-guide" x1={x(index)} x2={x(index)} y1={chart.top} y2={chart.top+chart.height}/>
-            {series.map(item=><g key={item.key} className={`trend-series ${item.className}`}><circle cx={x(index)} cy={y(number(selected[item.key]))} r={6}/></g>)}
-            <g className="activity-hover-tooltip" transform={`translate(${Math.max(chart.left,Math.min(516,x(index)+12))},${chart.top})`}>
-              <rect width={228} height={110} rx={8}/><text x={12} y={22}>Week of {date(selected.week)}</text>
-              {series.map((item,i)=><text key={item.key} x={12} y={46+i*24}>{item.label}: {number(selected[item.key]).toLocaleString("en-MY")}</text>)}
+          {selected && index !== undefined ? (
+            <g pointerEvents="none">
+              <line
+                className="activity-hover-guide"
+                x1={x(index)}
+                x2={x(index)}
+                y1={chart.top}
+                y2={chart.top + chart.height}
+              />
+              {series.map((item) => (
+                <g key={item.key} className={`trend-series ${item.className}`}>
+                  <circle cx={x(index)} cy={y(number(selected[item.key]))} r={6} />
+                </g>
+              ))}
+              <g
+                className="activity-hover-tooltip"
+                transform={`translate(${Math.max(chart.left, Math.min(516, x(index) + 12))},${chart.top})`}
+              >
+                <rect width={228} height={110} rx={8} />
+                <text x={12} y={22}>
+                  Week of {date(selected.week)}
+                </text>
+                {series.map((item, i) => (
+                  <text key={item.key} x={12} y={46 + i * 24}>
+                    {item.label}: {number(selected[item.key]).toLocaleString("en-MY")}
+                  </text>
+                ))}
+              </g>
             </g>
-          </g>:null}
+          ) : null}
         </svg>
-        {selected?<span className="activity-chart-announcement" role="status">Week of {date(selected.week)}. {series.map(item=>`${item.label}: ${number(selected[item.key])}`).join(". ")}</span>:null}
+        {selected ? (
+          <span className="activity-chart-announcement" role="status">
+            Week of {date(selected.week)}.{" "}
+            {series.map((item) => `${item.label}: ${number(selected[item.key])}`).join(". ")}
+          </span>
+        ) : null}
       </div>
       <details className="trend-details">
         <summary>View exact weekly figures</summary>
@@ -838,9 +828,7 @@ function WeeklyActivityChart({ rows }: { rows: AdminData["weekly_activity"] }) {
                 <tr key={row.week}>
                   <td>{date(row.week)}</td>
                   {series.map((item) => (
-                    <td key={item.key}>
-                      {number(row[item.key]).toLocaleString("en-MY")}
-                    </td>
+                    <td key={item.key}>{number(row[item.key]).toLocaleString("en-MY")}</td>
                   ))}
                 </tr>
               ))}
@@ -951,11 +939,7 @@ function Recipes({ data, query, setQuery }: SearchProps) {
         icon={<ChefHat />}
       />
       <Card>
-        <SearchBar
-          value={query}
-          onChange={setQuery}
-          placeholder="Search recipes or authors…"
-        />
+        <SearchBar value={query} onChange={setQuery} placeholder="Search recipes or authors…" />
         {rows.length ? (
           <div className="admin-table recipes-table actual">
             <div className="admin-tr admin-th">
@@ -980,9 +964,7 @@ function Recipes({ data, query, setQuery }: SearchProps) {
                   {row.cuisine || "Not specified"}
                   <small>{label(row.difficulty)}</small>
                 </span>
-                <span>
-                  {number(row.feedback_count).toLocaleString("en-MY")}
-                </span>
+                <span>{number(row.feedback_count).toLocaleString("en-MY")}</span>
                 <span>{number(row.report_count).toLocaleString("en-MY")}</span>
                 <span>
                   <Pill tone={row.is_published ? "green" : "gray"}>
@@ -1004,16 +986,20 @@ function RecipeArtwork({ src, alt = "" }: { src: string | null; alt?: string }) 
   const [failed, setFailed] = useState(false);
   useEffect(() => setFailed(false), [src]);
   const marker = "/api/v1/recipes/images/";
-  const resolved = src?.includes(marker) ? `/api/ecochef/recipes/images/${src.split(marker)[1]}` : src;
-  return resolved && !failed ? <img src={resolved} alt={alt} onError={() => setFailed(true)} /> : <ChefHat aria-hidden="true" />;
+  const resolved = src?.includes(marker)
+    ? `/api/ecochef/recipes/images/${src.split(marker)[1]}`
+    : src;
+  return resolved && !failed ? (
+    <img src={resolved} alt={alt} onError={() => setFailed(true)} />
+  ) : (
+    <ChefHat aria-hidden="true" />
+  );
 }
 
 function Households({ data, query, setQuery }: SearchProps) {
   const rows = data.users.filter((row) => matches(query, Object.values(row)));
-  const [selectedUser, setSelectedUser] =
-    useState<AdminData["users"][number]>();
-  const [selectedRecipe, setSelectedRecipe] =
-    useState<AdminData["recipes"][number]>();
+  const [selectedUser, setSelectedUser] = useState<AdminData["users"][number]>();
+  const [selectedRecipe, setSelectedRecipe] = useState<AdminData["recipes"][number]>();
   const [recipeQuery, setRecipeQuery] = useState("");
   const recipes = data.recipes.filter(
     (row) =>
@@ -1056,11 +1042,7 @@ function Households({ data, query, setQuery }: SearchProps) {
         icon={<Users />}
       />
       <div className="admin-stats three">
-        <Stat
-          label="Registered users"
-          value={data.overview.household_users}
-          icon={<Users />}
-        />
+        <Stat label="Registered users" value={data.overview.household_users} icon={<Users />} />
         <Stat
           label="Orders placed"
           value={data.overview.orders}
@@ -1091,11 +1073,7 @@ function Households({ data, query, setQuery }: SearchProps) {
             <button
               className="household-back-button"
               type="button"
-              onClick={
-                selectedRecipe
-                  ? () => setSelectedRecipe(undefined)
-                  : clearSelection
-              }
+              onClick={selectedRecipe ? () => setSelectedRecipe(undefined) : clearSelection}
             >
               <ArrowLeft /> {selectedRecipe ? "Back to recipes" : "Back to users"}
             </button>
@@ -1126,8 +1104,7 @@ function Households({ data, query, setQuery }: SearchProps) {
                     key={row.id}
                     onClick={() => selectUser(row)}
                     onKeyDown={(event) => {
-                      if (event.key === "Enter" || event.key === " ")
-                        selectUser(row);
+                      if (event.key === "Enter" || event.key === " ") selectUser(row);
                     }}
                   >
                     <span>
@@ -1137,12 +1114,8 @@ function Households({ data, query, setQuery }: SearchProps) {
                     <span>{row.email}</span>
                     <span>{row.phone_number || "Not provided"}</span>
                     <span>{date(row.date_joined)}</span>
-                    <span>
-                      {number(row.order_count).toLocaleString("en-MY")}
-                    </span>
-                    <span>
-                      {number(row.recipe_count).toLocaleString("en-MY")}
-                    </span>
+                    <span>{number(row.order_count).toLocaleString("en-MY")}</span>
+                    <span>{number(row.recipe_count).toLocaleString("en-MY")}</span>
                   </div>
                 ))}
               </div>
@@ -1177,8 +1150,7 @@ function Households({ data, query, setQuery }: SearchProps) {
                     key={recipe.id}
                     onClick={() => setSelectedRecipe(recipe)}
                     onKeyDown={(event) => {
-                      if (event.key === "Enter" || event.key === " ")
-                        setSelectedRecipe(recipe);
+                      if (event.key === "Enter" || event.key === " ") setSelectedRecipe(recipe);
                     }}
                   >
                     <span className="recipe-row-icon">
@@ -1192,12 +1164,8 @@ function Households({ data, query, setQuery }: SearchProps) {
                       {recipe.cuisine || "Not specified"}
                       <small>{label(recipe.difficulty)}</small>
                     </span>
-                    <span>
-                      {number(recipe.feedback_count).toLocaleString("en-MY")}
-                    </span>
-                    <span>
-                      {number(recipe.report_count).toLocaleString("en-MY")}
-                    </span>
+                    <span>{number(recipe.feedback_count).toLocaleString("en-MY")}</span>
+                    <span>{number(recipe.report_count).toLocaleString("en-MY")}</span>
                     <span>
                       <Pill tone={recipe.is_published ? "green" : "gray"}>
                         {recipe.is_published ? "Public" : "Private"}
@@ -1214,15 +1182,17 @@ function Households({ data, query, setQuery }: SearchProps) {
           <div className="recipe-review-detail">
             <header className="recipe-detail-summary">
               <span className="recipe-detail-image">
-                <RecipeArtwork src={selectedRecipe.image_url} alt={`${selectedRecipe.title} recipe`} />
+                <RecipeArtwork
+                  src={selectedRecipe.image_url}
+                  alt={`${selectedRecipe.title} recipe`}
+                />
               </span>
               <div>
                 <small>SELECTED RECIPE</small>
                 <h2>{selectedRecipe.title}</h2>
                 <p>
-                  {shortId(selectedRecipe.id)} ·{" "}
-                  {selectedRecipe.cuisine || "Cuisine not specified"} ·{" "}
-                  {label(selectedRecipe.difficulty)}
+                  {shortId(selectedRecipe.id)} · {selectedRecipe.cuisine || "Cuisine not specified"}{" "}
+                  · {label(selectedRecipe.difficulty)}
                 </p>
               </div>
               <Pill tone={selectedRecipe.is_published ? "green" : "gray"}>
@@ -1253,9 +1223,7 @@ function Households({ data, query, setQuery }: SearchProps) {
                           {"☆".repeat(Math.max(0, 5 - number(item.rating)))}
                         </span>
                       </header>
-                      <p>
-                        {item.comment || "No written feedback was provided."}
-                      </p>
+                      <p>{item.comment || "No written feedback was provided."}</p>
                       <small>{dateTime(item.date_submitted)}</small>
                     </article>
                   ))}
@@ -1350,8 +1318,7 @@ const shopJoinedDate = (value: string) => {
 };
 const shopActionLabel = (row: AdminData["vendors"][number]) => {
   if (row.status === "pending_approval") return "Approve store";
-  if (row.status === "approved" && number(row.strike_count) >= 3)
-    return "Revoke";
+  if (row.status === "approved" && number(row.strike_count) >= 3) return "Revoke";
   if (row.status === "approved") return "Issue strike";
   return row.status === "revoked" ? "Revoked" : "Not eligible";
 };
@@ -1371,9 +1338,7 @@ function ShopFilterDropdown({
   onOpen: () => void;
   onSelect: (value: string) => void;
 }) {
-  const selected =
-    options.find((option) => option.value === value)?.label ??
-    options[0]?.label;
+  const selected = options.find((option) => option.value === value)?.label ?? options[0]?.label;
   return (
     <div className={`shop-subject-filter${open ? " open" : ""}`}>
       <button
@@ -1429,15 +1394,7 @@ function SortHeader({
         aria-label={`Sort ${name} ${active && direction === "asc" ? "descending" : "ascending"}`}
       >
         {name}
-        {active ? (
-          direction === "asc" ? (
-            <ArrowUp />
-          ) : (
-            <ArrowDown />
-          )
-        ) : (
-          <ArrowUpDown />
-        )}
+        {active ? direction === "asc" ? <ArrowUp /> : <ArrowDown /> : <ArrowUpDown />}
       </button>
     </span>
   );
@@ -1470,15 +1427,7 @@ function SplitSortHeader({
         aria-label={`Sort ${name} ${active && direction === "asc" ? "descending" : "ascending"}`}
       >
         {name}
-        {active ? (
-          direction === "asc" ? (
-            <ArrowUp />
-          ) : (
-            <ArrowDown />
-          )
-        ) : (
-          <ArrowUpDown />
-        )}
+        {active ? direction === "asc" ? <ArrowUp /> : <ArrowDown /> : <ArrowUpDown />}
       </button>
     );
   };
@@ -1518,15 +1467,7 @@ function DetailSortHeader({
         aria-label={`Sort ${name} ${active && sort.direction === "asc" ? "descending" : "ascending"}`}
       >
         {name}
-        {active ? (
-          sort.direction === "asc" ? (
-            <ArrowUp />
-          ) : (
-            <ArrowDown />
-          )
-        ) : (
-          <ArrowUpDown />
-        )}
+        {active ? sort.direction === "asc" ? <ArrowUp /> : <ArrowDown /> : <ArrowUpDown />}
       </button>
     </span>
   );
@@ -1560,9 +1501,7 @@ function sortedDetailRows<T>(
   sort: DetailSort | undefined,
   values: (row: T) => Record<string, string | number | null | undefined>,
 ) {
-  const filtered = rows.filter((row) =>
-    matches(query, Object.values(values(row))),
-  );
+  const filtered = rows.filter((row) => matches(query, Object.values(values(row))));
   if (!sort) return filtered;
   return [...filtered].sort((left, right) => {
     const a = values(left)[sort.key] ?? "",
@@ -1591,27 +1530,18 @@ function StoreMarketplaceDetail({
     [orderSort, setOrderSort] = useState<DetailSort>();
   const [promotionQuery, setPromotionQuery] = useState(""),
     [promotionSort, setPromotionSort] = useState<DetailSort>();
-  const products = data.products.filter(
-    (row) => row.store_id === store.store_id,
-  );
+  const products = data.products.filter((row) => row.store_id === store.store_id);
   const orders = data.orders.filter((row) =>
     row.store_names?.split(", ").includes(store.store_name ?? ""),
   );
-  const promotions = data.promotions.filter(
-    (row) => row.store_name === store.store_name,
-  );
-  const productRows = sortedDetailRows(
-    products,
-    productQuery,
-    productSort,
-    (row) => ({
-      product: row.product_name,
-      category: row.category,
-      price: number(row.price),
-      stock: number(row.stock_quantity),
-      status: row.status,
-    }),
-  );
+  const promotions = data.promotions.filter((row) => row.store_name === store.store_name);
+  const productRows = sortedDetailRows(products, productQuery, productSort, (row) => ({
+    product: row.product_name,
+    category: row.category,
+    price: number(row.price),
+    stock: number(row.stock_quantity),
+    status: row.status,
+  }));
   const orderRows = sortedDetailRows(orders, orderQuery, orderSort, (row) => ({
     order: row.id,
     customer: `${row.customer_name} ${row.customer_email}`,
@@ -1619,24 +1549,19 @@ function StoreMarketplaceDetail({
     date: new Date(row.order_date).getTime(),
     status: row.order_status,
   }));
-  const promotionRows = sortedDetailRows(
-    promotions,
-    promotionQuery,
-    promotionSort,
-    (row) => ({
-      promotion: `${row.title} ${row.description}`,
-      code: row.code,
-      offer: row.free_delivery
-        ? "Free delivery"
-        : row.discount_percent
-          ? `${number(row.discount_percent)}% off`
-          : row.discount_amount
-            ? `${money(row.discount_amount)} off`
-            : "Not configured",
-      date: new Date(row.end_date).getTime(),
-      status: row.status,
-    }),
-  );
+  const promotionRows = sortedDetailRows(promotions, promotionQuery, promotionSort, (row) => ({
+    promotion: `${row.title} ${row.description}`,
+    code: row.code,
+    offer: row.free_delivery
+      ? "Free delivery"
+      : row.discount_percent
+        ? `${number(row.discount_percent)}% off`
+        : row.discount_amount
+          ? `${money(row.discount_amount)} off`
+          : "Not configured",
+    date: new Date(row.end_date).getTime(),
+    status: row.status,
+  }));
   return (
     <div className="store-marketplace-detail">
       <header className="store-detail-summary">
@@ -1664,17 +1589,12 @@ function StoreMarketplaceDetail({
             <span>
               <h3>Products</h3>
               <p>
-                {products.length} product{products.length === 1 ? "" : "s"}{" "}
-                listed by this shop
+                {products.length} product{products.length === 1 ? "" : "s"} listed by this shop
               </p>
             </span>
           </div>
         </header>
-        <DetailSearch
-          value={productQuery}
-          onChange={setProductQuery}
-          label="Products"
-        />
+        <DetailSearch value={productQuery} onChange={setProductQuery} label="Products" />
         {productRows.length ? (
           <div className="admin-table store-detail-products">
             <div className="admin-tr admin-th">
@@ -1712,11 +1632,7 @@ function StoreMarketplaceDetail({
             <div
               className="store-detail-entry-scroll"
               tabIndex={productRows.length > 9 ? 0 : undefined}
-              aria-label={
-                productRows.length > 9
-                  ? "Scrollable product entries"
-                  : undefined
-              }
+              aria-label={productRows.length > 9 ? "Scrollable product entries" : undefined}
             >
               {productRows.map((row) => (
                 <div className="admin-tr" key={row.id}>
@@ -1728,9 +1644,7 @@ function StoreMarketplaceDetail({
                   <span>
                     <strong>{money(row.price)}</strong>
                   </span>
-                  <span>
-                    {number(row.stock_quantity).toLocaleString("en-MY")}
-                  </span>
+                  <span>{number(row.stock_quantity).toLocaleString("en-MY")}</span>
                   <span>
                     <Pill tone={toneFor(row.status)}>{label(row.status)}</Pill>
                   </span>
@@ -1749,17 +1663,13 @@ function StoreMarketplaceDetail({
             <span>
               <h3>Orders</h3>
               <p>
-                {orders.length} order{orders.length === 1 ? "" : "s"} containing
-                items from this shop
+                {orders.length} order{orders.length === 1 ? "" : "s"} containing items from this
+                shop
               </p>
             </span>
           </div>
         </header>
-        <DetailSearch
-          value={orderQuery}
-          onChange={setOrderQuery}
-          label="Orders"
-        />
+        <DetailSearch value={orderQuery} onChange={setOrderQuery} label="Orders" />
         {orderRows.length ? (
           <div className="admin-table store-detail-orders">
             <div className="admin-tr admin-th">
@@ -1797,9 +1707,7 @@ function StoreMarketplaceDetail({
             <div
               className="store-detail-entry-scroll"
               tabIndex={orderRows.length > 9 ? 0 : undefined}
-              aria-label={
-                orderRows.length > 9 ? "Scrollable order entries" : undefined
-              }
+              aria-label={orderRows.length > 9 ? "Scrollable order entries" : undefined}
             >
               {orderRows.map((row) => (
                 <div className="admin-tr" key={row.id}>
@@ -1814,9 +1722,7 @@ function StoreMarketplaceDetail({
                   <span>{money(row.total_amount)}</span>
                   <span>{dateTime(row.order_date)}</span>
                   <span>
-                    <Pill tone={toneFor(row.order_status)}>
-                      {label(row.order_status)}
-                    </Pill>
+                    <Pill tone={toneFor(row.order_status)}>{label(row.order_status)}</Pill>
                   </span>
                 </div>
               ))}
@@ -1839,11 +1745,7 @@ function StoreMarketplaceDetail({
             </span>
           </div>
         </header>
-        <DetailSearch
-          value={promotionQuery}
-          onChange={setPromotionQuery}
-          label="Promotions"
-        />
+        <DetailSearch value={promotionQuery} onChange={setPromotionQuery} label="Promotions" />
         {promotionRows.length ? (
           <div className="admin-table store-detail-promotions">
             <div className="admin-tr admin-th">
@@ -1881,11 +1783,7 @@ function StoreMarketplaceDetail({
             <div
               className="store-detail-entry-scroll"
               tabIndex={promotionRows.length > 9 ? 0 : undefined}
-              aria-label={
-                promotionRows.length > 9
-                  ? "Scrollable promotion entries"
-                  : undefined
-              }
+              aria-label={promotionRows.length > 9 ? "Scrollable promotion entries" : undefined}
             >
               {promotionRows.map((row) => (
                 <div className="admin-tr" key={row.id}>
@@ -1919,14 +1817,7 @@ function StoreMarketplaceDetail({
   );
 }
 
-function ShopManagement({
-  data,
-  query,
-  setQuery,
-  onApprove,
-  onStrike,
-  onRevoke,
-}: ShopActionProps) {
+function ShopManagement({ data, query, setQuery, onApprove, onStrike, onRevoke }: ShopActionProps) {
   const defaultFilters: ShopFilters = {
     category: "all",
     location: "all",
@@ -1938,8 +1829,7 @@ function ShopManagement({
   const [filters, setFilters] = useState<ShopFilters>(defaultFilters);
   const [openFilter, setOpenFilter] = useState<ShopFilterKey>();
   const [view, setView] = useState<ShopView>("row");
-  const [selectedStore, setSelectedStore] =
-    useState<AdminData["vendors"][number]>();
+  const [selectedStore, setSelectedStore] = useState<AdminData["vendors"][number]>();
   const [sort, setSort] = useState<{
     key: ShopSortKey;
     direction: "asc" | "desc";
@@ -1947,8 +1837,7 @@ function ShopManagement({
   const [confirmingApproval, setConfirmingApproval] = useState<string>();
   const [confirmingRevoke, setConfirmingRevoke] = useState<string>();
   const [working, setWorking] = useState<string>();
-  const [strikeStore, setStrikeStore] =
-    useState<AdminData["vendors"][number]>();
+  const [strikeStore, setStrikeStore] = useState<AdminData["vendors"][number]>();
   const [strikeReason, setStrikeReason] = useState("");
   const [message, setMessage] = useState("");
   const [actionError, setActionError] = useState("");
@@ -1958,18 +1847,13 @@ function ShopManagement({
       if (!source?.startsWith("shop-")) setOpenFilter(undefined);
     };
     window.addEventListener("ecochef:filter-open", closeForOtherFilters);
-    return () =>
-      window.removeEventListener("ecochef:filter-open", closeForOtherFilters);
+    return () => window.removeEventListener("ecochef:filter-open", closeForOtherFilters);
   }, []);
   const shops = data.vendors.filter((row) => row.store_id);
   const categoryOptions: FilterOption[] = [
     { value: "all", label: "All categories" },
     ...Array.from(
-      new Set(
-        shops
-          .map((row) => row.category)
-          .filter((value): value is string => Boolean(value)),
-      ),
+      new Set(shops.map((row) => row.category).filter((value): value is string => Boolean(value))),
     )
       .sort((a, b) => a.localeCompare(b))
       .map((value) => ({ value, label: value })),
@@ -1996,9 +1880,7 @@ function ShopManagement({
     "draft",
   ];
   const presentStatuses = new Set(
-    shops
-      .map((row) => row.status)
-      .filter((value): value is string => Boolean(value)),
+    shops.map((row) => row.status).filter((value): value is string => Boolean(value)),
   );
   const approvalOptions: FilterOption[] = [
     { value: "all", label: "All approval states" },
@@ -2012,26 +1894,17 @@ function ShopManagement({
   ];
   const filteredRows = shops.filter((row) => {
     if (!matches(query, Object.values(row))) return false;
-    if (filters.category !== "all" && row.category !== filters.category)
-      return false;
-    if (filters.location !== "all" && shopLocation(row) !== filters.location)
-      return false;
-    if (
-      filters.strikes !== "all" &&
-      number(row.strike_count) !== Number(filters.strikes)
-    )
+    if (filters.category !== "all" && row.category !== filters.category) return false;
+    if (filters.location !== "all" && shopLocation(row) !== filters.location) return false;
+    if (filters.strikes !== "all" && number(row.strike_count) !== Number(filters.strikes))
       return false;
     const joined = shopJoinedDate(row.date_joined);
     if (filters.joinedFrom && joined < filters.joinedFrom) return false;
     if (filters.joinedTo && joined > filters.joinedTo) return false;
-    if (filters.approval !== "all" && row.status !== filters.approval)
-      return false;
+    if (filters.approval !== "all" && row.status !== filters.approval) return false;
     return true;
   });
-  const sortValue = (
-    row: AdminData["vendors"][number],
-    key: ShopSortKey,
-  ): string | number => {
+  const sortValue = (row: AdminData["vendors"][number], key: ShopSortKey): string | number => {
     if (key === "store") return row.store_name ?? "";
     if (key === "owner") return row.owner_name;
     if (key === "joinedDate") return new Date(row.date_joined).getTime();
@@ -2039,8 +1912,7 @@ function ShopManagement({
     if (key === "location") return shopLocation(row);
     if (key === "strikes") return number(row.strike_count);
     if (key === "approval") return row.status ?? "";
-    if (key === "approvalDate")
-      return row.approved_at ? new Date(row.approved_at).getTime() : 0;
+    if (key === "approvalDate") return row.approved_at ? new Date(row.approved_at).getTime() : 0;
     return shopActionLabel(row);
   };
   const rows = sort
@@ -2086,11 +1958,7 @@ function ShopManagement({
       setMessage(`${name} is approved and can now operate publicly.`);
       setConfirmingApproval(undefined);
     } catch (reason) {
-      setActionError(
-        reason instanceof Error
-          ? reason.message
-          : "The store could not be approved.",
-      );
+      setActionError(reason instanceof Error ? reason.message : "The store could not be approved.");
     } finally {
       setWorking(undefined);
     }
@@ -2107,11 +1975,7 @@ function ShopManagement({
       setStrikeStore(undefined);
       setStrikeReason("");
     } catch (reason) {
-      setActionError(
-        reason instanceof Error
-          ? reason.message
-          : "The strike could not be issued.",
-      );
+      setActionError(reason instanceof Error ? reason.message : "The strike could not be issued.");
       setStrikeStore(undefined);
     } finally {
       setWorking(undefined);
@@ -2126,9 +1990,7 @@ function ShopManagement({
       setConfirmingRevoke(undefined);
     } catch (reason) {
       setActionError(
-        reason instanceof Error
-          ? reason.message
-          : "The store approval could not be revoked.",
+        reason instanceof Error ? reason.message : "The store approval could not be revoked.",
       );
     } finally {
       setWorking(undefined);
@@ -2224,24 +2086,14 @@ function ShopManagement({
       />
       <div className="admin-stats">
         <Stat label="All shops" value={shops.length} icon={<Store />} />
-        <Stat
-          label="Approved shops"
-          value={approved}
-          icon={<CircleCheck />}
-          tone="green"
-        />
+        <Stat label="Approved shops" value={approved} icon={<CircleCheck />} tone="green" />
         <Stat
           label="Pending approvals"
           value={data.overview.pending_stores}
           icon={<Clock3 />}
           tone="amber"
         />
-        <Stat
-          label="Revoked or suspended"
-          value={restricted}
-          icon={<TriangleAlert />}
-          tone="red"
-        />
+        <Stat label="Revoked or suspended" value={restricted} icon={<TriangleAlert />} tone="red" />
       </div>
       <Card className="shop-management-panel">
         {message && (
@@ -2258,9 +2110,7 @@ function ShopManagement({
           <div>
             <Store />
             <span>
-              <strong>
-                {selectedStore ? "Store Marketplace Details" : "Store Listings"}
-              </strong>
+              <strong>{selectedStore ? "Store Marketplace Details" : "Store Listings"}</strong>
               <small>
                 {selectedStore
                   ? "Products, orders, and promotions for the selected shop."
@@ -2427,16 +2277,11 @@ function ShopManagement({
                     tabIndex={0}
                     onClick={() => openStore(row)}
                     onKeyDown={(event) => {
-                      if (event.key === "Enter" || event.key === " ")
-                        openStore(row);
+                      if (event.key === "Enter" || event.key === " ") openStore(row);
                     }}
                   >
                     <span className="store-row-icon">
-                      {row.icon_url ? (
-                        <img src={row.icon_url} alt="" />
-                      ) : (
-                        <Store />
-                      )}
+                      {row.icon_url ? <img src={row.icon_url} alt="" /> : <Store />}
                     </span>
                     <span>
                       <strong>{row.store_name}</strong>
@@ -2449,26 +2294,17 @@ function ShopManagement({
                     </span>
                     <span>{row.category || "Not specified"}</span>
                     <span>{shopLocation(row)}</span>
-                    <span
-                      className="store-strikes"
-                      aria-label={`${strikes} of 3 strikes`}
-                    >
+                    <span className="store-strikes" aria-label={`${strikes} of 3 strikes`}>
                       {[1, 2, 3].map((position) => (
-                        <X
-                          className={position <= strikes ? "active" : ""}
-                          key={position}
-                        />
+                        <X className={position <= strikes ? "active" : ""} key={position} />
                       ))}
                     </span>
                     <span className="store-approval-cell">
-                      <Pill tone={toneFor(row.status)}>
-                        {label(row.status)}
-                      </Pill>
+                      <Pill tone={toneFor(row.status)}>{label(row.status)}</Pill>
                       <small>
                         {row.approved_at
                           ? `Approved ${date(row.approved_at)}`
-                          : row.status === "approved" ||
-                              row.status === "revoked"
+                          : row.status === "approved" || row.status === "revoked"
                             ? "Approval date not recorded"
                             : "Not yet approved"}
                       </small>
@@ -2496,18 +2332,14 @@ function ShopManagement({
                     tabIndex={0}
                     onClick={() => openStore(row)}
                     onKeyDown={(event) => {
-                      if (event.key === "Enter" || event.key === " ")
-                        openStore(row);
+                      if (event.key === "Enter" || event.key === " ") openStore(row);
                     }}
                   >
                     <header>
                       <div className="store-card-heading">
                         <div className="store-card-image">
                           {row.icon_url ? (
-                            <img
-                              src={row.icon_url}
-                              alt={`${row.store_name} shop icon`}
-                            />
+                            <img src={row.icon_url} alt={`${row.store_name} shop icon`} />
                           ) : (
                             <Store />
                           )}
@@ -2517,9 +2349,7 @@ function ShopManagement({
                           <small>{shortId(row.store_id!)}</small>
                         </div>
                       </div>
-                      <Pill tone={toneFor(row.status)}>
-                        {label(row.status)}
-                      </Pill>
+                      <Pill tone={toneFor(row.status)}>{label(row.status)}</Pill>
                     </header>
                     <dl>
                       <div>
@@ -2540,15 +2370,9 @@ function ShopManagement({
                       </div>
                       <div>
                         <dt>Strikes</dt>
-                        <dd
-                          className="store-strikes"
-                          aria-label={`${strikes} of 3 strikes`}
-                        >
+                        <dd className="store-strikes" aria-label={`${strikes} of 3 strikes`}>
                           {[1, 2, 3].map((position) => (
-                            <X
-                              className={position <= strikes ? "active" : ""}
-                              key={position}
-                            />
+                            <X className={position <= strikes ? "active" : ""} key={position} />
                           ))}
                         </dd>
                       </div>
@@ -2557,8 +2381,7 @@ function ShopManagement({
                         <dd>
                           {row.approved_at
                             ? date(row.approved_at)
-                            : row.status === "approved" ||
-                                row.status === "revoked"
+                            : row.status === "approved" || row.status === "revoked"
                               ? "Not recorded"
                               : "Not yet approved"}
                         </dd>
@@ -2623,13 +2446,12 @@ function ShopManagement({
               />
             </label>
             <small>
-              {strikeReason.trim().length}/500 characters · A minimum of 10
-              characters is required.
+              {strikeReason.trim().length}/500 characters · A minimum of 10 characters is required.
             </small>
             {number(strikeStore.strike_count) === 2 && (
               <p className="strike-revocation-warning">
-                <TriangleAlert /> This is the third strike. After it is
-                recorded, the store becomes eligible for approval revocation.
+                <TriangleAlert /> This is the third strike. After it is recorded, the store becomes
+                eligible for approval revocation.
               </p>
             )}
             <footer>
@@ -2676,11 +2498,7 @@ function MarketplaceControls({
 }) {
   return (
     <div className="marketplace-browser-toolbar">
-      <div
-        className="marketplace-scope-toggle"
-        role="group"
-        aria-label="Choose marketplace scope"
-      >
+      <div className="marketplace-scope-toggle" role="group" aria-label="Choose marketplace scope">
         <button
           type="button"
           className={scope === "shops" ? "active" : ""}
@@ -2701,15 +2519,9 @@ function MarketplaceControls({
       <SearchBar
         value={query}
         onChange={setQuery}
-        placeholder={
-          scope === "shops" ? "Search shops or owners…" : placeholder
-        }
+        placeholder={scope === "shops" ? "Search shops or owners…" : placeholder}
       />
-      <div
-        className="shop-view-toggle"
-        role="group"
-        aria-label="Choose view style"
-      >
+      <div className="shop-view-toggle" role="group" aria-label="Choose view style">
         <button
           type="button"
           className={view === "row" ? "active" : ""}
@@ -2756,12 +2568,7 @@ function MarketplaceShops({
   const shops = data.vendors.filter(
     (shop) =>
       shop.store_id &&
-      matches(query, [
-        shop.store_name,
-        shop.description,
-        shop.owner_name,
-        shop.email,
-      ]),
+      matches(query, [shop.store_name, shop.description, shop.owner_name, shop.email]),
   );
   if (!shops.length) return <Empty noun="shops" />;
   if (view === "card")
@@ -2770,9 +2577,7 @@ function MarketplaceShops({
         {shops.map((shop) => (
           <article className="marketplace-shop-card" key={shop.store_id}>
             <ShopIdentity shop={shop} />
-            <p>
-              {shop.description || "No shop description has been provided."}
-            </p>
+            <p>{shop.description || "No shop description has been provided."}</p>
             <footer>
               <span>Shop owner</span>
               <strong>{shop.owner_name}</strong>
@@ -2791,9 +2596,7 @@ function MarketplaceShops({
       {shops.map((shop) => (
         <div className="admin-tr" key={shop.store_id}>
           <ShopIdentity shop={shop} />
-          <span>
-            {shop.description || "No shop description has been provided."}
-          </span>
+          <span>{shop.description || "No shop description has been provided."}</span>
           <span>
             <strong>{shop.owner_name}</strong>
           </span>
@@ -2831,9 +2634,7 @@ function MarketplaceEntryCard({
 function Products({ data, query, setQuery }: SearchProps) {
   const [scope, setScope] = useState<MarketplaceScope>("shops");
   const [view, setView] = useState<ShopView>("card");
-  const rows = data.products.filter((row) =>
-    matches(query, Object.values(row)),
-  );
+  const rows = data.products.filter((row) => matches(query, Object.values(row)));
   return (
     <>
       <Heading
@@ -2843,11 +2644,7 @@ function Products({ data, query, setQuery }: SearchProps) {
         icon={<Package />}
       />
       <div className="admin-stats three">
-        <Stat
-          label="All products"
-          value={data.overview.products}
-          icon={<Package />}
-        />
+        <Stat label="All products" value={data.overview.products} icon={<Package />} />
         <Stat
           label="Active products"
           value={data.overview.active_products}
@@ -2856,10 +2653,7 @@ function Products({ data, query, setQuery }: SearchProps) {
         />
         <Stat
           label="Other statuses"
-          value={
-            number(data.overview.products) -
-            number(data.overview.active_products)
-          }
+          value={number(data.overview.products) - number(data.overview.active_products)}
           icon={<Clock3 />}
           tone="gray"
         />
@@ -2898,16 +2692,10 @@ function Products({ data, query, setQuery }: SearchProps) {
                   <span>{row.category || "Not specified"}</span>
                   <span>
                     <strong>{money(row.price)}</strong>
-                    {row.original_price && (
-                      <small>Original {money(row.original_price)}</small>
-                    )}
+                    {row.original_price && <small>Original {money(row.original_price)}</small>}
                   </span>
-                  <span>
-                    {number(row.stock_quantity).toLocaleString("en-MY")}
-                  </span>
-                  <span>
-                    {row.expiry_date ? date(row.expiry_date) : "Not provided"}
-                  </span>
+                  <span>{number(row.stock_quantity).toLocaleString("en-MY")}</span>
+                  <span>{row.expiry_date ? date(row.expiry_date) : "Not provided"}</span>
                   <span>
                     <Pill tone={toneFor(row.status)}>{label(row.status)}</Pill>
                   </span>
@@ -2921,9 +2709,7 @@ function Products({ data, query, setQuery }: SearchProps) {
                   key={row.id}
                   title={row.product_name}
                   subtitle={row.store_name}
-                  status={
-                    <Pill tone={toneFor(row.status)}>{label(row.status)}</Pill>
-                  }
+                  status={<Pill tone={toneFor(row.status)}>{label(row.status)}</Pill>}
                 >
                   <div>
                     <dt>Category</dt>
@@ -2933,22 +2719,16 @@ function Products({ data, query, setQuery }: SearchProps) {
                     <dt>Price</dt>
                     <dd>
                       <strong>{money(row.price)}</strong>
-                      {row.original_price && (
-                        <small>Original {money(row.original_price)}</small>
-                      )}
+                      {row.original_price && <small>Original {money(row.original_price)}</small>}
                     </dd>
                   </div>
                   <div>
                     <dt>Stock</dt>
-                    <dd>
-                      {number(row.stock_quantity).toLocaleString("en-MY")}
-                    </dd>
+                    <dd>{number(row.stock_quantity).toLocaleString("en-MY")}</dd>
                   </div>
                   <div>
                     <dt>Expiry</dt>
-                    <dd>
-                      {row.expiry_date ? date(row.expiry_date) : "Not provided"}
-                    </dd>
+                    <dd>{row.expiry_date ? date(row.expiry_date) : "Not provided"}</dd>
                   </div>
                 </MarketplaceEntryCard>
               ))}
@@ -2978,11 +2758,7 @@ function Orders({ data, query, setQuery }: SearchProps) {
         icon={<ShoppingCart />}
       />
       <div className="admin-stats three">
-        <Stat
-          label="Orders today"
-          value={data.overview.orders_today}
-          icon={<ShoppingCart />}
-        />
+        <Stat label="Orders today" value={data.overview.orders_today} icon={<ShoppingCart />} />
         <article className="admin-stat">
           <div>
             <small>Gross order value</small>
@@ -2993,12 +2769,7 @@ function Orders({ data, query, setQuery }: SearchProps) {
             <DollarSign />
           </span>
         </article>
-        <Stat
-          label="In progress"
-          value={inProgress}
-          icon={<Clock3 />}
-          tone="amber"
-        />
+        <Stat label="In progress" value={inProgress} icon={<Clock3 />} tone="amber" />
       </div>
       <Card>
         <MarketplaceControls
@@ -3040,18 +2811,12 @@ function Orders({ data, query, setQuery }: SearchProps) {
                   </span>
                   <span>{dateTime(row.order_date)}</span>
                   <span>
-                    <Pill tone={toneFor(row.order_status)}>
-                      {label(row.order_status)}
-                    </Pill>
+                    <Pill tone={toneFor(row.order_status)}>{label(row.order_status)}</Pill>
                   </span>
                   <span>
-                    <Pill tone={toneFor(row.payment_status)}>
-                      {label(row.payment_status)}
-                    </Pill>
+                    <Pill tone={toneFor(row.payment_status)}>{label(row.payment_status)}</Pill>
                     <small>
-                      {row.payment_method
-                        ? label(row.payment_method)
-                        : "No payment record"}
+                      {row.payment_method ? label(row.payment_method) : "No payment record"}
                     </small>
                   </span>
                 </div>
@@ -3064,11 +2829,7 @@ function Orders({ data, query, setQuery }: SearchProps) {
                   key={row.id}
                   title={`Order ${shortId(row.id)}`}
                   subtitle={row.store_names || "No products recorded"}
-                  status={
-                    <Pill tone={toneFor(row.order_status)}>
-                      {label(row.order_status)}
-                    </Pill>
-                  }
+                  status={<Pill tone={toneFor(row.order_status)}>{label(row.order_status)}</Pill>}
                 >
                   <div>
                     <dt>Customer</dt>
@@ -3090,13 +2851,9 @@ function Orders({ data, query, setQuery }: SearchProps) {
                   <div>
                     <dt>Payment</dt>
                     <dd>
-                      <Pill tone={toneFor(row.payment_status)}>
-                        {label(row.payment_status)}
-                      </Pill>
+                      <Pill tone={toneFor(row.payment_status)}>{label(row.payment_status)}</Pill>
                       <small>
-                        {row.payment_method
-                          ? label(row.payment_method)
-                          : "No payment record"}
+                        {row.payment_method ? label(row.payment_method) : "No payment record"}
                       </small>
                     </dd>
                   </div>
@@ -3115,13 +2872,8 @@ function Orders({ data, query, setQuery }: SearchProps) {
 function Promotions({ data, query, setQuery }: SearchProps) {
   const [scope, setScope] = useState<MarketplaceScope>("shops");
   const [view, setView] = useState<ShopView>("card");
-  const rows = data.promotions.filter((row) =>
-    matches(query, Object.values(row)),
-  );
-  const redemptions = data.promotions.reduce(
-    (total, row) => total + number(row.redemptions),
-    0,
-  );
+  const rows = data.promotions.filter((row) => matches(query, Object.values(row)));
+  const redemptions = data.promotions.reduce((total, row) => total + number(row.redemptions), 0);
   return (
     <>
       <Heading
@@ -3131,23 +2883,14 @@ function Promotions({ data, query, setQuery }: SearchProps) {
         icon={<Tag />}
       />
       <div className="admin-stats three">
-        <Stat
-          label="All promotions"
-          value={data.promotions.length}
-          icon={<Tag />}
-        />
+        <Stat label="All promotions" value={data.promotions.length} icon={<Tag />} />
         <Stat
           label="Live now"
           value={data.overview.live_promotions}
           icon={<CircleCheck />}
           tone="green"
         />
-        <Stat
-          label="Recorded redemptions"
-          value={redemptions}
-          icon={<BarChart3 />}
-          tone="purple"
-        />
+        <Stat label="Recorded redemptions" value={redemptions} icon={<BarChart3 />} tone="purple" />
       </div>
       <Card>
         <MarketplaceControls
@@ -3207,9 +2950,7 @@ function Promotions({ data, query, setQuery }: SearchProps) {
                   key={row.id}
                   title={row.title}
                   subtitle={row.store_name || "Platform-wide"}
-                  status={
-                    <Pill tone={toneFor(row.status)}>{label(row.status)}</Pill>
-                  }
+                  status={<Pill tone={toneFor(row.status)}>{label(row.status)}</Pill>}
                 >
                   <div>
                     <dt>Code</dt>
@@ -3260,15 +3001,8 @@ type AdministratorProps = SearchProps & {
   }>;
 };
 
-function Administrators({
-  data,
-  query,
-  setQuery,
-  onInvite,
-}: AdministratorProps) {
-  const rows = data.administrators.filter((row) =>
-    matches(query, Object.values(row)),
-  );
+function Administrators({ data, query, setQuery, onInvite }: AdministratorProps) {
+  const rows = data.administrators.filter((row) => matches(query, Object.values(row)));
   const isSuperAdmin = data.account.access_level === "super_admin";
   const [inviteOpen, setInviteOpen] = useState(false);
   const [inviteEmail, setInviteEmail] = useState("");
@@ -3277,9 +3011,7 @@ function Administrators({
     tone: "success" | "error";
     text: string;
   }>();
-  const validInviteEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(
-    inviteEmail.trim(),
-  );
+  const validInviteEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(inviteEmail.trim());
   const submitInvite = async () => {
     if (!validInviteEmail) {
       setMessage({
@@ -3291,9 +3023,7 @@ function Administrators({
     setWorking("invite");
     setMessage(undefined);
     try {
-      const { administrator: invited, setupEmailSent } = await onInvite(
-        inviteEmail.trim(),
-      );
+      const { administrator: invited, setupEmailSent } = await onInvite(inviteEmail.trim());
       setInviteOpen(false);
       setInviteEmail("");
       setMessage(
@@ -3330,8 +3060,7 @@ function Administrators({
         />
         <div className="administrator-heading-actions">
           <strong>
-            Total Admins:{" "}
-            {number(data.overview.administrators).toLocaleString("en-MY")}
+            Total Admins: {number(data.overview.administrators).toLocaleString("en-MY")}
           </strong>
           {isSuperAdmin && (
             <button
@@ -3352,11 +3081,7 @@ function Administrators({
             {message.text}
           </p>
         )}
-        <SearchBar
-          value={query}
-          onChange={setQuery}
-          placeholder="Search by email, role, or ID…"
-        />
+        <SearchBar value={query} onChange={setQuery} placeholder="Search by email, role, or ID…" />
         {rows.length ? (
           <div className="admin-table administrators-table actual">
             <div className="admin-tr admin-th">
@@ -3379,11 +3104,7 @@ function Administrators({
                   </b>
                 </span>
                 <span>
-                  <Pill
-                    tone={
-                      row.access_level === "super_admin" ? "purple" : "blue"
-                    }
-                  >
+                  <Pill tone={row.access_level === "super_admin" ? "purple" : "blue"}>
                     {label(row.access_level)}
                   </Pill>
                 </span>
@@ -3419,8 +3140,8 @@ function Administrators({
               </button>
             </header>
             <p>
-              Create a standard EcoChef administrator account. The invited
-              person will receive an email to set their password.
+              Create a standard EcoChef administrator account. The invited person will receive an
+              email to set their password.
             </p>
             <label>
               Email address
@@ -3431,25 +3152,19 @@ function Administrators({
                 value={inviteEmail}
                 onChange={(event) => setInviteEmail(event.target.value)}
                 onKeyDown={(event) => {
-                  if (
-                    event.key === "Enter" &&
-                    validInviteEmail &&
-                    working !== "invite"
-                  )
+                  if (event.key === "Enter" && validInviteEmail && working !== "invite")
                     void submitInvite();
                 }}
                 placeholder="administrator@example.com"
               />
               {inviteEmail && !validInviteEmail && (
-                <small>
-                  Enter a complete email address, such as name@example.com.
-                </small>
+                <small>Enter a complete email address, such as name@example.com.</small>
               )}
             </label>
             <p className="administrator-invite-note">
-              <ShieldCheck /> Standard administrators can undo only their own
-              actions. Inviting administrators and undoing other administrators’
-              actions require the super admin access level.
+              <ShieldCheck /> Standard administrators can undo only their own actions. Inviting
+              administrators and undoing other administrators’ actions require the super admin
+              access level.
             </p>
             <footer>
               <button

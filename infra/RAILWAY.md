@@ -6,10 +6,10 @@ Railway hosts the API, web portal, PostgreSQL, and the Android APK download. The
 
 Create a Railway project from a Git repository containing this workspace. Add PostgreSQL, an API service, and a web service.
 
-| Service | Root directory | Config file |
-| --- | --- | --- |
-| API | `/apps/api` | `/apps/api/railway.json` |
-| Web | `/` | `/apps/web/railway.json` |
+| Service | Root directory | Config file              |
+| ------- | -------------- | ------------------------ |
+| API     | `/apps/api`    | `/apps/api/railway.json` |
+| Web     | `/`            | `/apps/web/railway.json` |
 
 For the web service, keep the repository root so pnpm can read the workspace packages. Set the service's Railway config file path to the value above. Generate public domains for API and web.
 

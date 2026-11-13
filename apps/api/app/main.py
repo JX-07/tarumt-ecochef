@@ -36,7 +36,11 @@ app.include_router(api_router, prefix=settings.api_prefix)
 
 
 def error_response(
-    error: str, message: str, status_code: int, details: object = None, headers: dict[str, str] | None = None
+    error: str,
+    message: str,
+    status_code: int,
+    details: object = None,
+    headers: dict[str, str] | None = None,
 ) -> JSONResponse:
     return JSONResponse(
         status_code=status_code,
@@ -53,8 +57,15 @@ def error_response(
 def cors_error_headers(request: Request) -> dict[str, str] | None:
     """Preserve CORS headers when an exception is handled before middleware can add them."""
     origin = request.headers.get("origin")
-    if origin and (origin in settings.cors_origins or re.fullmatch(r"http://(localhost|127\.0\.0\.1)(:\d+)?", origin)):
-        return {"Access-Control-Allow-Origin": origin, "Access-Control-Allow-Credentials": "true", "Vary": "Origin"}
+    if origin and (
+        origin in settings.cors_origins
+        or re.fullmatch(r"http://(localhost|127\.0\.0\.1)(:\d+)?", origin)
+    ):
+        return {
+            "Access-Control-Allow-Origin": origin,
+            "Access-Control-Allow-Credentials": "true",
+            "Vary": "Origin",
+        }
     return None
 
 
@@ -72,7 +83,9 @@ async def validation_exception_handler(_: Request, exc: RequestValidationError) 
 @app.exception_handler(StarletteHTTPException)
 async def http_exception_handler(request: Request, exc: StarletteHTTPException) -> JSONResponse:
     message = exc.detail if isinstance(exc.detail, str) else "Request failed."
-    return error_response("http_error", message, exc.status_code, headers=cors_error_headers(request))
+    return error_response(
+        "http_error", message, exc.status_code, headers=cors_error_headers(request)
+    )
 
 
 @app.exception_handler(Exception)

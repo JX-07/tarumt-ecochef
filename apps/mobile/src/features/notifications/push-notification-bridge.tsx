@@ -15,7 +15,6 @@ const Notifications: typeof import("expo-notifications") | null =
     ? null
     : require("expo-notifications");
 
-
 Notifications?.setNotificationHandler({
   handleNotification: async () => ({
     shouldPlaySound: true,
@@ -47,7 +46,9 @@ export function PushNotificationBridge() {
   useEffect(() => {
     if (!Notifications) return;
     const subscription = Notifications.addNotificationResponseReceivedListener(openResponse);
-    void Notifications.getLastNotificationResponseAsync().then(openResponse).catch(() => undefined);
+    void Notifications.getLastNotificationResponseAsync()
+      .then(openResponse)
+      .catch(() => undefined);
     return () => subscription.remove();
   }, []);
 
@@ -64,16 +65,24 @@ export function PushNotificationBridge() {
         });
       }
       const current = await Notifications.getPermissionsAsync();
-      const permission = current.status === "granted" ? current : await Notifications.requestPermissionsAsync();
+      const permission =
+        current.status === "granted" ? current : await Notifications.requestPermissionsAsync();
       if (permission.status !== "granted") return;
-      const projectId = process.env.EXPO_PUBLIC_EAS_PROJECT_ID
-        ?? Constants.easConfig?.projectId
-        ?? (Constants.expoConfig?.extra?.eas as { projectId?: string } | undefined)?.projectId;
+      const projectId =
+        process.env.EXPO_PUBLIC_EAS_PROJECT_ID ??
+        Constants.easConfig?.projectId ??
+        (Constants.expoConfig?.extra?.eas as { projectId?: string } | undefined)?.projectId;
       if (!projectId) return;
       const token = (await Notifications.getExpoPushTokenAsync({ projectId })).data;
-      await api.registerPushToken({ device_id: await deviceId(), expo_push_token: token, platform: Platform.OS as "android" | "ios" });
+      await api.registerPushToken({
+        device_id: await deviceId(),
+        expo_push_token: token,
+        platform: Platform.OS as "android" | "ios",
+      });
     })().catch(() => undefined);
-    return () => { active = false; };
+    return () => {
+      active = false;
+    };
   }, [api, user]);
 
   return null;

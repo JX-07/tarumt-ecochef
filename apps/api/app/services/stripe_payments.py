@@ -28,10 +28,14 @@ def expire_unpaid_checkout(checkout_session_id: str) -> None:
         if checkout.status == "expired":
             return
         if checkout.status != "open":
-            raise StripeOperationError("Your previous payment is being confirmed. Refresh your orders before paying again.")
+            raise StripeOperationError(
+                "Your previous payment is being confirmed. Refresh your orders before paying again."
+            )
         sessions.expire(checkout_session_id)
     except stripe.StripeError as error:
-        raise StripeOperationError("The previous checkout could not be closed. Please try again shortly.") from error
+        raise StripeOperationError(
+            "The previous checkout could not be closed. Please try again shortly."
+        ) from error
 
 
 @dataclass(frozen=True)
@@ -99,7 +103,9 @@ def create_checkout_session(
             {"idempotency_key": f"ecochef-checkout-{payment_id}"},
         )
     except stripe.StripeError as error:
-        raise StripeOperationError(error.user_message or "Stripe could not create the checkout.") from error
+        raise StripeOperationError(
+            error.user_message or "Stripe could not create the checkout."
+        ) from error
     if not checkout.client_secret:
         raise StripeOperationError("Stripe did not return a Checkout Form client secret.")
     return CheckoutSessionResult(id=checkout.id, client_secret=checkout.client_secret)
@@ -172,11 +178,7 @@ def create_sandbox_payment(
             {"idempotency_key": f"ecochef-sandbox-payment-{payment_id}"},
         )
     except stripe.StripeError as error:
-        stripe_message = (
-            error.user_message
-            or getattr(error, "message", None)
-            or str(error)
-        )
+        stripe_message = error.user_message or getattr(error, "message", None) or str(error)
         raise StripeOperationError(
             f"Stripe could not complete the sandbox payment: {stripe_message}"
         ) from error
@@ -270,7 +272,9 @@ def create_recipient_account(*, store_id: UUID, name: str, email: str) -> Any:
                 "EcoChef's current multi-shop payout configuration. Choose a Malaysia-compatible "
                 "payment and payout model before onboarding vendors."
             ) from error
-        raise StripeOperationError("Stripe could not create the vendor recipient account.") from error
+        raise StripeOperationError(
+            "Stripe could not create the vendor recipient account."
+        ) from error
 
 
 def retrieve_recipient_account(account_id: str) -> Any:

@@ -15,20 +15,89 @@ from pathlib import Path, PurePosixPath
 BASE = "https://dorc.ks3-cn-beijing.ksyun.com/data-set/2020Objects365%E6%95%B0%E6%8D%AE%E9%9B%86"
 
 INGREDIENTS = {
-    "Apple", "Other Fish", "Orange/Tangerine", "Tomato", "Green Vegetables", "Banana",
-    "Pumpkin", "Lemon", "Duck", "Broccoli", "Carrot", "Strawberry", "Pepper", "Grape",
-    "Potato", "Sausage", "Egg", "Cucumber", "Pear", "Onion", "Green beans", "Chicken",
-    "Watermelon", "Cabbage", "Peach", "Rice", "Pineapple", "Mango", "Corn", "Lettuce",
-    "Garlic", "Green Onion", "Nuts", "Plum", "Kiwi fruit", "Shrimp", "Cheese", "Cherry",
-    "Pasta", "Avocado", "Hamimelon", "Mushroom", "Eggplant", "Coconut", "Steak",
-    "Pomegranate", "Crab", "Meat ball", "Papaya", "Grapefruit", "Radish", "Red Cabbage",
-    "Asparagus", "Scallop", "Oyster", "Lobster", "Durian", "Okra",
+    "Apple",
+    "Other Fish",
+    "Orange/Tangerine",
+    "Tomato",
+    "Green Vegetables",
+    "Banana",
+    "Pumpkin",
+    "Lemon",
+    "Duck",
+    "Broccoli",
+    "Carrot",
+    "Strawberry",
+    "Pepper",
+    "Grape",
+    "Potato",
+    "Sausage",
+    "Egg",
+    "Cucumber",
+    "Pear",
+    "Onion",
+    "Green beans",
+    "Chicken",
+    "Watermelon",
+    "Cabbage",
+    "Peach",
+    "Rice",
+    "Pineapple",
+    "Mango",
+    "Corn",
+    "Lettuce",
+    "Garlic",
+    "Green Onion",
+    "Nuts",
+    "Plum",
+    "Kiwi fruit",
+    "Shrimp",
+    "Cheese",
+    "Cherry",
+    "Pasta",
+    "Avocado",
+    "Hamimelon",
+    "Mushroom",
+    "Eggplant",
+    "Coconut",
+    "Steak",
+    "Pomegranate",
+    "Crab",
+    "Meat ball",
+    "Papaya",
+    "Grapefruit",
+    "Radish",
+    "Red Cabbage",
+    "Asparagus",
+    "Scallop",
+    "Oyster",
+    "Lobster",
+    "Durian",
+    "Okra",
 }
 
 PREPARED_FOOD = {
-    "Bread", "Canned", "Cake", "Pizza", "Donut", "Dessert", "Pie", "Cookies", "Candy",
-    "Hamburger", "Ice cream", "French Fries", "Hot dog", "Sandwich", "Sushi", "Chips",
-    "Egg tart", "Baozi", "French", "Spring Rolls", "Noddles", "Dumpling",
+    "Bread",
+    "Canned",
+    "Cake",
+    "Pizza",
+    "Donut",
+    "Dessert",
+    "Pie",
+    "Cookies",
+    "Candy",
+    "Hamburger",
+    "Ice cream",
+    "French Fries",
+    "Hot dog",
+    "Sandwich",
+    "Sushi",
+    "Chips",
+    "Egg tart",
+    "Baozi",
+    "French",
+    "Spring Rolls",
+    "Noddles",
+    "Dumpling",
 }
 
 
@@ -70,7 +139,9 @@ def build_subset(
 
     categories = [category for category in data["categories"] if category["name"] in wanted_names]
     if not categories:
-        raise RuntimeError("None of the selected class names exist in this Objects365 annotation file")
+        raise RuntimeError(
+            "None of the selected class names exist in this Objects365 annotation file"
+        )
 
     old_to_new = {category["id"]: index for index, category in enumerate(categories)}
     selected_annotations = [a for a in data["annotations"] if a["category_id"] in old_to_new]
@@ -175,7 +246,12 @@ def main() -> None:
     source = (args.source_root or (args.root / "source")).resolve()
     for split in args.splits:
         build_subset(
-            args.root.resolve(), source, split, wanted, args.keep_downloads, args.plan_only
+            args.root.resolve(),
+            source,
+            split,
+            wanted,
+            args.keep_downloads,
+            args.plan_only,
         )
 
 

@@ -13,16 +13,14 @@ export default function RootLayout() {
   const [voucherBusy, setVoucherBusy] = useState(true);
   useEffect(() => {
     if (Platform.OS === "web") return;
-    void ScreenOrientation.lockAsync(
-      ScreenOrientation.OrientationLock.PORTRAIT_UP,
-    );
+    void ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP);
   }, []);
 
   return (
     <AuthProvider>
       <PushNotificationBridge />
-      <SharedVoucherPopup onVisibilityChange={setVoucherBusy}/>
-      <VerifiedPurchaseReviewPrompt blocked={voucherBusy}/>
+      <SharedVoucherPopup onVisibilityChange={setVoucherBusy} />
+      <VerifiedPurchaseReviewPrompt blocked={voucherBusy} />
       <StatusBar style="dark" />
       <Stack screenOptions={{ headerShown: false }}>
         <Stack.Screen name="marketplace" options={{ animation: "none" }} />

@@ -40,15 +40,26 @@ class VendorStoreInput(BaseModel):
                 open_hour, open_minute = map(int, str(hours.get("open", "")).split(":"))
                 close_hour, close_minute = map(int, str(hours.get("close", "")).split(":"))
             except (TypeError, ValueError):
-                raise ValueError("Invalid Operating Hour Set: enter a valid opening and closing time.")
-            if not (0 <= open_hour <= 23 and 0 <= close_hour <= 23 and 0 <= open_minute <= 59 and 0 <= close_minute <= 59):
+                raise ValueError(
+                    "Invalid Operating Hour Set: enter a valid opening and closing time."
+                )
+            if not (
+                0 <= open_hour <= 23
+                and 0 <= close_hour <= 23
+                and 0 <= open_minute <= 59
+                and 0 <= close_minute <= 59
+            ):
                 raise ValueError("Invalid Operating Hour Set: time is outside the 24-hour clock.")
             duration = close_hour * 60 + close_minute - open_hour * 60 - open_minute
             if duration <= 0:
-                raise ValueError("Invalid Operating Hour Set: closing time must be later than opening time.")
+                raise ValueError(
+                    "Invalid Operating Hour Set: closing time must be later than opening time."
+                )
             total_minutes += duration
         if total_minutes < 60:
-            raise ValueError("Invalid Operating Hour Set: Operation Hour cannot be less than 1 hour")
+            raise ValueError(
+                "Invalid Operating Hour Set: Operation Hour cannot be less than 1 hour"
+            )
         return self
 
 
@@ -133,7 +144,11 @@ class VendorProductInput(BaseModel):
     def validate_original_price(self) -> "VendorProductInput":
         if self.original_price is not None and self.original_price < self.price:
             raise ValueError("Original price must be greater than or equal to the listing price.")
-        if self.discount and self.discount.type == "fixed_amount" and self.discount.value >= self.price:
+        if (
+            self.discount
+            and self.discount.type == "fixed_amount"
+            and self.discount.value >= self.price
+        ):
             raise ValueError("Fixed discount must be less than the listing price.")
         return self
 
@@ -166,11 +181,15 @@ class VendorPromotionInput(BaseModel):
             raise ValueError("Enter a discount value.")
         if self.discount_type == "percentage" and self.value is not None and self.value >= 100:
             raise ValueError("Percentage discounts must be below 100.")
-        if self.discount_type == "buy_x_get_y" and (self.buy_quantity is None or self.gift_quantity is None):
+        if self.discount_type == "buy_x_get_y" and (
+            self.buy_quantity is None or self.gift_quantity is None
+        ):
             raise ValueError("Enter the purchased and free quantities.")
         if self.promotion_kind == "direct" and not self.product_ids:
             raise ValueError("Select at least one product for a direct promotion.")
-        if self.promotion_kind == "coupon" and (not self.code or self.discount_type == "buy_x_get_y"):
+        if self.promotion_kind == "coupon" and (
+            not self.code or self.discount_type == "buy_x_get_y"
+        ):
             raise ValueError("Coupons require a code and a percentage or fixed discount.")
         return self
 
@@ -206,4 +225,3 @@ class VendorStore(BaseModel):
 
 class VendorStoreList(BaseModel):
     stores: list[VendorStore]
-

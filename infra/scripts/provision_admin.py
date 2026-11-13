@@ -19,20 +19,26 @@ def provision(email: str, access_level: str, name: str | None = None) -> None:
         raise SystemExit("Administrator display name must contain between 2 and 100 characters.")
 
     with SessionLocal() as session:
-        existing = session.execute(
-            text(
-                """
+        existing = (
+            session.execute(
+                text(
+                    """
                 SELECT 'consumer' AS role FROM users WHERE lower(email) = :email
                 UNION ALL
                 SELECT 'business_owner' AS role FROM business_owners WHERE lower(email) = :email
                 UNION ALL
                 SELECT access_level AS role FROM administrators WHERE lower(email) = :email
                 """
-            ),
-            {"email": normalized_email},
-        ).scalars().all()
+                ),
+                {"email": normalized_email},
+            )
+            .scalars()
+            .all()
+        )
         if existing:
-            raise SystemExit(f"Account already exists in EcoChef with role/access level: {', '.join(existing)}")
+            raise SystemExit(
+                f"Account already exists in EcoChef with role/access level: {', '.join(existing)}"
+            )
 
     app = get_firebase_app()
     temporary_password: str | None = None
@@ -77,7 +83,9 @@ def provision(email: str, access_level: str, name: str | None = None) -> None:
     if temporary_password:
         print(f"Temporary password: {temporary_password}")
     else:
-        print("Firebase identity already existed; use its existing password or password reset flow.")
+        print(
+            "Firebase identity already existed; use its existing password or password reset flow."
+        )
 
 
 if __name__ == "__main__":

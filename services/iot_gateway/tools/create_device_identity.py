@@ -3,6 +3,7 @@
 Run from apps/api with its virtual environment so DATABASE_URL is loaded:
   .venv/Scripts/python ../../services/iot_gateway/tools/create_device_identity.py
 """
+
 from __future__ import annotations
 
 import argparse
@@ -30,17 +31,27 @@ def main() -> None:
     setup_code = secrets.token_hex(6).upper()
     setup_code_hash = hashlib.sha256(setup_code.encode()).hexdigest()
     with create_engine(get_settings().database_url).begin() as connection:
-        connection.execute(text("""
+        connection.execute(
+            text("""
             INSERT INTO sensor_provisioning_devices
                 (device_code, claim_secret_hash, setup_code_hash, ble_name)
             VALUES (:device_code, :secret_hash, :setup_code_hash, :ble_name)
-        """), {"device_code": device_code, "secret_hash": secret_hash, "setup_code_hash": setup_code_hash, "ble_name": ble_name})
+        """),
+            {
+                "device_code": device_code,
+                "secret_hash": secret_hash,
+                "setup_code_hash": setup_code_hash,
+                "ble_name": ble_name,
+            },
+        )
     payload = f"ecochef://sensor-setup?v=1&code={device_code}&secret={claim_secret}&ble={ble_name}"
     print(f"Device code: {device_code}")
     print(f"BLE name:    {ble_name}")
     print(f"Setup code:  {setup_code[:4]}-{setup_code[4:8]}-{setup_code[8:]}")
     print(f"QR payload:  {payload}")
-    print("Store the code/BLE name in firmware and print the QR payload as the device label. The secret is shown once.")
+    print(
+        "Store the code/BLE name in firmware and print the QR payload as the device label. The secret is shown once."
+    )
 
 
 if __name__ == "__main__":

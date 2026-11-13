@@ -42,6 +42,12 @@ api_router.include_router(chat_router, prefix="/chats", tags=["paid order chat"]
 
 api_router.include_router(reports_router, prefix="/reports", tags=["reports and moderation"])
 
-from app.api.v1.endpoints.vendor_feedback import router as vendor_feedback_router, moderator_router as product_feedback_moderator_router
+from app.api.v1.endpoints.vendor_feedback import (
+    router as vendor_feedback_router,
+    moderator_router as product_feedback_moderator_router,
+)
+
 api_router.include_router(vendor_feedback_router, prefix="/vendor", tags=["vendor feedback"])
-api_router.include_router(product_feedback_moderator_router, prefix="/reports", tags=["feedback moderation"])
+api_router.include_router(
+    product_feedback_moderator_router, prefix="/reports", tags=["feedback moderation"]
+)

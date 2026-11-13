@@ -20,21 +20,10 @@ import { useBottomSheetSlide } from "../../../shared/hooks/use-bottom-sheet-slid
 import { useAuth } from "../../auth/auth-provider";
 import { createMobileApi } from "../../../lib/api";
 import { AppMessageModal } from "../../../shared/components/app-message-modal";
-import {
-  PAGE_TOP_GAP,
-  PageHeader,
-} from "../../../shared/components/page-header";
-import type {
-  MealPlanCalendar,
-  MealPlanEntry,
-  MealSlot,
-  PlannedShoppingList,
-} from "../types";
+import { PAGE_TOP_GAP, PageHeader } from "../../../shared/components/page-header";
+import type { MealPlanCalendar, MealPlanEntry, MealSlot, PlannedShoppingList } from "../types";
 import { ShoppingListSheet, type ShoppingCompletionItem } from "../components/shopping-list-sheet";
-import {
-  displayMealTime,
-  TimePickerSheet,
-} from "../components/time-picker-sheet";
+import { displayMealTime, TimePickerSheet } from "../components/time-picker-sheet";
 import { DatePickerSheet } from "../components/date-picker-sheet";
 import { getCookedMeals, wasMealCooked } from "../cooking-history";
 import { ingredientEmojiFor } from "../../../shared/ingredient-icons";
@@ -55,9 +44,8 @@ const slots: {
   { value: "dessert", label: "Dessert", icon: "ice-cream-outline" },
   { value: "snacks", label: "Snack", icon: "nutrition-outline" },
 ];
-const runtimeProcess = (
-  globalThis as { process?: { env?: Record<string, string | undefined> } }
-).process;
+const runtimeProcess = (globalThis as { process?: { env?: Record<string, string | undefined> } })
+  .process;
 
 const iso = (date: Date) =>
   `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
@@ -87,10 +75,7 @@ export function MealPlanScreen() {
   const navigation = useNavigation();
   const params = useLocalSearchParams<{ date?: string; shopping?: string }>();
   const { user } = useAuth();
-  const api = useMemo(
-    () => createMobileApi(apiBaseUrl, () => user?.getIdToken()),
-    [user],
-  );
+  const api = useMemo(() => createMobileApi(apiBaseUrl, () => user?.getIdToken()), [user]);
   const [start, setStart] = useState(() => weekStart(new Date()));
   const [selected, setSelected] = useState(() => iso(new Date()));
   const [calendar, setCalendar] = useState<MealPlanCalendar>();
@@ -120,18 +105,13 @@ export function MealPlanScreen() {
     try {
       setCalendar(await api.getMyMealPlan<MealPlanCalendar>(iso(start)));
     } catch (next) {
-      setError(
-        next instanceof Error
-          ? next.message
-          : "Your meal plan could not be loaded.",
-      );
+      setError(next instanceof Error ? next.message : "Your meal plan could not be loaded.");
     } finally {
       setLoading(false);
     }
   }, [api, start]);
   const loadShopping = useCallback(
-    (from: string, to: string) =>
-      api.getMyShoppingList<PlannedShoppingList>(from, to),
+    (from: string, to: string) => api.getMyShoppingList<PlannedShoppingList>(from, to),
     [api],
   );
   useEffect(() => {
@@ -158,20 +138,23 @@ export function MealPlanScreen() {
       router.setParams({ shopping: "" });
     }
   }, [params.shopping]);
-  useEffect(() => registerShoppingReturn((returnDate) => {
-    if (returnDate && /^\d{4}-\d{2}-\d{2}$/.test(returnDate)) {
-      const date = parseDate(returnDate);
-      setSelected(returnDate);
-      setStart(weekStart(date));
-    }
-    setShoppingOpen(true);
-  }), []);
+  useEffect(
+    () =>
+      registerShoppingReturn((returnDate) => {
+        if (returnDate && /^\d{4}-\d{2}-\d{2}$/.test(returnDate)) {
+          const date = parseDate(returnDate);
+          setSelected(returnDate);
+          setStart(weekStart(date));
+        }
+        setShoppingOpen(true);
+      }),
+    [],
+  );
   const days = useMemo(
     () => Array.from({ length: 7 }, (_, index) => addDays(start, index)),
     [start],
   );
-  const items =
-    calendar?.items.filter((item) => item.scheduled_date === selected) ?? [];
+  const items = calendar?.items.filter((item) => item.scheduled_date === selected) ?? [];
   const visibleTimelineSlots = slots.filter(
     (slot) =>
       ["breakfast", "lunch", "dinner"].includes(slot.value) ||
@@ -295,10 +278,7 @@ export function MealPlanScreen() {
           <Pressable style={styles.arrow} onPress={() => changeWeek(-1)}>
             <Ionicons name="chevron-back" size={23} color={palette.c6f7d8d} />
           </Pressable>
-          <Pressable
-            style={styles.monthButton}
-            onPress={() => setWeekCalendarOpen(true)}
-          >
+          <Pressable style={styles.monthButton} onPress={() => setWeekCalendarOpen(true)}>
             <Text style={styles.month}>
               {start.toLocaleDateString(undefined, {
                 month: "short",
@@ -321,9 +301,7 @@ export function MealPlanScreen() {
           {days.map((day) => {
             const value = iso(day),
               active = value === selected,
-              count =
-                calendar?.items.filter((item) => item.scheduled_date === value)
-                  .length ?? 0;
+              count = calendar?.items.filter((item) => item.scheduled_date === value).length ?? 0;
             return (
               <Pressable
                 key={value}
@@ -333,9 +311,7 @@ export function MealPlanScreen() {
                 <Text style={[styles.dayName, active && styles.dayTextActive]}>
                   {day.toLocaleDateString(undefined, { weekday: "narrow" })}
                 </Text>
-                <Text
-                  style={[styles.dayNumber, active && styles.dayTextActive]}
-                >
+                <Text style={[styles.dayNumber, active && styles.dayTextActive]}>
                   {day.getDate()}
                 </Text>
                 {count > 0 && (
@@ -349,7 +325,10 @@ export function MealPlanScreen() {
         </View>
       </View>
       <ScrollView
-        contentContainerStyle={[styles.content, { paddingBottom: Math.max(insets.bottom + 105, 120) }]}
+        contentContainerStyle={[
+          styles.content,
+          { paddingBottom: Math.max(insets.bottom + 105, 120) },
+        ]}
         showsVerticalScrollIndicator={false}
       >
         {loading ? (
@@ -394,10 +373,7 @@ export function MealPlanScreen() {
                   tint={palette.cfff1e7}
                 />
               </View>
-              <Pressable
-                style={styles.shoppingSummary}
-                onPress={() => setShoppingOpen(true)}
-              >
+              <Pressable style={styles.shoppingSummary} onPress={() => setShoppingOpen(true)}>
                 <Ionicons name="basket-outline" size={15} color={GREEN} />
                 <Text style={styles.shoppingSummaryText}>
                   {dayShopping
@@ -412,112 +388,99 @@ export function MealPlanScreen() {
               <Text style={styles.orderHint}>Earliest to latest</Text>
             </View>
             {timelineSlots.map((slot, index, visibleSlots) => {
-                const slotItems = items.filter(
-                  (item) => item.meal_slot === slot.value,
-                );
-                return (
-                  <View key={slot.value} style={styles.timelineRow}>
-                    <View style={styles.timeColumn}>
-                      <Text style={styles.timelineTime}>
-                        {slotItems[0]?.scheduled_time
-                          ? displayMealTime(slotItems[0].scheduled_time)
-                          : "--:--"}
-                      </Text>
-                      <View style={styles.timelineDot} />
-                      {index < visibleSlots.length - 1 && (
-                        <View style={styles.timelineLine} />
-                      )}
-                    </View>
-                    <View style={styles.timelineBody}>
-                      <Text style={styles.slotTitle}>{slot.label}</Text>
-                      {slotItems.length ? (
-                        slotItems.map((item) => (
-                          <Pressable
-                            key={item.id}
-                            style={styles.card}
-                            onPress={() =>
-                              router.push({
-                                pathname: "/recipes/[recipeId]",
-                                params: { recipeId: item.recipe_id },
-                              })
-                            }
-                          >
-                            {item.image_url ? (
-                              <Image
-                                source={{ uri: item.image_url }}
-                                style={styles.image}
-                              />
-                            ) : (
-                              <View style={styles.imageFallback}>
-                                <Text style={styles.food}>🍽️</Text>
-                              </View>
-                            )}
-                            <View style={styles.cardBody}>
-                              {item.shared_group_id ? <Text style={[styles.metaText,{color:colors.primaryStrong}]}>Group Schedule · Added by {item.added_by_name ?? "group member"}</Text> : null}
-                              {item.shared_group_id && item.shared_group_name ? <Text style={styles.metaText}>From {item.shared_group_name}</Text> : null}
-                              <Text style={styles.cardTitle} numberOfLines={2}>
-                                {item.title}
-                              </Text>
-                              <Text style={styles.metaText}>
-                                {item.total_time} min
-                              </Text>
-                            </View>
-                            <Pressable
-                              style={styles.cookAction}
-                              onPress={(event) => {
-                                event.stopPropagation();
-                                router.push({
-                                  pathname: "/recipes/[recipeId]/cook",
-                                  params: {
-                                    recipeId: item.recipe_id,
-                                    plannedDate: item.scheduled_date,
-                                  },
-                                });
-                              }}
-                            >
-                              <Text style={styles.cookActionText}>
-                                {wasMealCooked(
-                                  cooked,
-                                  item.recipe_id,
-                                  item.scheduled_date,
-                                )
-                                  ? "Cook again"
-                                  : "Cook now"}
-                              </Text>
-                            </Pressable>
-                            <Pressable
-                              disabled={item.can_edit === false}
-                              accessibilityElementsHidden={item.can_edit === false}
-                              accessibilityLabel={`Edit ${item.title}`}
-                              style={[styles.more,item.can_edit === false && {display:"none"}]}
-                              onPress={(event) => {
-                                event.stopPropagation();
-                                openEdit(item);
-                              }}
-                            >
-                              <Ionicons
-                                name="pencil-outline"
-                                size={17}
-                                color={palette.ca4acb5}
-                              />
-                            </Pressable>
-                          </Pressable>
-                        ))
-                      ) : (
-                        <Pressable
-                          style={styles.quickAdd}
-                          onPress={() => router.push("/(tabs)/recipes")}
-                        >
-                          <Ionicons name="add" size={17} color={palette.c95a0af} />
-                          <Text style={styles.quickAddText}>
-                            Quick Add · {slot.label}
-                          </Text>
-                        </Pressable>
-                      )}
-                    </View>
+              const slotItems = items.filter((item) => item.meal_slot === slot.value);
+              return (
+                <View key={slot.value} style={styles.timelineRow}>
+                  <View style={styles.timeColumn}>
+                    <Text style={styles.timelineTime}>
+                      {slotItems[0]?.scheduled_time
+                        ? displayMealTime(slotItems[0].scheduled_time)
+                        : "--:--"}
+                    </Text>
+                    <View style={styles.timelineDot} />
+                    {index < visibleSlots.length - 1 && <View style={styles.timelineLine} />}
                   </View>
-                );
-              })}
+                  <View style={styles.timelineBody}>
+                    <Text style={styles.slotTitle}>{slot.label}</Text>
+                    {slotItems.length ? (
+                      slotItems.map((item) => (
+                        <Pressable
+                          key={item.id}
+                          style={styles.card}
+                          onPress={() =>
+                            router.push({
+                              pathname: "/recipes/[recipeId]",
+                              params: { recipeId: item.recipe_id },
+                            })
+                          }
+                        >
+                          {item.image_url ? (
+                            <Image source={{ uri: item.image_url }} style={styles.image} />
+                          ) : (
+                            <View style={styles.imageFallback}>
+                              <Text style={styles.food}>🍽️</Text>
+                            </View>
+                          )}
+                          <View style={styles.cardBody}>
+                            {item.shared_group_id ? (
+                              <Text style={[styles.metaText, { color: colors.primaryStrong }]}>
+                                Group Schedule · Added by {item.added_by_name ?? "group member"}
+                              </Text>
+                            ) : null}
+                            {item.shared_group_id && item.shared_group_name ? (
+                              <Text style={styles.metaText}>From {item.shared_group_name}</Text>
+                            ) : null}
+                            <Text style={styles.cardTitle} numberOfLines={2}>
+                              {item.title}
+                            </Text>
+                            <Text style={styles.metaText}>{item.total_time} min</Text>
+                          </View>
+                          <Pressable
+                            style={styles.cookAction}
+                            onPress={(event) => {
+                              event.stopPropagation();
+                              router.push({
+                                pathname: "/recipes/[recipeId]/cook",
+                                params: {
+                                  recipeId: item.recipe_id,
+                                  plannedDate: item.scheduled_date,
+                                },
+                              });
+                            }}
+                          >
+                            <Text style={styles.cookActionText}>
+                              {wasMealCooked(cooked, item.recipe_id, item.scheduled_date)
+                                ? "Cook again"
+                                : "Cook now"}
+                            </Text>
+                          </Pressable>
+                          <Pressable
+                            disabled={item.can_edit === false}
+                            accessibilityElementsHidden={item.can_edit === false}
+                            accessibilityLabel={`Edit ${item.title}`}
+                            style={[styles.more, item.can_edit === false && { display: "none" }]}
+                            onPress={(event) => {
+                              event.stopPropagation();
+                              openEdit(item);
+                            }}
+                          >
+                            <Ionicons name="pencil-outline" size={17} color={palette.ca4acb5} />
+                          </Pressable>
+                        </Pressable>
+                      ))
+                    ) : (
+                      <Pressable
+                        style={styles.quickAdd}
+                        onPress={() => router.push("/(tabs)/recipes")}
+                      >
+                        <Ionicons name="add" size={17} color={palette.c95a0af} />
+                        <Text style={styles.quickAddText}>Quick Add · {slot.label}</Text>
+                      </Pressable>
+                    )}
+                  </View>
+                </View>
+              );
+            })}
           </>
         )}
       </ScrollView>
@@ -529,11 +492,7 @@ export function MealPlanScreen() {
       >
         <View style={styles.overlay}>
           <Animated.View
-            style={[
-              styles.sheet,
-              { paddingBottom: Math.max(insets.bottom, 16) },
-              editSheetMotion,
-            ]}
+            style={[styles.sheet, { paddingBottom: Math.max(insets.bottom, 16) }, editSheetMotion]}
           >
             <View style={styles.sheetHead}>
               <View>
@@ -542,18 +501,12 @@ export function MealPlanScreen() {
                   {editing?.title}
                 </Text>
               </View>
-              <Pressable
-                style={styles.close}
-                onPress={() => setEditing(undefined)}
-              >
+              <Pressable style={styles.close} onPress={() => setEditing(undefined)}>
                 <Ionicons name="close" size={19} color={palette.c5b6778} />
               </Pressable>
             </View>
             <Text style={styles.label}>DATE</Text>
-            <Pressable
-              style={editTimeStyles.input}
-              onPress={() => setEditCalendarOpen(true)}
-            >
+            <Pressable style={editTimeStyles.input} onPress={() => setEditCalendarOpen(true)}>
               <Text style={editTimeStyles.text}>{friendly(editDate)}</Text>
               <Ionicons name="calendar-outline" size={18} color={GREEN} />
             </Pressable>
@@ -562,17 +515,11 @@ export function MealPlanScreen() {
               {slots.map((slot) => (
                 <Pressable
                   key={slot.value}
-                  style={[
-                    styles.choice,
-                    editSlot === slot.value && styles.choiceActive,
-                  ]}
+                  style={[styles.choice, editSlot === slot.value && styles.choiceActive]}
                   onPress={() => setEditSlot(slot.value)}
                 >
                   <Text
-                    style={[
-                      styles.choiceText,
-                      editSlot === slot.value && styles.choiceTextActive,
-                    ]}
+                    style={[styles.choiceText, editSlot === slot.value && styles.choiceTextActive]}
                   >
                     {slot.label}
                   </Text>
@@ -580,16 +527,8 @@ export function MealPlanScreen() {
               ))}
             </View>
             <Text style={styles.label}>TIME (OPTIONAL)</Text>
-            <Pressable
-              style={editTimeStyles.input}
-              onPress={() => setEditTimeOpen(true)}
-            >
-              <Text
-                style={[
-                  editTimeStyles.text,
-                  !editTime && editTimeStyles.placeholder,
-                ]}
-              >
+            <Pressable style={editTimeStyles.input} onPress={() => setEditTimeOpen(true)}>
+              <Text style={[editTimeStyles.text, !editTime && editTimeStyles.placeholder]}>
                 {displayMealTime(editTime)}
               </Text>
               <Ionicons name="chevron-down" size={18} color={palette.c596779} />
@@ -603,14 +542,8 @@ export function MealPlanScreen() {
                 <Ionicons name="trash-outline" size={17} color={palette.cc64c55} />
                 <Text style={styles.deleteText}>Remove</Text>
               </Pressable>
-              <Pressable
-                disabled={saving}
-                style={styles.save}
-                onPress={() => void saveEdit()}
-              >
-                <Text style={styles.saveText}>
-                  {saving ? "Saving…" : "Save changes"}
-                </Text>
+              <Pressable disabled={saving} style={styles.save} onPress={() => void saveEdit()}>
+                <Text style={styles.saveText}>{saving ? "Saving…" : "Save changes"}</Text>
               </Pressable>
             </View>
           </Animated.View>
@@ -631,16 +564,10 @@ export function MealPlanScreen() {
             <Text style={confirmStyles.copy}>
               {editing?.title} will be removed from your meal plan.
             </Text>
-            <Pressable
-              style={confirmStyles.remove}
-              onPress={() => void remove()}
-            >
+            <Pressable style={confirmStyles.remove} onPress={() => void remove()}>
               <Text style={confirmStyles.removeText}>Remove meal</Text>
             </Pressable>
-            <Pressable
-              style={confirmStyles.cancel}
-              onPress={() => setRemoveConfirm(false)}
-            >
+            <Pressable style={confirmStyles.cancel} onPress={() => setRemoveConfirm(false)}>
               <Text style={confirmStyles.cancelText}>Keep meal</Text>
             </Pressable>
           </View>
@@ -679,14 +606,16 @@ export function MealPlanScreen() {
         selectedDate={selected}
         load={loadShopping}
         onComplete={async (completed: ShoppingCompletionItem[]) => {
-          await api.addInventoryItems(completed.map((item) => ({
+          await api.addInventoryItems(
+            completed.map((item) => ({
               name: item.name,
               quantity: item.quantity,
               expiry_date: item.expiry_date,
               category: "Shopping list",
               source: "shopping",
               icon: ingredientEmojiFor(item.name),
-            })));
+            })),
+          );
         }}
         onClose={() => setShoppingOpen(false)}
         onMessage={(copy, tone = "info") => {
@@ -749,7 +678,11 @@ const styles = StyleSheet.create({
     borderRadius: 11,
     backgroundColor: GREEN,
   },
-  listButtonText: { color: palette.cfff, fontSize: typography.mobile.rawSize.s11, fontWeight: typography.weight.black },
+  listButtonText: {
+    color: palette.cfff,
+    fontSize: typography.mobile.rawSize.s11,
+    fontWeight: typography.weight.black,
+  },
   weekHead: {
     flexDirection: "row",
     alignItems: "center",
@@ -763,7 +696,11 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  month: { color: palette.c28384a, fontSize: typography.mobile.rawSize.s11, fontWeight: typography.weight.extrabold },
+  month: {
+    color: palette.c28384a,
+    fontSize: typography.mobile.rawSize.s11,
+    fontWeight: typography.weight.extrabold,
+  },
   monthButton: {
     minWidth: 190,
     height: 40,
@@ -787,7 +724,11 @@ const styles = StyleSheet.create({
     backgroundColor: palette.cfff,
   },
   dayActive: { borderColor: GREEN, backgroundColor: GREEN },
-  dayName: { color: palette.c8a94a3, fontSize: typography.mobile.rawSize.s8, fontWeight: typography.weight.extrabold },
+  dayName: {
+    color: palette.c8a94a3,
+    fontSize: typography.mobile.rawSize.s8,
+    fontWeight: typography.weight.extrabold,
+  },
   dayNumber: {
     marginTop: 3,
     color: palette.c26374b,
@@ -828,7 +769,11 @@ const styles = StyleSheet.create({
     padding: 7,
     borderRadius: 12,
   },
-  planMetricValue: { marginTop: 4, fontSize: typography.mobile.rawSize.s14, fontWeight: typography.weight.black },
+  planMetricValue: {
+    marginTop: 4,
+    fontSize: typography.mobile.rawSize.s14,
+    fontWeight: typography.weight.black,
+  },
   planMetricLabel: {
     marginTop: 2,
     color: palette.c7e8996,
@@ -860,7 +805,11 @@ const styles = StyleSheet.create({
   orderHint: { color: palette.ca5adb5, fontSize: typography.mobile.rawSize.s8 },
   timelineRow: { flexDirection: "row", minHeight: 87 },
   timeColumn: { width: 52, alignItems: "center", paddingTop: 24 },
-  timelineTime: { color: palette.c909aa7, fontSize: typography.mobile.rawSize.s8, fontWeight: typography.weight.bold },
+  timelineTime: {
+    color: palette.c909aa7,
+    fontSize: typography.mobile.rawSize.s8,
+    fontWeight: typography.weight.bold,
+  },
   timelineDot: {
     position: "absolute",
     right: 0,
@@ -907,7 +856,11 @@ const styles = StyleSheet.create({
   },
   food: { fontSize: typography.mobile.rawSize.s21 },
   cardBody: { flex: 1, paddingHorizontal: 10 },
-  cardTitle: { color: palette.c1d3044, fontSize: typography.mobile.rawSize.s12, fontWeight: typography.weight.extrabold },
+  cardTitle: {
+    color: palette.c1d3044,
+    fontSize: typography.mobile.rawSize.s12,
+    fontWeight: typography.weight.extrabold,
+  },
   meta: { flexDirection: "row", alignItems: "center", gap: 5, marginTop: 7 },
   metaText: { marginTop: 3, color: palette.c8a95a2, fontSize: typography.mobile.rawSize.s9 },
   more: {
@@ -928,7 +881,11 @@ const styles = StyleSheet.create({
     borderRadius: 9,
     backgroundColor: palette.ce8f7ed,
   },
-  cookActionText: { color: palette.c118447, fontSize: typography.mobile.rawSize.s8, fontWeight: typography.weight.black },
+  cookActionText: {
+    color: palette.c118447,
+    fontSize: typography.mobile.rawSize.s8,
+    fontWeight: typography.weight.black,
+  },
   quickAdd: {
     height: 53,
     flexDirection: "row",
@@ -941,7 +898,11 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     backgroundColor: palette.cfff,
   },
-  quickAddText: { color: palette.c919caa, fontSize: typography.mobile.rawSize.s11, fontWeight: typography.weight.bold },
+  quickAddText: {
+    color: palette.c919caa,
+    fontSize: typography.mobile.rawSize.s11,
+    fontWeight: typography.weight.bold,
+  },
   state: { alignItems: "center", paddingVertical: 50 },
   stateTitle: {
     marginTop: 12,
@@ -979,8 +940,17 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
   },
-  sheetTitle: { color: palette.c17283c, fontSize: typography.mobile.rawSize.s20, fontWeight: typography.weight.extrabold },
-  sheetCopy: { maxWidth: 270, marginTop: 4, color: palette.c7c8795, fontSize: typography.mobile.rawSize.s12 },
+  sheetTitle: {
+    color: palette.c17283c,
+    fontSize: typography.mobile.rawSize.s20,
+    fontWeight: typography.weight.extrabold,
+  },
+  sheetCopy: {
+    maxWidth: 270,
+    marginTop: 4,
+    color: palette.c7c8795,
+    fontSize: typography.mobile.rawSize.s12,
+  },
   close: {
     width: 35,
     height: 35,
@@ -1016,7 +986,11 @@ const styles = StyleSheet.create({
     backgroundColor: palette.cfafbfc,
   },
   choiceActive: { borderColor: GREEN, backgroundColor: palette.ceaf8ef },
-  choiceText: { color: palette.c657184, fontSize: typography.mobile.rawSize.s11, fontWeight: typography.weight.bold },
+  choiceText: {
+    color: palette.c657184,
+    fontSize: typography.mobile.rawSize.s11,
+    fontWeight: typography.weight.bold,
+  },
   choiceTextActive: { color: palette.c098e45 },
   sheetActions: { flexDirection: "row", gap: 10, marginTop: 24 },
   delete: {
@@ -1078,8 +1052,18 @@ const confirmStyles = StyleSheet.create({
     borderRadius: 26,
     backgroundColor: palette.cfff0f1,
   },
-  title: { marginTop: 14, color: palette.c263a31, fontSize: typography.mobile.rawSize.s19, fontWeight: typography.weight.black },
-  copy: { marginTop: 7, color: palette.c718078, fontSize: typography.mobile.rawSize.s12, textAlign: "center" },
+  title: {
+    marginTop: 14,
+    color: palette.c263a31,
+    fontSize: typography.mobile.rawSize.s19,
+    fontWeight: typography.weight.black,
+  },
+  copy: {
+    marginTop: 7,
+    color: palette.c718078,
+    fontSize: typography.mobile.rawSize.s12,
+    textAlign: "center",
+  },
   remove: {
     width: "100%",
     alignItems: "center",

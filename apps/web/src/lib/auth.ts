@@ -34,7 +34,9 @@ export const signInWithEmail = async (
     firebaseAuth,
     role === "administrator"
       ? browserLocalPersistence
-      : rememberMe ? browserLocalPersistence : browserSessionPersistence,
+      : rememberMe
+        ? browserLocalPersistence
+        : browserSessionPersistence,
   );
   const credential = await signInWithEmailAndPassword(firebaseAuth, email, password);
   return credential.user;
@@ -45,10 +47,13 @@ export const sendPasswordReset = (email: string): Promise<void> =>
 
 export const signOutCurrentUser = (): Promise<void> => signOut(firebaseAuth);
 
-export const getCurrentFirebaseIdToken = async (forceRefresh = false): Promise<string | undefined> => {
+export const getCurrentFirebaseIdToken = async (
+  forceRefresh = false,
+): Promise<string | undefined> => {
   // Firebase restores persisted browser sessions asynchronously. Waiting here
   // prevents the first API request after a refresh from being sent without a token.
   await firebaseAuth.authStateReady();
-  if (!firebaseAuth.currentUser) throw new Error("Your session has ended. Please sign in again before continuing.");
+  if (!firebaseAuth.currentUser)
+    throw new Error("Your session has ended. Please sign in again before continuing.");
   return firebaseAuth.currentUser.getIdToken(forceRefresh);
 };

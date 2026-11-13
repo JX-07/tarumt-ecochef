@@ -1,10 +1,11 @@
 import { NextRequest } from "next/server";
 
-const apiBaseUrl = () => (
-  process.env.ECOCHEF_API_INTERNAL_URL
-  ?? process.env.NEXT_PUBLIC_API_URL
-  ?? "http://127.0.0.1:8000/api/v1"
-).replace(/\/$/, "");
+const apiBaseUrl = () =>
+  (
+    process.env.ECOCHEF_API_INTERNAL_URL ??
+    process.env.NEXT_PUBLIC_API_URL ??
+    "http://127.0.0.1:8000/api/v1"
+  ).replace(/\/$/, "");
 
 async function proxy(request: NextRequest, context: { params: Promise<{ path: string[] }> }) {
   const { path } = await context.params;
@@ -18,7 +19,10 @@ async function proxy(request: NextRequest, context: { params: Promise<{ path: st
     const response = await fetch(`${apiBaseUrl()}/${path.join("/")}${request.nextUrl.search}`, {
       method: request.method,
       headers,
-      body: request.method === "GET" || request.method === "HEAD" ? undefined : await request.arrayBuffer(),
+      body:
+        request.method === "GET" || request.method === "HEAD"
+          ? undefined
+          : await request.arrayBuffer(),
       cache: "no-store",
     });
     const responseHeaders = new Headers();
