@@ -15,6 +15,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "../src/features/auth/auth-provider";
 import { createMobileApi } from "../src/lib/api";
 import { Text } from "../src/shared/components/themed-text";
+import { PAGE_TOP_GAP } from "../src/shared/components/page-header";
 
 type Report = {
   id: string;
@@ -28,7 +29,6 @@ type Report = {
   resolution_note?: string;
   resolved_at?: string;
 };
-const runtime = (globalThis as { process?: { env?: Record<string, string | undefined> } }).process;
 const label = (value: string) => value.replaceAll("_", " ");
 
 export default function ReportsScreen() {
@@ -85,23 +85,27 @@ export default function ReportsScreen() {
         }
         contentContainerStyle={[
           styles.content,
-          { paddingTop: insets.top + spacing[5], paddingBottom: insets.bottom + spacing[8] },
+          { paddingTop: insets.top + PAGE_TOP_GAP, paddingBottom: insets.bottom + spacing[8] },
         ]}
       >
         <View style={styles.header}>
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel="Back"
-            onPress={() => router.back()}
+            accessibilityLabel="Back to purchase history"
+            style={styles.back}
+            onPress={() =>
+              router.canGoBack()
+                ? router.back()
+                : router.replace("/account?section=purchases" as never)
+            }
           >
-            <Ionicons name="chevron-back" size={spacing[6]} color={colors.text} />
+            <Ionicons name="chevron-back" size={22} color={colors.textMuted} />
           </Pressable>
-          <Text style={styles.title}>Your reports</Text>
+          <View style={styles.headerCopy}>
+            <Text style={styles.title}>Report & Outcome</Text>
+            <Text style={styles.subtitle}>Follow the reports you have submitted</Text>
+          </View>
         </View>
-        <Text style={styles.copy}>
-          Follow the review of recipes and shops you have reported. Each decision includes the
-          moderator’s explanation.
-        </Text>
         {error ? (
           <Pressable accessibilityRole="button" onPress={() => void refresh()}>
             <Text style={styles.error}>{error} Tap to retry.</Text>
@@ -153,6 +157,14 @@ export default function ReportsScreen() {
                 <View style={styles.outcome}>
                   <Text style={styles.name}>Moderator’s explanation</Text>
                   <Text style={styles.copy}>{report.resolution_note}</Text>
+                  {report.resolved_at ? (
+                    <Text style={styles.caption}>
+                      Replied{" "}
+                      {new Date(report.resolved_at).toLocaleString("en-MY", {
+                        timeZone: "Asia/Kuala_Lumpur",
+                      })}
+                    </Text>
+                  ) : null}
                 </View>
               ) : null}
             </View>
@@ -166,12 +178,22 @@ export default function ReportsScreen() {
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.consumerCanvas },
   content: { padding: spacing[5], gap: spacing[4] },
-  header: { flexDirection: "row", alignItems: "center", gap: spacing[3] },
+  header: { flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 18 },
+  back: {
+    width: 32,
+    height: 32,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 16,
+    backgroundColor: colors.surfaceMuted,
+  },
+  headerCopy: { flex: 1 },
   title: {
-    fontSize: typography.mobile.size.pageTitle,
+    fontSize: typography.mobile.rawSize.s21,
     fontWeight: typography.weight.bold,
     color: colors.text,
   },
+  subtitle: { marginTop: 1, color: colors.textMuted, fontSize: typography.mobile.rawSize.s11 },
   copy: {
     fontSize: typography.mobile.size.bodyInteraction,
     color: colors.textMuted,

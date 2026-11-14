@@ -1201,7 +1201,8 @@ def _product_reviews(
         )
         if reviews
         else Decimal(0),
-        can_review=not locked
+        can_review=state is None
+        and not locked
         and _completed_product_purchase(session, user_id, product_id) is not None,
         my_review=next((review for review in reviews if review.user_id == user_id), None),
     )
@@ -1229,16 +1230,14 @@ def write_product_review(
             403, "You can rate only an item you purchased after that paid order is completed."
         )
     state = _product_review_state(session, product_id, current_user.id, lock=True)
-    if state and (state.removed_at is not None or state.status is not None):
-        raise HTTPException(
-            409, "This feedback is under moderation or has a decision and cannot be changed."
-        )
-    session.execute(
+    if state is not None:
+        raise HTTPException(409, "You have already rated this item. Ratings cannot be edited.")
+    inserted = session.execute(
         text("""
         INSERT INTO product_reviews(user_id, product_id, store_id, order_id, rating, comment)
         VALUES (:user_id,:product_id,:store_id,:order_id,:rating,:comment)
-        ON CONFLICT (user_id, product_id) DO UPDATE
-        SET rating=EXCLUDED.rating, comment=EXCLUDED.comment, updated_at=now()
+        ON CONFLICT (user_id, product_id) DO NOTHING
+        RETURNING id
     """),
         {
             "user_id": current_user.id,
@@ -1248,7 +1247,9 @@ def write_product_review(
             "rating": request.rating,
             "comment": request.comment,
         },
-    )
+    ).scalar_one_or_none()
+    if inserted is None:
+        raise HTTPException(409, "You have already rated this item. Ratings cannot be edited.")
     session.commit()
     return _product_reviews(session, product_id, current_user.id)
 
@@ -1264,7 +1265,8 @@ def product_review_prompts(
         session.execute(
             text("""
         SELECT DISTINCT ON (item.product_id) item.product_id, item.product_name,
-               item.store_id, store.store_name, o.id AS order_id,
+               item.store_id, store.store_name, COALESCE(review.order_id,o.id) AS order_id,
+               o.order_date AS purchased_at, review.date_submitted AS rated_at,
                (review.id IS NOT NULL) AS reviewed, review.rating, review.comment
         FROM orders o JOIN carts cart ON cart.id=o.cart_id
         JOIN order_items item ON item.order_id=o.id

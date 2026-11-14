@@ -337,15 +337,19 @@ class RecipeCatalogueQuery(BaseModel):
 class RecipeSafetyProfile(BaseModel):
     allergies: list[str] = Field(default_factory=list)
     dietary_restrictions: list[str] = Field(default_factory=list)
+    food_dislikes: list[str] = Field(default_factory=list)
 
-    @field_validator("allergies", "dietary_restrictions")
+    @field_validator("allergies", "dietary_restrictions", "food_dislikes")
     @classmethod
     def normalize_terms(cls, values: list[str]) -> list[str]:
         return _clean_terms(values)
 
 
 def recipe_safety_warnings(
-    allergens: list[str], dietary_tags: list[str], profile: RecipeSafetyProfile
+    allergens: list[str],
+    dietary_tags: list[str],
+    profile: RecipeSafetyProfile,
+    ingredients: list[str] | None = None,
 ) -> list[str]:
     normalized_allergens = set(_clean_terms(allergens))
     matched = sorted(normalized_allergens.intersection(profile.allergies))
@@ -354,4 +358,8 @@ def recipe_safety_warnings(
     for restriction in profile.dietary_restrictions:
         if restriction not in suitable:
             warnings.append(f"Not confirmed suitable for {restriction}")
+    ingredient_names = _clean_terms(ingredients or [])
+    for dislike in profile.food_dislikes:
+        if any(dislike == name or dislike in name.split() for name in ingredient_names):
+            warnings.append(f"Contains disliked ingredient: {dislike}")
     return warnings

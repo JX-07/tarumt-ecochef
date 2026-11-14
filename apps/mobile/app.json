@@ -4,6 +4,7 @@
     "slug": "ecochef",
     "scheme": "ecochef",
     "orientation": "portrait",
+    "userInterfaceStyle": "light",
     "plugins": [
       "expo-router",
       [

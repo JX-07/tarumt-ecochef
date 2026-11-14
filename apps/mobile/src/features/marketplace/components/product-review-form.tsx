@@ -68,7 +68,7 @@ export function ProductReviewForm({
     };
   }, [api, productId]);
   const save = async () => {
-    if (!productId || !rating || !data?.can_review || saving) return;
+    if (!productId || !rating || !data?.can_review || data.my_review || saving) return;
     setSaving(true);
     setError(undefined);
     try {
@@ -118,7 +118,7 @@ export function ProductReviewForm({
           <ScrollView keyboardShouldPersistTaps="handled">
             <View style={styles.header}>
               <Text style={styles.title}>
-                {data?.my_review ? "Edit your product rating" : "Rate your purchased item"}
+                {data?.my_review ? "Your product rating" : "Rate your purchased item"}
               </Text>
               <Pressable disabled={saving} accessibilityLabel="Close rating" onPress={onClose}>
                 <Ionicons name="close" size={spacing[6]} color={colors.text} />
@@ -127,6 +127,25 @@ export function ProductReviewForm({
             <Text style={styles.name}>{productName}</Text>
             {loading ? (
               <ActivityIndicator color={colors.primary} />
+            ) : data?.my_review ? (
+              <View>
+                <View
+                  style={styles.stars}
+                  accessibilityLabel={`Your rating: ${data.my_review.rating} out of 5 stars`}
+                >
+                  {[1, 2, 3, 4, 5].map((value) => (
+                    <Ionicons
+                      key={value}
+                      name={value <= data.my_review!.rating ? "star" : "star-outline"}
+                      size={spacing[8]}
+                      color={colors.ratingStar}
+                    />
+                  ))}
+                </View>
+                {data.my_review.comment ? (
+                  <Text style={styles.help}>{data.my_review.comment}</Text>
+                ) : null}
+              </View>
             ) : data?.can_review ? (
               <>
                 <View style={styles.stars}>

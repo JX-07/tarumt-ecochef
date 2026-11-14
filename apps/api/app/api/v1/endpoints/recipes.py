@@ -349,7 +349,7 @@ def _profile(session: Session, user_id: UUID) -> RecipeSafetyProfile:
     row = (
         session.execute(
             text(
-                "SELECT COALESCE(allergies, '{}') AS allergies, COALESCE(dietary_restrictions, '{}') AS dietary_restrictions FROM user_preferences WHERE user_id = :user_id"
+                "SELECT COALESCE(allergies, '{}') AS allergies, COALESCE(dietary_restrictions, '{}') AS dietary_restrictions, COALESCE(food_dislikes, '{}') AS food_dislikes FROM user_preferences WHERE user_id = :user_id"
             ),
             {"user_id": user_id},
         )
@@ -421,7 +421,20 @@ def _summary(
         allergen_tags=allergen_tags,
         average_rating=float(row.average_rating) if row.average_rating is not None else None,
         is_favourite=row.is_favourite,
-        safety_warnings=recipe_safety_warnings(allergen_tags, dietary_tags, profile),
+        safety_warnings=recipe_safety_warnings(
+            allergen_tags,
+            dietary_tags,
+            profile,
+            [
+                ingredient.name
+                for ingredient in session.execute(
+                    text(
+                        "SELECT ingredient.ingredient_name AS name FROM recipe_ingredients ri JOIN ingredients ingredient ON ingredient.id=ri.ingredient_id WHERE ri.recipe_id=:recipe_id"
+                    ),
+                    {"recipe_id": row.id},
+                ).all()
+            ],
+        ),
         is_owner=row.user_id == current_user_id,
         is_published=row.is_published,
         edit_log=_edit_logs(session, row.id) if row.user_id == current_user_id else [],

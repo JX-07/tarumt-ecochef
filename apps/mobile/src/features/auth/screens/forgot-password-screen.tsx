@@ -1,9 +1,7 @@
-import { apiBaseUrl } from "../../../lib/api-url";
 import { Text, TextInput } from "../../../shared/components/themed-text";
 import { colors, palette, typography } from "@ecochef/design-tokens";
 import { Ionicons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
-import { sendPasswordResetEmail } from "firebase/auth";
 import { useState } from "react";
 import {
   Image,
@@ -15,22 +13,10 @@ import {
   View,
 } from "react-native";
 
-import { firebaseAuth } from "../../../lib/firebase";
+import { sendConsumerPasswordResetEmail } from "../password-reset";
 import { goBackOrReplace } from "../../../shared/navigation";
 
 const ecoChefLogo = require("../../../../assets/ecochef-logo-horizontal.png");
-
-async function confirmConsumerResetEmail(email: string): Promise<void> {
-  const response = await fetch(`${apiBaseUrl}/auth/password-reset-eligibility`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email, requested_role: "consumer" }),
-  });
-  if (response.ok) return;
-  throw new Error(
-    "We could not send password-reset instructions. Check the email address and try again.",
-  );
-}
 
 export function ForgotPasswordScreen() {
   const { mode } = useLocalSearchParams<{ mode?: string }>();
@@ -46,8 +32,7 @@ export function ForgotPasswordScreen() {
     try {
       setSending(true);
       if (/^\S+@\S+\.\S+$/.test(email.trim())) {
-        await confirmConsumerResetEmail(email.trim());
-        await sendPasswordResetEmail(firebaseAuth, email.trim());
+        await sendConsumerPasswordResetEmail(email);
       }
     } catch {
       // Deliberately do not reveal whether this email exists or belongs to another portal.

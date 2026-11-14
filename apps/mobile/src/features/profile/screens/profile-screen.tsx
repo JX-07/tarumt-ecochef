@@ -5,6 +5,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { router, useFocusEffect, useLocalSearchParams, useNavigation } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as FileSystem from "expo-file-system/legacy";
+import * as Clipboard from "expo-clipboard";
 import * as ImagePicker from "expo-image-picker";
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -12,6 +13,7 @@ import {
   Animated,
   Alert,
   BackHandler,
+  Easing,
   Image,
   LayoutAnimation,
   Modal,
@@ -24,7 +26,7 @@ import {
   StyleSheet,
   Switch,
   UIManager,
-  useColorScheme,
+  useWindowDimensions,
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -32,6 +34,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { createMobileApi } from "../../../lib/api";
 import { PAGE_TOP_GAP } from "../../../shared/components/page-header";
 import { useAuth } from "../../auth/auth-provider";
+import { sendConsumerPasswordResetEmail } from "../../auth/password-reset";
 import { type CookingGroupList, type CookingGroup } from "../../social/cooking-group";
 
 type UnitPreference = "metric" | "imperial";
@@ -71,12 +74,13 @@ type Section =
   | "friends"
   | "purchases"
   | "promos";
-type ThemeChoice = "Light" | "Dark" | "System";
 type Dialog = {
   title: string;
   copy: string;
   confirm: string;
   destructive?: boolean;
+  hideCancel?: boolean;
+  icon?: Icon;
   onConfirm?: () => void | Promise<void>;
 } | null;
 type Icon = keyof typeof Ionicons.glyphMap;
@@ -97,8 +101,10 @@ const titleFor: Record<Exclude<Section, "overview">, string> = {
   promos: "Promo Codes",
 };
 const subtitleFor: Partial<Record<Section, string>> = {
+  personal: "Keep your profile details up to date",
+  preferences: "Choose the foods that suit you",
   privacy: "Control your account and your data",
-  settings: "Make EcoChef feel like yours",
+  settings: "Manage app storage and information",
   friends: "Cook and save food together",
   purchases: "Recent orders and receipts",
   promos: "Codes saved for your orders",
@@ -136,6 +142,7 @@ function ListRow({
   onPress,
   danger,
   right,
+  showChevron = true,
 }: {
   icon: Icon;
   label: string;
@@ -143,6 +150,7 @@ function ListRow({
   onPress?: () => void;
   danger?: boolean;
   right?: ReactNode;
+  showChevron?: boolean;
 }) {
   return (
     <Pressable
@@ -160,7 +168,7 @@ function ListRow({
         )}
       </View>
       {right ??
-        (onPress && (
+        (onPress && showChevron && (
           <Ionicons
             name="chevron-forward"
             size={18}
@@ -191,28 +199,36 @@ function Group({
 export function ProfileScreen() {
   const { user, signOut } = useAuth();
   const params = useLocalSearchParams<{ section?: string; mode?: string }>();
-  const requestedSection = params.section === "friends" ? "friends" : "overview";
+  const requestedSection: Section =
+    params.section === "friends" || params.section === "purchases" ? params.section : "overview";
   const groupMode = requestedSection === "friends" && params.mode === "group";
   const insets = useSafeAreaInsets();
+  const { width: screenWidth } = useWindowDimensions();
   const navigation = useNavigation();
   const scrollRef = useRef<ScrollViewInstance>(null);
-  const systemScheme = useColorScheme();
   const api = useMemo(() => createMobileApi(apiBaseUrl, () => user?.getIdToken()), [user]);
   const [section, setSection] = useState<Section>(requestedSection);
   const [friendsPage, setFriendsPage] = useState<"friends" | "blocked" | "profile">("friends");
+  const pageSlide = useRef(new Animated.Value(0)).current;
+  const previousPage = useRef<{
+    section: Section;
+    friendsPage: "friends" | "blocked" | "profile";
+  }>({ section: requestedSection, friendsPage: "friends" });
   const [friendsRefreshing, setFriendsRefreshing] = useState(false);
   const [friendsRefreshSignal, setFriendsRefreshSignal] = useState(0);
   const [profile, setProfile] = useState<ConsumerProfile | null>(null);
   const [draft, setDraft] = useState<Draft | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [passwordSending, setPasswordSending] = useState(false);
+  const preferenceSaveQueue = useRef<Promise<void>>(Promise.resolve());
   const [message, setMessage] = useState<string | null>(null);
+  const [promoToast, setPromoToast] = useState<{ message: string; success: boolean } | null>(null);
   const [avatarUri, setAvatarUri] = useState<string | null>(null);
   const [lastAvatarChange, setLastAvatarChange] = useState<string | null>(null);
   const [dialog, setDialog] = useState<Dialog>(null);
   const [publicProfile, setPublicProfile] = useState(true);
   const [shareStats, setShareStats] = useState(true);
-  const [theme, setTheme] = useState<ThemeChoice>("System");
   const [address, setAddress] = useState<AddressInput>({
     address_line_1: "",
     address_line_2: "",
@@ -263,10 +279,26 @@ export function ProfileScreen() {
     requestAnimationFrame(() => scrollRef.current?.scrollTo({ y: 0, animated: false }));
   }, [section, friendsPage]);
   useEffect(() => {
-    void AsyncStorage.getItem("ecochef.profile.theme").then((stored) => {
-      if (stored === "Light" || stored === "Dark" || stored === "System") setTheme(stored);
-    });
-  }, []);
+    const previous = previousPage.current;
+    if (previous.section === section && previous.friendsPage === friendsPage) return;
+    const goingBack =
+      (section === "overview" && previous.section !== "overview") ||
+      (section === "friends" && friendsPage === "friends" && previous.friendsPage !== "friends");
+    previousPage.current = { section, friendsPage };
+    pageSlide.stopAnimation();
+    pageSlide.setValue(goingBack ? -screenWidth : screenWidth);
+    Animated.timing(pageSlide, {
+      toValue: 0,
+      duration: 280,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: true,
+    }).start();
+  }, [friendsPage, pageSlide, screenWidth, section]);
+  useEffect(() => {
+    if (!promoToast) return;
+    const timeout = setTimeout(() => setPromoToast(null), 3500);
+    return () => clearTimeout(timeout);
+  }, [promoToast]);
   useEffect(() => {
     const owner = user?.uid ?? "guest";
     void AsyncStorage.multiGet([
@@ -286,6 +318,9 @@ export function ProfileScreen() {
     [navigation, requestedSection],
   );
   useEffect(() => {
+    setSection(requestedSection);
+  }, [requestedSection]);
+  useEffect(() => {
     navigation.setOptions({
       tabBarStyle:
         section === "overview"
@@ -302,22 +337,73 @@ export function ProfileScreen() {
     if (router.canGoBack()) router.back();
     else router.replace("/(tabs)");
   }, []);
+  const persistPreferences = useCallback(
+    (snapshot: Draft, savedProfile: ConsumerProfile) => {
+      const previous = preferenceSaveQueue.current;
+      const next = previous
+        .catch(() => undefined)
+        .then(async () => {
+          const updated = await api.updateMyConsumerProfile<ConsumerProfile>({
+            ...snapshot,
+            name: savedProfile.name,
+            phone_number: savedProfile.phone_number ?? undefined,
+            bio: savedProfile.bio ?? "",
+            profile_visibility: savedProfile.profile_visibility,
+          });
+          setProfile(updated);
+        });
+      preferenceSaveQueue.current = next;
+      void next.catch((error) =>
+        setMessage(error instanceof Error ? error.message : "Preferences could not be saved."),
+      );
+    },
+    [api],
+  );
   useFocusEffect(
     useCallback(() => {
       const subscription = BackHandler.addEventListener("hardwareBackPress", () => {
         if (groupMode && friendsPage !== "friends") setFriendsPage("friends");
         else if (groupMode) leaveProfile();
-        else if (section !== "overview") setSection("overview");
-        else leaveProfile();
+        else if (section !== "overview") {
+          if (section === "preferences" && draft && profile) {
+            const changed = (["dietary_restrictions", "allergies", "food_dislikes"] as const).some(
+              (key) => JSON.stringify(draft[key]) !== JSON.stringify(profile[key]),
+            );
+            if (changed) persistPreferences(draft, profile);
+          }
+          if (section === "personal" && profile) {
+            setDraft((current) =>
+              current
+                ? {
+                    ...current,
+                    name: profile.name,
+                    phone_number: profile.phone_number ?? "",
+                    bio: profile.bio ?? "",
+                    profile_visibility: profile.profile_visibility,
+                  }
+                : current,
+            );
+          }
+          setSection("overview");
+        } else leaveProfile();
         return true;
       });
       return () => subscription.remove();
-    }, [friendsPage, groupMode, leaveProfile, section]),
+    }, [draft, friendsPage, groupMode, leaveProfile, persistPreferences, profile, section]),
   );
   const updateDraft = (
     key: keyof Draft,
     value: string | string[] | UnitPreference | ProfileVisibility,
   ) => setDraft((current) => (current ? { ...current, [key]: value } : current));
+  useEffect(() => {
+    if (section !== "preferences" || !draft || !profile) return;
+    const changed = (["dietary_restrictions", "allergies", "food_dislikes"] as const).some(
+      (key) => JSON.stringify(draft[key]) !== JSON.stringify(profile[key]),
+    );
+    if (!changed) return;
+    const timeout = setTimeout(() => persistPreferences(draft, profile), 650);
+    return () => clearTimeout(timeout);
+  }, [draft, persistPreferences, profile, section]);
   const changeAvatar = async () => {
     const now = new Date();
     const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
@@ -368,7 +454,12 @@ export function ProfileScreen() {
       if (section === "preferences") {
         setMessage("Successfully saved preferences and allergies.");
       } else {
-        setSection("overview");
+        setDialog({
+          title: "Save Successful",
+          copy: "Your personal information has been updated.",
+          confirm: "Okay",
+          hideCancel: true,
+        });
       }
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "We could not save your profile.");
@@ -411,8 +502,72 @@ export function ProfileScreen() {
         }
       },
     });
+  const confirmPasswordChange = () => {
+    if (passwordSending) return;
+    const email = profile?.email ?? user?.email;
+    if (!email) {
+      setDialog({
+        title: "Email unavailable",
+        copy: "Your account email could not be found. Please reload your profile and try again.",
+        confirm: "Okay",
+        hideCancel: true,
+        icon: "mail-outline",
+      });
+      return;
+    }
+    setDialog({
+      title: "Change password?",
+      copy: `Send a password reset link to ${email}?`,
+      confirm: "Send email",
+      icon: "mail-outline",
+      onConfirm: async () => {
+        setPasswordSending(true);
+        try {
+          await sendConsumerPasswordResetEmail(email);
+          setDialog({
+            title: "Check your email",
+            copy: `We sent a password reset link to ${email}.`,
+            confirm: "Okay",
+            hideCancel: true,
+            icon: "mail-outline",
+          });
+        } catch {
+          setDialog({
+            title: "Email not sent",
+            copy: "We could not send the reset link right now. Please try again.",
+            confirm: "Okay",
+            hideCancel: true,
+            icon: "mail-outline",
+          });
+        } finally {
+          setPasswordSending(false);
+        }
+      },
+    });
+  };
   const go = (next: Section) => {
     setMessage(null);
+    if (next === "purchases") router.setParams({ section: "purchases" });
+    if (next === "overview" && params.section === "purchases") router.setParams({ section: "" });
+    if (section === "preferences" && next !== "preferences" && draft && profile) {
+      const changed = (["dietary_restrictions", "allergies", "food_dislikes"] as const).some(
+        (key) => JSON.stringify(draft[key]) !== JSON.stringify(profile[key]),
+      );
+      if (changed) persistPreferences(draft, profile);
+    }
+    if (section === "personal" && next !== "personal" && profile) {
+      setDraft((current) =>
+        current
+          ? {
+              ...current,
+              name: profile.name,
+              phone_number: profile.phone_number ?? "",
+              bio: profile.bio ?? "",
+              profile_visibility: profile.profile_visibility,
+            }
+          : current,
+      );
+    }
     if (next === "friends") setFriendsPage("friends");
     setSection(next);
   };
@@ -425,13 +580,8 @@ export function ProfileScreen() {
       </View>
     );
   const name = profile?.name ?? user?.displayName ?? "EcoChef member";
-  const dark = theme === "Dark" || (theme === "System" && systemScheme === "dark");
-  const selectTheme = (next: ThemeChoice) => {
-    setTheme(next);
-    void AsyncStorage.setItem("ecochef.profile.theme", next);
-  };
   return (
-    <View style={[styles.root, dark && { backgroundColor: palette.c17211f }]}>
+    <View style={styles.root}>
       <ScrollView
         ref={scrollRef}
         contentContainerStyle={[styles.content, { paddingTop: insets.top + PAGE_TOP_GAP }]}
@@ -450,138 +600,169 @@ export function ProfileScreen() {
           ) : undefined
         }
       >
-        {section === "overview" ? (
-          <Overview
-            name={name}
-            profile={profile}
-            draft={draft}
-            avatarUri={avatarUri}
-            changeAvatar={changeAvatar}
-            go={go}
-            onBack={leaveProfile}
-            openLogout={() =>
-              setDialog({
-                title: "Log out of EcoChef?",
-                copy: "You can sign back in anytime to continue planning meals and reducing food waste.",
-                confirm: "Log out",
-                destructive: true,
-                onConfirm: async () => {
-                  await signOut();
-                  router.replace("/(auth)/sign-in");
-                },
-              })
-            }
-          />
-        ) : (
-          <>
-            <View style={styles.pageHeading}>
-              <Pressable
-                style={[
-                  styles.backButton,
-                  {
-                    borderRadius: 20,
-                    backgroundColor: palette.ceef1f0,
-                    borderColor: palette.ceef1f0,
+        <Animated.View style={{ transform: [{ translateX: pageSlide }] }}>
+          {section === "overview" ? (
+            <Overview
+              name={name}
+              profile={profile}
+              draft={draft}
+              avatarUri={avatarUri}
+              changeAvatar={changeAvatar}
+              go={go}
+              onBack={leaveProfile}
+              openLogout={() =>
+                setDialog({
+                  title: "Log out of EcoChef?",
+                  copy: "You can sign back in anytime to continue planning meals and reducing food waste.",
+                  confirm: "Log out",
+                  destructive: true,
+                  onConfirm: async () => {
+                    await signOut();
+                    router.replace("/(auth)/sign-in");
                   },
-                ]}
-                onPress={() =>
-                  section === "friends" && friendsPage !== "friends"
-                    ? setFriendsPage("friends")
-                    : groupMode
-                      ? router.back()
-                      : go("overview")
-                }
-                accessibilityLabel={
-                  section === "friends" && friendsPage !== "friends"
-                    ? "Back to friends"
-                    : "Back to profile"
-                }
-              >
-                <Ionicons name="chevron-back" size={22} color={palette.c64716d} />
-              </Pressable>
-              <View>
-                <Text style={[styles.pageTitle, dark && { color: palette.cf6f8f7 }]}>
-                  {section === "friends" && friendsPage === "blocked"
-                    ? "Blocked User"
-                    : section === "friends" && friendsPage === "profile"
-                      ? "User Profile"
+                })
+              }
+            />
+          ) : (
+            <>
+              <View style={styles.pageHeading}>
+                <Pressable
+                  style={[
+                    styles.backButton,
+                    {
+                      borderRadius: 20,
+                      backgroundColor: palette.ceef1f0,
+                      borderColor: palette.ceef1f0,
+                    },
+                  ]}
+                  onPress={() =>
+                    section === "friends" && friendsPage !== "friends"
+                      ? setFriendsPage("friends")
                       : groupMode
-                        ? "Cooking Group"
-                        : titleFor[section]}
-                </Text>
-                {subtitleFor[section] && !(section === "friends" && friendsPage !== "friends") && (
-                  <Text style={styles.pageSubtitle}>
-                    {groupMode
-                      ? "Choose which friends appear in your cooking group"
-                      : subtitleFor[section]}
+                        ? router.back()
+                        : go("overview")
+                  }
+                  accessibilityLabel={
+                    section === "friends" && friendsPage !== "friends"
+                      ? "Back to friends"
+                      : "Back to profile"
+                  }
+                >
+                  <Ionicons name="chevron-back" size={22} color={palette.c64716d} />
+                </Pressable>
+                <View style={styles.pageHeadingCopy}>
+                  <Text style={styles.pageTitle}>
+                    {section === "friends" && friendsPage === "blocked"
+                      ? "Blocked User"
+                      : section === "friends" && friendsPage === "profile"
+                        ? "User Profile"
+                        : groupMode
+                          ? "Cooking Group"
+                          : titleFor[section]}
                   </Text>
+                  {subtitleFor[section] &&
+                    !(section === "friends" && friendsPage !== "friends") && (
+                      <Text style={styles.pageSubtitle}>
+                        {groupMode
+                          ? "Choose which friends appear in your cooking group"
+                          : subtitleFor[section]}
+                      </Text>
+                    )}
+                </View>
+                {section === "friends" && friendsPage === "friends" && (
+                  <Pressable
+                    style={styles.headerAction}
+                    accessibilityRole="button"
+                    accessibilityLabel="View blocked people"
+                    onPress={() => setFriendsPage("blocked")}
+                  >
+                    <Ionicons name="ban-outline" size={20} color={colors.danger} />
+                  </Pressable>
                 )}
               </View>
-              {section === "preferences" && (
-                <Pressable style={styles.saveTop} onPress={() => void saveProfile()}>
-                  <Text style={styles.saveTopText}>Save</Text>
+              {message && (
+                <Pressable style={styles.message} onPress={() => setMessage(null)}>
+                  <Text style={styles.messageText}>{message}</Text>
                 </Pressable>
               )}
-            </View>
-            {message && (
-              <Pressable style={styles.message} onPress={() => setMessage(null)}>
-                <Text style={styles.messageText}>{message}</Text>
-              </Pressable>
-            )}
-            {section === "personal" && draft && (
-              <Personal
-                draft={draft}
-                email={profile?.email ?? ""}
-                update={updateDraft}
-                save={saveProfile}
-                saving={saving}
-              />
-            )}
-            {section === "preferences" && draft && (
-              <Preferences draft={draft} update={updateDraft} />
-            )}
-            {section === "addresses" && (
-              <Addresses
-                profile={profile}
-                address={address}
-                setAddress={setAddress}
-                save={saveAddress}
-                saving={saving}
-                api={api}
-                reload={load}
-              />
-            )}
-            {section === "privacy" && (
-              <Privacy
-                publicProfile={publicProfile}
-                setPublicProfile={setPublicProfile}
-                shareStats={shareStats}
-                setShareStats={setShareStats}
-                requestDeletion={requestDeletion}
-                openDialog={setDialog}
-              />
-            )}
-            {section === "settings" && (
-              <Settings theme={theme} setTheme={selectTheme} openDialog={setDialog} />
-            )}
-            {section === "friends" && (
-              <Friends
-                api={api}
-                openDialog={setDialog}
-                page={friendsPage}
-                onPageChange={setFriendsPage}
-                groupMode={groupMode}
-                currentUserId={profile?.id}
-                currentUserAvatar={avatarUri}
-                refreshSignal={friendsRefreshSignal}
-                onRefreshDone={setFriendsRefreshing}
-              />
-            )}
-            {section === "purchases" && <Purchases api={api} />}
-            {section === "promos" && <Promos api={api} />}
-          </>
-        )}
+              {section === "personal" && draft && (
+                <Personal
+                  draft={draft}
+                  email={profile?.email ?? ""}
+                  update={updateDraft}
+                  save={saveProfile}
+                  saving={saving}
+                />
+              )}
+              {section === "preferences" && draft && (
+                <Preferences draft={draft} update={updateDraft} />
+              )}
+              {section === "addresses" && (
+                <Addresses
+                  profile={profile}
+                  address={address}
+                  setAddress={setAddress}
+                  save={saveAddress}
+                  saving={saving}
+                  api={api}
+                  reload={load}
+                />
+              )}
+              {section === "privacy" && (
+                <Privacy
+                  publicProfile={publicProfile}
+                  setPublicProfile={setPublicProfile}
+                  shareStats={shareStats}
+                  setShareStats={setShareStats}
+                  requestDeletion={requestDeletion}
+                  confirmPasswordChange={confirmPasswordChange}
+                  passwordSending={passwordSending}
+                  openDialog={setDialog}
+                />
+              )}
+              {section === "settings" && <Settings openDialog={setDialog} />}
+              {section === "friends" && (
+                <Friends
+                  api={api}
+                  openDialog={setDialog}
+                  page={friendsPage}
+                  onPageChange={setFriendsPage}
+                  groupMode={groupMode}
+                  currentUserId={profile?.id}
+                  currentUserAvatar={avatarUri}
+                  refreshSignal={friendsRefreshSignal}
+                  onRefreshDone={setFriendsRefreshing}
+                />
+              )}
+              {section === "purchases" && <Purchases api={api} />}
+              {section === "promos" && <Promos api={api} onCopyFeedback={setPromoToast} />}
+            </>
+          )}
+        </Animated.View>
       </ScrollView>
+      {promoToast && section === "promos" && (
+        <View
+          style={[
+            styles.promoToast,
+            !promoToast.success && styles.promoToastError,
+            { bottom: insets.bottom + 16 },
+          ]}
+        >
+          <Ionicons
+            name={promoToast.success ? "checkmark-circle-outline" : "alert-circle-outline"}
+            size={20}
+            color={palette.cfff}
+          />
+          <Text style={styles.promoToastText}>{promoToast.message}</Text>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Dismiss message"
+            onPress={() => setPromoToast(null)}
+          >
+            <Ionicons name="close" size={20} color={palette.cfff} />
+          </Pressable>
+        </View>
+      )}
       <Modal
         transparent
         visible={!!dialog}
@@ -592,9 +773,11 @@ export function ProfileScreen() {
           <View style={styles.dialog}>
             <View style={styles.dialogIcon}>
               <Ionicons
-                name={dialog?.destructive ? "alert-circle-outline" : "leaf-outline"}
+                name={
+                  dialog?.icon ?? (dialog?.destructive ? "alert-circle-outline" : "leaf-outline")
+                }
                 size={25}
-                color={dialog?.destructive ? palette.cc94c56 : palette.c159b54}
+                color={dialog?.destructive ? colors.danger : palette.c159b54}
               />
             </View>
             <Text style={styles.dialogTitle}>{dialog?.title}</Text>
@@ -612,9 +795,11 @@ export function ProfileScreen() {
             >
               <Text style={styles.logoutConfirmText}>{dialog?.confirm}</Text>
             </Pressable>
-            <Pressable style={styles.dialogCancel} onPress={() => setDialog(null)}>
-              <Text style={styles.dialogCancelText}>Cancel</Text>
-            </Pressable>
+            {!dialog?.hideCancel && (
+              <Pressable style={styles.dialogCancel} onPress={() => setDialog(null)}>
+                <Text style={styles.dialogCancelText}>Cancel</Text>
+              </Pressable>
+            )}
           </View>
         </View>
       </Modal>
@@ -917,111 +1102,154 @@ function Preferences({
     "Blue Cheese",
   ];
   const [custom, setCustom] = useState("");
-  const [query, setQuery] = useState("");
+  const [customDislike, setCustomDislike] = useState("");
   const selectedDislikes = draft.food_dislikes;
   const addAllergy = () => {
     const item = custom.trim().toLowerCase();
     if (item && !draft.allergies.includes(item)) update("allergies", [...draft.allergies, item]);
     setCustom("");
   };
-  const visibleDislikes = dislikes.filter((item) =>
-    item.toLowerCase().includes(query.toLowerCase()),
-  );
+  const addDislike = () => {
+    const item = customDislike.trim().toLowerCase();
+    if (item && !draft.food_dislikes.includes(item))
+      update("food_dislikes", [...draft.food_dislikes, item]);
+    setCustomDislike("");
+  };
+  const labelFor = (value: string) =>
+    [...diets, ...allergies, ...dislikes].find(
+      (option) => option.toLowerCase() === value.toLowerCase(),
+    ) ?? value.replace(/\b\w/g, (letter) => letter.toUpperCase());
   return (
-    <>
-      <Text style={styles.formHeading}>Dietary Lifestyle</Text>
-      <Text style={styles.helper}>Select all that apply</Text>
-      <ChipSet
-        values={diets}
-        selected={draft.dietary_restrictions}
-        onChange={(next) => update("dietary_restrictions", next)}
-        tone="green"
-      />
-      <Text style={styles.formHeading}>Allergies & Intolerances</Text>
-      <Text style={styles.helper}>We’ll use this to exclude from recipes</Text>
-      <ChipSet
-        values={allergies}
-        selected={draft.allergies}
-        onChange={(next) => update("allergies", next)}
-        tone="red"
-      />
-      <View style={extraStyles.customRow}>
-        <TextInput
-          value={custom}
-          onChangeText={setCustom}
-          placeholder="Add custom allergy…"
-          placeholderTextColor={palette.c9aa6b4}
-          style={extraStyles.customInput}
-          onSubmitEditing={addAllergy}
-        />
-        <Pressable
-          style={extraStyles.addButton}
-          onPress={addAllergy}
-          accessibilityLabel="Add custom allergy"
-        >
-          <Ionicons name="add" size={22} color={palette.cfff} />
-        </Pressable>
-      </View>
-      <Text style={styles.formHeading}>Food Dislikes</Text>
-      <Text style={styles.helper}>We will avoid these in suggestions</Text>
-      <View style={styles.search}>
-        <Ionicons name="search-outline" size={18} color={palette.ca4afab} />
-        <TextInput
-          value={query}
-          onChangeText={setQuery}
-          placeholder="Search food dislikes"
-          placeholderTextColor={palette.ca4afab}
-          style={extraStyles.searchInput}
-        />
-      </View>
-      <ChipSet
-        values={visibleDislikes}
-        selected={selectedDislikes}
-        onChange={(next) => update("food_dislikes", next)}
-        tone="orange"
-      />
-      <Text style={styles.formHeading}>Your profile</Text>
-      <View style={styles.profileSummary}>
-        <View style={styles.chips}>
-          {[
-            ...draft.dietary_restrictions,
-            ...draft.allergies.map((item) => `No ${item}`),
-            ...selectedDislikes.map((item) => `Dislikes ${item}`),
-          ].map((item, index) => (
-            <View
-              key={item}
-              style={[
-                extraStyles.summaryChip,
-                {
-                  backgroundColor:
-                    index % 3 === 0
-                      ? palette.ce5f8eb
-                      : index % 3 === 1
-                        ? palette.cfff0f1
-                        : palette.cfff3e5,
-                },
-              ]}
-            >
-              <Text
+    <View style={styles.preferenceSections}>
+      <View>
+        <Text style={[styles.formHeading, styles.firstFormHeading]}>Your profile</Text>
+        <View style={styles.profileSummary}>
+          <View style={[styles.chips, styles.summaryChips]}>
+            {[
+              ...draft.dietary_restrictions.map((item) => ({
+                text: labelFor(item),
+                tone: "green",
+              })),
+              ...draft.allergies.map((item) => ({ text: `No ${labelFor(item)}`, tone: "red" })),
+              ...selectedDislikes.map((item) => ({
+                text: `Dislikes ${labelFor(item)}`,
+                tone: "orange",
+              })),
+            ].map((item) => (
+              <View
+                key={`${item.tone}-${item.text}`}
                 style={[
-                  styles.summaryText,
+                  extraStyles.summaryChip,
                   {
-                    color:
-                      index % 3 === 0
-                        ? palette.c159b54
-                        : index % 3 === 1
-                          ? palette.cf0525f
-                          : palette.cf37a20,
+                    backgroundColor:
+                      item.tone === "green"
+                        ? palette.ce5f8eb
+                        : item.tone === "red"
+                          ? palette.cfff0f1
+                          : palette.cfff3e5,
                   },
                 ]}
               >
-                {item}
-              </Text>
-            </View>
-          ))}
+                <Text
+                  style={[
+                    styles.summaryText,
+                    {
+                      color:
+                        item.tone === "green"
+                          ? palette.c159b54
+                          : item.tone === "red"
+                            ? palette.cf0525f
+                            : palette.cf37a20,
+                    },
+                  ]}
+                >
+                  {item.text}
+                </Text>
+              </View>
+            ))}
+            {!draft.dietary_restrictions.length &&
+              !draft.allergies.length &&
+              !selectedDislikes.length && (
+                <Text style={styles.helper}>Your selections will appear here.</Text>
+              )}
+          </View>
         </View>
       </View>
-    </>
+      <View>
+        <Text style={[styles.formHeading, styles.firstFormHeading]}>Dietary Lifestyle</Text>
+        <Text style={styles.helper}>Select all that apply</Text>
+        <ChipSet
+          values={diets}
+          selected={draft.dietary_restrictions}
+          onChange={(next) => update("dietary_restrictions", next)}
+          tone="green"
+        />
+      </View>
+      <View>
+        <Text style={[styles.formHeading, styles.firstFormHeading]}>Allergies & Intolerances</Text>
+        <Text style={styles.helper}>We’ll use this to exclude from recipes</Text>
+        <View style={extraStyles.customRow}>
+          <TextInput
+            value={custom}
+            onChangeText={setCustom}
+            placeholder="Add custom allergy…"
+            placeholderTextColor={palette.c9aa6b4}
+            style={extraStyles.customInput}
+            onSubmitEditing={addAllergy}
+          />
+          <Pressable
+            style={[extraStyles.addButton, extraStyles.addButtonRed]}
+            onPress={addAllergy}
+            accessibilityLabel="Add custom allergy"
+          >
+            <Ionicons name="add" size={22} color={palette.cfff} />
+          </Pressable>
+        </View>
+        <ChipSet
+          values={[
+            ...allergies,
+            ...draft.allergies.filter(
+              (item) => !allergies.some((option) => option.toLowerCase() === item),
+            ),
+          ]}
+          selected={draft.allergies}
+          onChange={(next) => update("allergies", next)}
+          tone="red"
+        />
+      </View>
+      <View>
+        <Text style={[styles.formHeading, styles.firstFormHeading]}>Food Dislikes</Text>
+        <Text style={styles.helper}>We will avoid these in suggestions</Text>
+        <View style={extraStyles.customRow}>
+          <TextInput
+            value={customDislike}
+            onChangeText={setCustomDislike}
+            placeholder="Add food dislike…"
+            placeholderTextColor={palette.c9aa6b4}
+            style={extraStyles.customInput}
+            onSubmitEditing={addDislike}
+          />
+          <Pressable
+            style={[extraStyles.addButton, extraStyles.addButtonOrange]}
+            onPress={addDislike}
+            accessibilityLabel="Add food dislike"
+          >
+            <Ionicons name="add" size={22} color={palette.cfff} />
+          </Pressable>
+        </View>
+        <ChipSet
+          values={[
+            ...dislikes,
+            ...selectedDislikes.filter(
+              (item) => !dislikes.some((option) => option.toLowerCase() === item),
+            ),
+          ]}
+          selected={selectedDislikes}
+          onChange={(next) => update("food_dislikes", next)}
+          tone="orange"
+        />
+      </View>
+    </View>
   );
 }
 function ChipSet({
@@ -1133,6 +1361,8 @@ function Privacy({
   shareStats,
   setShareStats,
   requestDeletion,
+  confirmPasswordChange,
+  passwordSending,
   openDialog,
 }: {
   publicProfile: boolean;
@@ -1140,20 +1370,18 @@ function Privacy({
   shareStats: boolean;
   setShareStats: (value: boolean) => void;
   requestDeletion: () => void;
+  confirmPasswordChange: () => void;
+  passwordSending: boolean;
   openDialog: (dialog: Dialog) => void;
 }) {
   return (
     <>
       <Group label="ACCOUNT SECURITY">
         <ListRow
-          icon="key-outline"
-          label="Change password"
-          onPress={() =>
-            router.push({
-              pathname: "/(auth)/forgot-password",
-              params: { mode: "change-password" },
-            })
-          }
+          icon="mail-outline"
+          label={passwordSending ? "Sending email…" : "Change password"}
+          onPress={passwordSending ? undefined : confirmPasswordChange}
+          showChevron={false}
         />
       </Group>
       <Group label="PRIVACY">
@@ -1190,46 +1418,9 @@ function Privacy({
     </>
   );
 }
-function Settings({
-  theme,
-  setTheme,
-  openDialog,
-}: {
-  theme: ThemeChoice;
-  setTheme: (theme: ThemeChoice) => void;
-  openDialog: (dialog: Dialog) => void;
-}) {
+function Settings({ openDialog }: { openDialog: (dialog: Dialog) => void }) {
   return (
     <>
-      <Group label="APPEARANCE">
-        <View style={styles.themeCard}>
-          <Text style={styles.fieldLabel}>THEME</Text>
-          <View style={styles.themeOptions}>
-            {(["Light", "Dark", "System"] as ThemeChoice[]).map((item) => (
-              <Pressable
-                key={item}
-                onPress={() => setTheme(item)}
-                style={[styles.themeOption, theme === item && styles.themeActive]}
-              >
-                <Ionicons
-                  name={
-                    item === "Light"
-                      ? "sunny-outline"
-                      : item === "Dark"
-                        ? "moon-outline"
-                        : "phone-portrait-outline"
-                  }
-                  size={18}
-                  color={theme === item ? palette.c159b54 : palette.c9aa6b0}
-                />
-                <Text style={[styles.themeText, theme === item && styles.themeTextActive]}>
-                  {item}
-                </Text>
-              </Pressable>
-            ))}
-          </View>
-        </View>
-      </Group>
       <Group label="DATA & STORAGE">
         <ListRow
           icon="trash-outline"
@@ -1255,28 +1446,6 @@ function Settings({
           icon="information-circle-outline"
           label="App version"
           right={<Text style={styles.rowCaption}>0.2.1</Text>}
-        />
-        <ListRow
-          icon="document-text-outline"
-          label="Terms of Service"
-          onPress={() =>
-            openDialog({
-              title: "Terms of Service",
-              copy: "EcoChef connects you with local food choices while respecting responsible, fair use.",
-              confirm: "Done",
-            })
-          }
-        />
-        <ListRow
-          icon="shield-outline"
-          label="Privacy Policy"
-          onPress={() =>
-            openDialog({
-              title: "Privacy Policy",
-              copy: "You control whether your profile and eco stats can be shared. We protect your account data.",
-              confirm: "Done",
-            })
-          }
         />
       </Group>
     </>
@@ -1325,11 +1494,11 @@ type SocialProfileDto = {
   id: string;
   name: string;
   profile_picture_url?: string;
-  member_since: string;
+  member_since?: string | null;
   details_visible: boolean;
-  relationship: string;
+  relationship?: string | null;
   mutual_friends: number;
-  mutual_friend_users: SocialUserDto[];
+  mutual_friend_users?: SocialUserDto[] | null;
   bio?: string;
   dietary_restrictions?: string[];
   allergies?: string[];
@@ -1338,6 +1507,42 @@ type SocialProfileDto = {
   eco_points?: number;
   recipes?: number;
 };
+const socialStrings = (value: unknown): string[] =>
+  Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
+
+function normalizeSocialProfile(value: unknown, user: SocialUserDto): SocialProfileDto {
+  if (!value || typeof value !== "object") throw new Error("Invalid profile response.");
+  const data = value as Record<string, unknown>;
+  const mutualUsers = Array.isArray(data.mutual_friend_users)
+    ? data.mutual_friend_users
+        .filter(
+          (item): item is Record<string, unknown> => Boolean(item) && typeof item === "object",
+        )
+        .filter((item) => typeof item.id === "string" && typeof item.name === "string")
+        .map((item) => ({ id: item.id as string, name: item.name as string }))
+    : [];
+  return {
+    id: user.id,
+    name: typeof data.name === "string" ? data.name : user.name,
+    profile_picture_url:
+      typeof data.profile_picture_url === "string" ? data.profile_picture_url : undefined,
+    member_since: typeof data.member_since === "string" ? data.member_since : null,
+    details_visible: data.details_visible === true,
+    relationship: typeof data.relationship === "string" ? data.relationship : "none",
+    mutual_friends:
+      typeof data.mutual_friends === "number" && Number.isFinite(data.mutual_friends)
+        ? data.mutual_friends
+        : mutualUsers.length,
+    mutual_friend_users: mutualUsers,
+    bio: typeof data.bio === "string" ? data.bio : undefined,
+    dietary_restrictions: socialStrings(data.dietary_restrictions),
+    allergies: socialStrings(data.allergies),
+    food_dislikes: socialStrings(data.food_dislikes),
+    food_saved_kg: typeof data.food_saved_kg === "number" ? data.food_saved_kg : 0,
+    eco_points: typeof data.eco_points === "number" ? data.eco_points : 0,
+    recipes: typeof data.recipes === "number" ? data.recipes : 0,
+  };
+}
 type ProfileAction = "request" | "accept" | "cancel" | "ignore" | "remove" | "block" | "unblock";
 function Friends({
   api,
@@ -1406,6 +1611,8 @@ function Friends({
   };
   const [selectedUser, setSelectedUser] = useState<SocialUserDto | null>(null);
   const [socialProfile, setSocialProfile] = useState<SocialProfileDto | null>(null);
+  const [socialProfileError, setSocialProfileError] = useState<string | null>(null);
+  const [profileReload, setProfileReload] = useState(0);
   useEffect(() => {
     let active = true;
     const social = api
@@ -1447,13 +1654,22 @@ function Friends({
   }, [api, refreshSignal]);
   useEffect(() => {
     if (page === "profile" && selectedUser) {
+      let active = true;
       setSocialProfile(null);
+      setSocialProfileError(null);
       void api
-        .getSocialProfile<SocialProfileDto>(selectedUser.id)
-        .then(setSocialProfile)
-        .catch(() => undefined);
+        .getSocialProfile<unknown>(selectedUser.id)
+        .then((result) => {
+          if (active) setSocialProfile(normalizeSocialProfile(result, selectedUser));
+        })
+        .catch(() => {
+          if (active) setSocialProfileError("This profile could not be loaded.");
+        });
+      return () => {
+        active = false;
+      };
     }
-  }, [api, page, selectedUser]);
+  }, [api, page, profileReload, selectedUser]);
   const viewProfile = (name: string) => {
     const id = userIds[name];
     if (!id) return;
@@ -1493,14 +1709,14 @@ function Friends({
       setBlocked((items) => items.filter((item) => item !== selectedUser.name));
       setSuggestions((items) => [...new Set([...items, selectedUser.name])]);
     }
-    const updated = await api.getSocialProfile<SocialProfileDto>(selectedUser.id);
-    setSocialProfile(updated);
+    const updated = await api.getSocialProfile<unknown>(selectedUser.id);
+    setSocialProfile(normalizeSocialProfile(updated, selectedUser));
   };
   const requestProfileAction = (action: ProfileAction) => {
     if (!selectedUser) return;
-    const destructive = action === "block" || action === "remove";
-    const needsConfirmation = destructive || action === "unblock";
-    if (!needsConfirmation) {
+    const destructive =
+      action === "block" || action === "remove" || action === "cancel" || action === "unblock";
+    if (!destructive) {
       void performProfileAction(action);
       return;
     }
@@ -1511,18 +1727,43 @@ function Friends({
             copy: "They will be removed from your friends and requests, and will not be able to find your profile.",
             confirm: "Block person",
           }
-        : action === "remove"
+        : action === "cancel"
           ? {
-              title: `Remove ${selectedUser.name}?`,
-              copy: "They will no longer appear in your friends list. You can send another request later.",
-              confirm: "Remove friend",
+              title: `Cancel request to ${selectedUser.name}?`,
+              copy: "Your friend request will be withdrawn. You can send another request later.",
+              confirm: "Cancel request",
             }
-          : {
-              title: `Unblock ${selectedUser.name}?`,
-              copy: "They will be able to find your profile and send friend requests again.",
-              confirm: "Unblock",
-            };
-    openDialog({ ...labels, destructive, onConfirm: () => performProfileAction(action) });
+          : action === "remove"
+            ? {
+                title: `Remove ${selectedUser.name}?`,
+                copy: "They will no longer appear in your friends list. You can send another request later.",
+                confirm: "Remove friend",
+              }
+            : {
+                title: `Unblock ${selectedUser.name}?`,
+                copy: "They will be able to find your profile and send friend requests again.",
+                confirm: "Unblock",
+              };
+    openDialog({
+      ...labels,
+      destructive,
+      icon: action === "unblock" ? "lock-open-outline" : undefined,
+      onConfirm: () => performProfileAction(action),
+    });
+  };
+  const confirmCancelRequest = (name: string) => {
+    openDialog({
+      title: `Cancel request to ${name}?`,
+      copy: "Your friend request will be withdrawn. You can send another request later.",
+      confirm: "Cancel request",
+      destructive: true,
+      onConfirm: async () => {
+        const id = userIds[name];
+        if (!id) return;
+        await api.removeSocialRelationship(id);
+        setPending((items) => items.filter((item) => item !== name));
+      },
+    });
   };
   const matches = (name: string) => name.toLowerCase().includes(query.trim().toLowerCase());
   const pictureFor = (name: string) => userPictures[name];
@@ -1614,8 +1855,10 @@ function Friends({
     return (
       <SocialProfileView
         profile={socialProfile}
+        error={socialProfileError}
         fallbackName={selectedUser?.name ?? "User"}
         onAction={requestProfileAction}
+        onRetry={() => setProfileReload((value) => value + 1)}
       />
     );
   if (page === "blocked")
@@ -1635,12 +1878,14 @@ function Friends({
                 onPress={() => viewProfile(name)}
                 actions={
                   <Pressable
-                    style={styles.personAction}
+                    style={[styles.personAction, styles.unblockAction]}
                     onPress={() =>
                       openDialog({
                         title: `Unblock ${name}?`,
                         copy: "They will be able to find your profile and send a new friend request again.",
                         confirm: "Unblock",
+                        destructive: true,
+                        icon: "lock-open-outline",
                         onConfirm: async () => {
                           const id = userIds[name];
                           if (id) await api.unblockSocialUser(id);
@@ -1734,22 +1979,6 @@ function Friends({
         </>
       )}
 
-      {false && blocked.length > 0 && (
-        <Pressable
-          style={extraStyles.blockedLink}
-          onPress={() =>
-            openDialog({
-              title: "Blocked people",
-              copy: `${blocked.join(", ")}. Use the button below to restore their access.`,
-              confirm: "Unblock all",
-              onConfirm: () => setBlocked([]),
-            })
-          }
-        >
-          <Ionicons name="ban-outline" size={17} color={palette.cf0525f} />
-          <Text style={extraStyles.blockedLinkText}>Blocked people ({blocked.length})</Text>
-        </Pressable>
-      )}
       {requests.filter(matches).length || pending.filter(matches).length ? (
         <Group label="FRIEND REQUESTS">
           {requests.filter(matches).map((name) => (
@@ -1802,11 +2031,7 @@ function Friends({
                 actions={
                   <Pressable
                     style={extraStyles.ignoreAction}
-                    onPress={() => {
-                      const id = userIds[name];
-                      void (id ? api.removeSocialRelationship(id) : Promise.resolve());
-                      setPending((items) => items.filter((item) => item !== name));
-                    }}
+                    onPress={() => confirmCancelRequest(name)}
                   >
                     <Text style={extraStyles.ignoreText}>Cancel</Text>
                   </Pressable>
@@ -2041,12 +2266,6 @@ function Friends({
           </View>
         </View>
       </Modal>
-      {blocked.length > 0 && (
-        <Pressable style={extraStyles.blockedLink} onPress={() => onPageChange("blocked")}>
-          <Ionicons name="ban-outline" size={17} color={palette.cf0525f} />
-          <Text style={extraStyles.blockedLinkText}>Blocked people ({blocked.length})</Text>
-        </Pressable>
-      )}
     </>
   );
 }
@@ -2133,24 +2352,48 @@ function CookingGroupCard({
 }
 function SocialProfileView({
   profile,
+  error,
   fallbackName,
   onAction,
+  onRetry,
 }: {
   profile: SocialProfileDto | null;
+  error: string | null;
   fallbackName: string;
   onAction: (action: ProfileAction) => void;
+  onRetry: () => void;
 }) {
   if (!profile)
     return (
       <View style={extraStyles.socialProfileLoading}>
-        <ActivityIndicator color={palette.c16a45b} />
-        <Text style={styles.helper}>Loading {fallbackName}’s profile…</Text>
+        {error ? (
+          <>
+            <Text style={styles.helper}>{error}</Text>
+            <Pressable
+              style={extraStyles.socialProfileRetry}
+              onPress={onRetry}
+              accessibilityRole="button"
+            >
+              <Ionicons name="refresh-outline" size={17} color={palette.cfff} />
+              <Text style={extraStyles.socialProfileRetryText}>Try again</Text>
+            </Pressable>
+          </>
+        ) : (
+          <>
+            <ActivityIndicator color={palette.c16a45b} />
+            <Text style={styles.helper}>Loading {fallbackName}’s profile…</Text>
+          </>
+        )}
       </View>
     );
-  const memberSince = new Date(profile.member_since).toLocaleDateString(undefined, {
-    month: "long",
-    year: "numeric",
-  });
+  const joined = profile.member_since ? new Date(profile.member_since) : null;
+  const memberSince =
+    joined && !Number.isNaN(joined.getTime())
+      ? joined.toLocaleDateString(undefined, { month: "long", year: "numeric" })
+      : null;
+  const mutualFriends = Array.isArray(profile.mutual_friend_users)
+    ? profile.mutual_friend_users.filter((friend) => friend && typeof friend.name === "string")
+    : [];
   return (
     <View style={extraStyles.socialProfileCard}>
       <View style={extraStyles.socialProfileAvatar}>
@@ -2163,23 +2406,23 @@ function SocialProfileView({
           <Ionicons name="person" size={68} color={palette.c9aa3af} />
         )}
       </View>
-      <Text style={extraStyles.socialProfileName}>{profile.name}</Text>
-      <Text style={styles.helper}>EcoChef member since {memberSince}</Text>
+      <Text style={extraStyles.socialProfileName}>{profile.name || fallbackName}</Text>
+      {memberSince && <Text style={styles.helper}>EcoChef member since {memberSince}</Text>}
       <View style={extraStyles.relationshipPills}>
         <View style={extraStyles.relationshipPill}>
           <Ionicons name="people-outline" size={15} color={palette.c168e51} />
           <Text style={extraStyles.relationshipText}>
-            {profile.relationship.replaceAll("_", " ")}
+            {(profile.relationship ?? "none").replace(/_/g, " ")}
           </Text>
         </View>
         <View style={extraStyles.relationshipPill}>
           <Text style={extraStyles.relationshipText}>{profile.mutual_friends} mutual friends</Text>
         </View>
       </View>
-      {profile.mutual_friend_users.length > 0 && (
+      {mutualFriends.length > 0 && (
         <View style={extraStyles.mutualSection}>
           <Text style={styles.formHeading}>Mutual friends</Text>
-          {profile.mutual_friend_users.map((friend) => (
+          {mutualFriends.map((friend) => (
             <View key={friend.id} style={extraStyles.mutualFriendRow}>
               <View style={styles.personAvatar}>
                 <Text style={styles.personInitials}>
@@ -2266,6 +2509,7 @@ function SocialProfileView({
           <ProfileActionButton
             icon="close-circle-outline"
             label="Cancel request"
+            danger
             onPress={() => onAction("cancel")}
           />
         )}
@@ -2296,6 +2540,7 @@ function SocialProfileView({
           <ProfileActionButton
             icon="lock-open-outline"
             label="Unblock user"
+            dangerFilled
             onPress={() => onAction("unblock")}
           />
         ) : (
@@ -2317,12 +2562,14 @@ function ProfileActionButton({
   label,
   onPress,
   danger,
+  dangerFilled,
   secondary,
 }: {
   icon: Icon;
   label: string;
   onPress: () => void;
   danger?: boolean;
+  dangerFilled?: boolean;
   secondary?: boolean;
 }) {
   return (
@@ -2331,6 +2578,7 @@ function ProfileActionButton({
         extraStyles.profileActionButton,
         secondary && extraStyles.profileActionSecondary,
         danger && extraStyles.profileActionDanger,
+        dangerFilled && extraStyles.profileActionDangerFilled,
       ]}
       onPress={onPress}
     >
@@ -2548,19 +2796,36 @@ function Purchases({ api }: { api: ReturnType<typeof createMobileApi> }) {
           <Text style={styles.spendValue}>{transactionCount}</Text>
         </View>
       </View>
-      <Pressable
-        accessibilityRole="button"
-        onPress={() => router.push("/marketplace/reviews" as never)}
-      >
-        <Text style={[styles.groupLabel, { color: colors.primaryStrong }]}>
-          RATE PURCHASED ITEMS
-        </Text>
-      </Pressable>
-      <Pressable accessibilityRole="button" onPress={() => router.push("/reports" as never)}>
-        <Text style={[styles.groupLabel, { color: colors.primaryStrong }]}>
-          YOUR REPORTS & OUTCOMES
-        </Text>
-      </Pressable>
+      <View style={styles.purchaseLinks}>
+        <Pressable
+          style={styles.purchaseLink}
+          accessibilityRole="button"
+          onPress={() => router.push("/rating-history" as never)}
+        >
+          <View style={[styles.purchaseLinkIcon, styles.ratingHistoryIcon]}>
+            <Ionicons name="star" size={20} color={colors.ratingStar} />
+          </View>
+          <View style={styles.purchaseLinkCopy}>
+            <Text style={styles.purchaseLinkTitle}>Rating History</Text>
+            <Text style={styles.rowCaption}>Rate items or see your ratings</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={18} color={palette.c8a98a4} />
+        </Pressable>
+        <Pressable
+          style={styles.purchaseLink}
+          accessibilityRole="button"
+          onPress={() => router.push("/reports" as never)}
+        >
+          <View style={styles.purchaseLinkIcon}>
+            <Ionicons name="document-text-outline" size={20} color={colors.primaryStrong} />
+          </View>
+          <View style={styles.purchaseLinkCopy}>
+            <Text style={styles.purchaseLinkTitle}>Report & Outcome</Text>
+            <Text style={styles.rowCaption}>Follow submitted reports</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={18} color={palette.c8a98a4} />
+        </Pressable>
+      </View>
       <Text style={styles.groupLabel}>RECENT ORDERS</Text>
       {orders.length === 0 && <Text style={extraStyles.emptyText}>No transaction yet</Text>}
       {orders.map((order) => {
@@ -2632,7 +2897,13 @@ type PromoDto = {
   audience: "available" | "new_account" | "gift";
   end_date: string;
 };
-function Promos({ api }: { api: ReturnType<typeof createMobileApi> }) {
+function Promos({
+  api,
+  onCopyFeedback,
+}: {
+  api: ReturnType<typeof createMobileApi>;
+  onCopyFeedback: (feedback: { message: string; success: boolean }) => void;
+}) {
   const [promos, setPromos] = useState<PromoDto[]>([]);
   const [loadingPromos, setLoadingPromos] = useState(true);
   useEffect(() => {
@@ -2688,6 +2959,7 @@ function Promos({ api }: { api: ReturnType<typeof createMobileApi> }) {
             expiry={`Ends ${new Date(promo.end_date).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" })}`}
             tint={audienceStyle.tint}
             accent={audienceStyle.accent}
+            onCopyFeedback={onCopyFeedback}
           />
         );
       })}
@@ -2703,6 +2975,7 @@ function Promo({
   expiry,
   tint,
   accent,
+  onCopyFeedback,
 }: {
   label?: string;
   headingIcon?: Icon;
@@ -2712,7 +2985,17 @@ function Promo({
   expiry: string;
   tint: string;
   accent: string;
+  onCopyFeedback: (feedback: { message: string; success: boolean }) => void;
 }) {
+  const copyCode = async () => {
+    try {
+      const copied = await Clipboard.setStringAsync(code);
+      if (!copied) throw new Error("Clipboard write failed");
+      onCopyFeedback({ message: `${code} copied to clipboard`, success: true });
+    } catch {
+      onCopyFeedback({ message: "Could not copy the code. Please try again.", success: false });
+    }
+  };
   return (
     <>
       {label && (
@@ -2745,7 +3028,12 @@ function Promo({
             </Text>
             <Text style={[styles.rowCaption, { marginTop: 9 }]}>{expiry}</Text>
           </View>
-          <Pressable style={styles.copyButton}>
+          <Pressable
+            style={styles.copyButton}
+            accessibilityRole="button"
+            accessibilityLabel={`Copy ${code}`}
+            onPress={() => void copyCode()}
+          >
             <Ionicons name="copy-outline" size={15} color={palette.cfff} />
             <Text style={styles.copyText}>Copy code</Text>
           </Pressable>
@@ -2956,6 +3244,16 @@ const extraStyles = StyleSheet.create({
   },
   personProfileLink: { flex: 1, flexDirection: "row", alignItems: "center", gap: 10 },
   socialProfileLoading: { alignItems: "center", gap: 10, paddingVertical: 60 },
+  socialProfileRetry: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 12,
+    backgroundColor: palette.c14a957,
+  },
+  socialProfileRetryText: { color: palette.cfff, fontWeight: typography.weight.bold },
   socialProfileCard: {
     alignItems: "center",
     padding: 18,
@@ -3054,6 +3352,7 @@ const extraStyles = StyleSheet.create({
     borderColor: palette.cf2c8cc,
     backgroundColor: palette.cfff1f2,
   },
+  profileActionDangerFilled: { backgroundColor: colors.danger },
   profileActionText: {
     color: palette.cffffff,
     fontSize: typography.mobile.rawSize.s12,
@@ -3085,24 +3384,11 @@ const extraStyles = StyleSheet.create({
     borderRadius: 14,
     backgroundColor: palette.c14a957,
   },
+  addButtonRed: { backgroundColor: palette.cff4659 },
+  addButtonOrange: { backgroundColor: palette.cff8b1a },
   searchInput: { flex: 1, color: palette.c20372f, fontSize: typography.mobile.rawSize.s12 },
   chipOrange: { borderColor: palette.cff8b1a, backgroundColor: palette.cff8b1a },
   summaryChip: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 10 },
-  blockedLink: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 7,
-    marginTop: 10,
-    paddingVertical: 10,
-    borderRadius: 11,
-    backgroundColor: palette.cfff1f2,
-  },
-  blockedLinkText: {
-    color: palette.cd46a72,
-    fontSize: typography.mobile.rawSize.s12,
-    fontWeight: typography.weight.bold,
-  },
   personActions: { flexDirection: "row", alignItems: "center", gap: 7 },
   ignoreAction: { paddingHorizontal: 8, paddingVertical: 7 },
   ignoreText: {
@@ -3235,6 +3521,17 @@ const styles = StyleSheet.create({
     gap: 10,
     marginBottom: 18,
   },
+  pageHeadingCopy: { flex: 1 },
+  headerAction: {
+    width: 32,
+    height: 32,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+  },
   backButton: {
     width: 32,
     height: 32,
@@ -3255,18 +3552,6 @@ const styles = StyleSheet.create({
     fontWeight: typography.weight.bold,
   },
   pageSubtitle: { marginTop: 1, color: palette.c91a0ad, fontSize: typography.mobile.rawSize.s11 },
-  saveTop: {
-    marginLeft: "auto",
-    paddingHorizontal: 16,
-    paddingVertical: 9,
-    borderRadius: 14,
-    backgroundColor: palette.c14a957,
-  },
-  saveTopText: {
-    color: palette.cfff,
-    fontSize: typography.mobile.rawSize.s12,
-    fontWeight: typography.weight.bold,
-  },
   profileCard: {
     alignItems: "center",
     padding: 18,
@@ -3483,6 +3768,8 @@ const styles = StyleSheet.create({
     fontSize: typography.mobile.rawSize.s14,
     fontWeight: typography.weight.bold,
   },
+  firstFormHeading: { marginTop: 0 },
+  preferenceSections: { gap: 28 },
   helper: { marginTop: 3, color: palette.c9aa6b4, fontSize: typography.mobile.rawSize.s11 },
   chips: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 10 },
   chip: {
@@ -3509,6 +3796,7 @@ const styles = StyleSheet.create({
     borderRadius: 15,
     backgroundColor: palette.cfff,
   },
+  summaryChips: { marginTop: 0 },
   summaryText: { color: palette.c3d5661, fontSize: typography.mobile.rawSize.s12, lineHeight: 18 },
   addressCard: {
     flexDirection: "row",
@@ -3527,23 +3815,6 @@ const styles = StyleSheet.create({
     fontWeight: typography.weight.bold,
   },
   addressDetails: { marginTop: 3, color: palette.c82909b, fontSize: typography.mobile.rawSize.s11 },
-  themeCard: { padding: 12 },
-  themeOptions: { flexDirection: "row", gap: 8 },
-  themeOption: {
-    flex: 1,
-    alignItems: "center",
-    gap: 6,
-    paddingVertical: 12,
-    borderRadius: 11,
-    backgroundColor: palette.cf8fafa,
-  },
-  themeActive: {
-    borderWidth: 1,
-    borderColor: palette.caee5c4,
-    backgroundColor: palette.cf0fff5,
-  },
-  themeText: { color: palette.c8e9aa6, fontSize: typography.mobile.rawSize.s10 },
-  themeTextActive: { color: palette.c159b54 },
   search: {
     flexDirection: "row",
     alignItems: "center",
@@ -3588,6 +3859,7 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     backgroundColor: palette.c14a957,
   },
+  unblockAction: { backgroundColor: colors.danger },
   pendingAction: { backgroundColor: palette.cfff0b8 },
   personActionText: {
     color: palette.cfff,
@@ -3597,6 +3869,44 @@ const styles = StyleSheet.create({
   pendingText: { color: palette.cbb7b00 },
   suggestedText: { color: colors.todayStrong },
   purchaseMetrics: { flexDirection: "row", gap: 10, marginBottom: 2 },
+  purchaseLinks: { gap: 10, marginTop: 18, marginBottom: 8 },
+  purchaseLink: {
+    minHeight: 68,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    paddingHorizontal: 14,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 14,
+    backgroundColor: colors.surface,
+  },
+  purchaseLinkIcon: {
+    width: 38,
+    height: 38,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 12,
+    backgroundColor: colors.primarySoft,
+  },
+  ratingHistoryIcon: { backgroundColor: colors.warningSoft },
+  purchaseLinkCopy: { flex: 1 },
+  purchaseLinkTitle: { color: colors.text, fontSize: 14, fontWeight: "700" },
+  promoToast: {
+    position: "absolute",
+    left: 16,
+    right: 16,
+    minHeight: 48,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    paddingHorizontal: 14,
+    borderRadius: 12,
+    backgroundColor: colors.primaryStrong,
+    elevation: 5,
+  },
+  promoToastError: { backgroundColor: colors.danger },
+  promoToastText: { flex: 1, color: palette.cfff, fontSize: 13, fontWeight: "600" },
   spendMetric: {
     flex: 1,
     padding: 15,
@@ -3756,7 +4066,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     marginTop: 22,
     borderRadius: 11,
-    backgroundColor: palette.cc94c56,
+    backgroundColor: colors.danger,
   },
   logoutConfirmText: {
     color: palette.cfff,

@@ -102,6 +102,8 @@ class MarketplaceReviewPrompt(BaseModel):
     store_id: UUID
     store_name: str
     order_id: UUID
+    purchased_at: datetime
+    rated_at: datetime | None = None
     reviewed: bool
     rating: int | None = None
     comment: str | None = None

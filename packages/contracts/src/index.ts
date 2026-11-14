@@ -465,6 +465,8 @@ export interface MarketplaceReviewPrompt {
   store_id: string;
   store_name: string;
   order_id: string;
+  purchased_at: string;
+  rated_at?: string | null;
   reviewed: boolean;
   rating?: number | null;
   comment?: string | null;

@@ -26,6 +26,7 @@ import { goBackOrReplace } from "../../../shared/navigation";
 import { ingredientEmojiFor } from "../../../shared/ingredient-icons";
 import { recipeTagKind } from "../recipe-tag-options";
 import { recipeImageUrl } from "../recipe-image";
+import { recipeWarningGroups } from "../warning-groups";
 import { ScheduleSheet } from "../components/schedule-sheet";
 import type { MealPlanCalendar, MealPlanEntry, MealSlot } from "../../meal-planning/types";
 import { dateToIso } from "../../meal-planning/components/date-picker-sheet";
@@ -340,9 +341,7 @@ export function RecipeDetailScreen() {
   const allergyWarnings = recipe.safety_warnings.filter((warning) =>
     warning.startsWith("Contains "),
   );
-  const suitabilityWarnings = recipe.safety_warnings.filter(
-    (warning) => !warning.startsWith("Contains "),
-  );
+  const warningGroups = recipeWarningGroups(recipe.safety_warnings);
   const matchedAllergens = new Set(
     allergyWarnings.map((warning) => warning.slice("Contains ".length).toLowerCase()),
   );
@@ -446,19 +445,19 @@ export function RecipeDetailScreen() {
               );
             })}
           </View>
-          {suitabilityWarnings.length > 0 && (
-            <View style={styles.alert}>
+          {warningGroups.map((group) => (
+            <View key={group.title} style={styles.alert}>
               <Ionicons name="warning-outline" size={22} color={palette.ca46100} />
               <View style={styles.alertBody}>
-                <Text style={styles.alertTitle}>Check before cooking</Text>
-                {suitabilityWarnings.map((warning) => (
+                <Text style={styles.alertTitle}>{group.title}</Text>
+                {group.warnings.map((warning) => (
                   <Text key={warning} style={styles.alertCopy}>
                     • {warning}
                   </Text>
                 ))}
               </View>
             </View>
-          )}
+          ))}
           <View style={styles.stats}>
             <Stat icon="time-outline" value={`${recipe.total_time} min`} label="Total" />
             <Stat icon="people-outline" value={`${recipe.servings ?? "-"} pax`} label="Servings" />
@@ -514,21 +513,6 @@ export function RecipeDetailScreen() {
                     );
                   })}
                 </View>
-                {allergyWarnings.length > 0 && (
-                  <View style={allergenDetailStyles.warning}>
-                    <Ionicons name="warning" size={20} color={palette.cc23f48} />
-                    <View style={allergenDetailStyles.warningCopy}>
-                      <Text style={allergenDetailStyles.warningTitle}>
-                        Matches your allergy profile
-                      </Text>
-                      {allergyWarnings.map((warning) => (
-                        <Text key={warning} style={allergenDetailStyles.warningText}>
-                          • {warning}
-                        </Text>
-                      ))}
-                    </View>
-                  </View>
-                )}
               </View>
             </>
           )}

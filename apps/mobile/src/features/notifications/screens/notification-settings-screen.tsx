@@ -153,8 +153,10 @@ export function NotificationSettingsScreen() {
         >
           <Ionicons name="chevron-back" size={22} color={colors.text} />
         </Pressable>
-        <Text style={styles.title}>Notification settings</Text>
-        <View style={styles.headerSpacer} />
+        <View style={styles.headerCopy}>
+          <Text style={styles.title}>Notification settings</Text>
+          <Text style={styles.subtitle}>Choose the alerts you want to receive</Text>
+        </View>
       </View>
       <ScrollView
         contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + spacing[8] }]}
@@ -253,23 +255,22 @@ const styles = StyleSheet.create({
     paddingBottom: spacing[4],
   },
   back: {
-    width: 42,
-    height: 42,
+    width: 32,
+    height: 32,
     alignItems: "center",
     justifyContent: "center",
     borderWidth: 1,
     borderColor: colors.border,
-    borderRadius: 21,
-    backgroundColor: colors.surface,
+    borderRadius: 16,
+    backgroundColor: colors.surfaceMuted,
   },
-  headerSpacer: { width: 42 },
+  headerCopy: { flex: 1 },
   title: {
-    flex: 1,
     color: colors.text,
     fontSize: typography.mobile.rawSize.s21,
     fontWeight: typography.weight.bold,
-    textAlign: "center",
   },
+  subtitle: { marginTop: 1, color: colors.textMuted, fontSize: typography.mobile.rawSize.s11 },
   content: { paddingHorizontal: spacing[4] },
   intro: {
     flexDirection: "row",

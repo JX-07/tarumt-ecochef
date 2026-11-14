@@ -97,7 +97,11 @@ async function findDevice(manager: BleManager, bleName: string): Promise<Device>
         new Error("Sensor not found. Hold its setup button until the light pulses, then retry."),
       );
     }, 10_000);
-    manager.startDeviceScan([ECOCHEF_PROVISIONING_SERVICE], null, (error, device) => {
+    // Match the factory BLE name instead of filtering by service UUID. Some ESP32
+    // advertising stacks move the 128-bit service UUID into the scan response when
+    // the name does not fit in the primary advertising packet, and Android can then
+    // omit the device when a service filter is supplied.
+    manager.startDeviceScan(null, null, (error, device) => {
       if (error) {
         clearTimeout(timeout);
         manager.stopDeviceScan();
@@ -113,6 +117,21 @@ async function findDevice(manager: BleManager, bleName: string): Promise<Device>
   });
 }
 
+async function prepareConnectedDevice(device: Device): Promise<Device> {
+  let connected = device;
+  if (Platform.OS === "android") {
+    // A Wi-Fi result containing a 32-character SSID is larger than the default
+    // 20-byte GATT notification payload. Negotiate enough room for one complete
+    // JSON result before asking the ESP32 to scan.
+    connected = await connected.requestMTU(185).catch(() => connected);
+  }
+  return connected.discoverAllServicesAndCharacteristics();
+}
+
+function wait(milliseconds: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, milliseconds));
+}
+
 export type ProvisioningStatus = "wifi_connecting" | "api_connecting" | "ready";
 export type SensorWifiNetwork = { ssid: string; rssi: number; secure: boolean };
 
@@ -125,7 +144,7 @@ export async function scanSensorWifiNetworks(setup: SensorSetupQr): Promise<Sens
     await waitForPoweredOn(manager);
     device = await findDevice(manager, setup.bleName);
     device = await device.connect({ timeout: 15_000 });
-    await device.discoverAllServicesAndCharacteristics();
+    device = await prepareConnectedDevice(device);
     const networks = await new Promise<SensorWifiNetwork[]>((resolve, reject) => {
       const found = new Map<string, SensorWifiNetwork>();
       const timeout = setTimeout(
@@ -161,11 +180,15 @@ export async function scanSensorWifiNetworks(setup: SensorSetupQr): Promise<Sens
           }
         },
       );
-      void device
-        ?.writeCharacteristicWithResponseForService(
-          ECOCHEF_PROVISIONING_SERVICE,
-          ECOCHEF_CONFIG_CHARACTERISTIC,
-          bytesToBase64(`${JSON.stringify({ v: 1, action: "scan_wifi" })}\n`),
+      // Give Android time to finish enabling notifications (the CCCD write)
+      // before the ESP32 starts sending scan results.
+      void wait(300)
+        .then(() =>
+          device?.writeCharacteristicWithResponseForService(
+            ECOCHEF_PROVISIONING_SERVICE,
+            ECOCHEF_CONFIG_CHARACTERISTIC,
+            bytesToBase64(`${JSON.stringify({ v: 1, action: "scan_wifi" })}\n`),
+          ),
         )
         .catch((error) => {
           clearTimeout(timeout);
@@ -193,7 +216,7 @@ export async function provisionSensor(
     await waitForPoweredOn(manager);
     device = await findDevice(manager, setup.bleName);
     device = await device.connect({ timeout: 15_000 });
-    await device.discoverAllServicesAndCharacteristics();
+    device = await prepareConnectedDevice(device);
     const completion = new Promise<void>((resolve, reject) => {
       const timeout = setTimeout(
         () =>

@@ -24,6 +24,7 @@ import { RecipeFilterSheet, type RecipeFilters } from "../components/recipe-filt
 import { ScheduleSheet } from "../components/schedule-sheet";
 import { recipeTagKind } from "../recipe-tag-options";
 import { recipeImageUrl } from "../recipe-image";
+import { recipeWarningGroups } from "../warning-groups";
 import type { MealPlanCalendar } from "../../meal-planning/types";
 
 const GREEN = palette.c12ad55;
@@ -506,7 +507,10 @@ function RecipeCard({
         </View>
         {recipe.safety_warnings.length > 0 && (
           <Text style={styles.safety} numberOfLines={1}>
-            ⚠ {recipe.safety_warnings.join(" · ")}
+            ⚠ Warning:{" "}
+            {recipeWarningGroups(recipe.safety_warnings)
+              .map((group) => group.title)
+              .join(" · ")}
           </Text>
         )}
         <View style={styles.actions}>

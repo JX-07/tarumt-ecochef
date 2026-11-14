@@ -7,6 +7,7 @@ import { colors, spacing, typography } from "@ecochef/design-tokens";
 import type { MarketplaceReviewPrompt, MarketplaceReviewPromptList } from "@ecochef/contracts";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Text } from "../../../shared/components/themed-text";
+import { PAGE_TOP_GAP } from "../../../shared/components/page-header";
 import { createMobileApi } from "../../../lib/api";
 import { useAuth } from "../../auth/auth-provider";
 import { ProductReviewForm } from "../components/product-review-form";
@@ -48,19 +49,30 @@ export function ProductReviewsScreen() {
       <ScrollView
         contentContainerStyle={{
           padding: spacing[5],
-          paddingTop: insets.top + spacing[5],
+          paddingTop: insets.top + PAGE_TOP_GAP,
           paddingBottom: insets.bottom + spacing[6],
         }}
       >
         <View style={styles.header}>
-          <Pressable accessibilityLabel="Back" onPress={() => router.back()}>
-            <Ionicons name="chevron-back" size={spacing[6]} color={colors.text} />
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Back to purchase history"
+            style={styles.back}
+            onPress={() =>
+              router.canGoBack()
+                ? router.back()
+                : router.replace("/account?section=purchases" as never)
+            }
+          >
+            <Ionicons name="chevron-back" size={22} color={colors.textMuted} />
           </Pressable>
-          <Text style={styles.title}>Rate purchased items</Text>
+          <View style={styles.headerCopy}>
+            <Text style={styles.title}>Rating History</Text>
+            <Text style={styles.subtitle}>Your verified purchases and ratings</Text>
+          </View>
         </View>
         <Text style={styles.help}>
-          Ratings unlock after the shop completes your paid order. Each product has one rating from
-          you, which you can update.
+          Ratings unlock after the shop completes your paid order. You can rate each item once.
         </Text>
         {loading ? (
           <ActivityIndicator color={colors.primary} />
@@ -74,23 +86,51 @@ export function ProductReviewsScreen() {
           </Text>
         ) : (
           items.map((item) => (
-            <Pressable
-              accessibilityRole="button"
-              key={item.product_id}
-              style={styles.card}
-              onPress={() => setSelected(item)}
-            >
+            <View key={item.product_id} style={styles.card}>
               <View style={styles.body}>
                 <Text style={styles.name}>{item.product_name}</Text>
                 <Text style={styles.help}>{item.store_name}</Text>
-                <Text style={styles.state}>
-                  {item.reviewed
-                    ? `${"★".repeat(item.rating ?? 0)} · Edit your rating`
-                    : "Verified purchase · Rate this item"}
+                <Text style={styles.meta}>Order #{item.order_id.slice(0, 8).toUpperCase()}</Text>
+                <Text style={styles.meta}>
+                  {item.reviewed ? "Rated" : "Purchased"}{" "}
+                  {new Date(
+                    item.reviewed && item.rated_at ? item.rated_at : item.purchased_at,
+                  ).toLocaleDateString("en-MY", {
+                    day: "2-digit",
+                    month: "short",
+                    year: "numeric",
+                    timeZone: "Asia/Kuala_Lumpur",
+                  })}
                 </Text>
+                {item.reviewed ? (
+                  <View
+                    style={styles.ratingRow}
+                    accessibilityLabel={`Your rating: ${item.rating ?? 0} out of 5 stars`}
+                  >
+                    {[1, 2, 3, 4, 5].map((star) => (
+                      <Ionicons
+                        key={star}
+                        name={star <= (item.rating ?? 0) ? "star" : "star-outline"}
+                        size={18}
+                        color={colors.ratingStar}
+                      />
+                    ))}
+                    <Text style={styles.ratingValue}>{(item.rating ?? 0).toFixed(1)}/5.0</Text>
+                  </View>
+                ) : (
+                  <Text style={styles.state}>Verified purchase</Text>
+                )}
               </View>
-              <Ionicons name="chevron-forward" size={spacing[5]} color={colors.primaryStrong} />
-            </Pressable>
+              {!item.reviewed && (
+                <Pressable
+                  accessibilityRole="button"
+                  style={styles.rateButton}
+                  onPress={() => setSelected(item)}
+                >
+                  <Text style={styles.rateButtonText}>Rate item</Text>
+                </Pressable>
+              )}
+            </View>
           ))
         )}
       </ScrollView>
@@ -105,12 +145,22 @@ export function ProductReviewsScreen() {
 }
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.consumerCanvas },
-  header: { flexDirection: "row", alignItems: "center", gap: spacing[3] },
+  header: { flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 18 },
+  back: {
+    width: 32,
+    height: 32,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 16,
+    backgroundColor: colors.surfaceMuted,
+  },
+  headerCopy: { flex: 1 },
   title: {
     color: colors.text,
-    fontSize: typography.mobile.size.bodyTextHeavy,
+    fontSize: typography.mobile.rawSize.s21,
     fontWeight: typography.weight.bold,
   },
+  subtitle: { marginTop: 1, color: colors.textMuted, fontSize: typography.mobile.rawSize.s11 },
   help: {
     marginVertical: spacing[3],
     color: colors.textMuted,
@@ -137,6 +187,24 @@ const styles = StyleSheet.create({
     fontSize: typography.mobile.size.secondaryInteraction,
     fontWeight: typography.weight.semibold,
   },
+  meta: {
+    marginTop: spacing[1],
+    color: colors.textMuted,
+    fontSize: typography.mobile.size.caption,
+  },
+  ratingRow: { flexDirection: "row", alignItems: "center", gap: 3, marginTop: spacing[2] },
+  ratingValue: {
+    marginLeft: 6,
+    color: colors.textMuted,
+    fontSize: typography.mobile.size.secondaryInteraction,
+  },
+  rateButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    borderRadius: 10,
+    backgroundColor: colors.primaryStrong,
+  },
+  rateButtonText: { color: colors.surface, fontSize: 12, fontWeight: "700" },
   error: {
     marginTop: spacing[4],
     color: colors.danger,
