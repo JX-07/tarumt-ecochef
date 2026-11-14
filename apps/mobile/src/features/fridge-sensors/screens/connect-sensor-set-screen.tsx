@@ -458,13 +458,22 @@ function WifiPicker({
   onSelect: (network: SensorWifiNetwork) => void;
   onManual: (ssid: string) => void;
 }) {
+  const insets = useSafeAreaInsets();
   const [manual, setManual] = useState(false);
   const [value, setValue] = useState("");
+  useEffect(() => {
+    if (!visible) return;
+    setManual(false);
+    setValue("");
+  }, [visible]);
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <View style={s.modalOverlay}>
+      <KeyboardAvoidingView
+        style={s.modalOverlay}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+      >
         <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
-        <View style={s.wifiSheet}>
+        <View style={[s.wifiSheet, { paddingBottom: insets.bottom + spacing[5] }]}>
           <View style={s.sheetHeader}>
             <View>
               <Text style={s.sheetTitle}>Choose Wi-Fi</Text>
@@ -555,7 +564,7 @@ function WifiPicker({
             </Pressable>
           ) : null}
         </View>
-      </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }

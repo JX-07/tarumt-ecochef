@@ -147,6 +147,16 @@ export async function scanSensorWifiNetworks(setup: SensorSetupQr): Promise<Sens
     device = await prepareConnectedDevice(device);
     const networks = await new Promise<SensorWifiNetwork[]>((resolve, reject) => {
       const found = new Map<string, SensorWifiNetwork>();
+      let networkMessage = "";
+      const saveNetwork = (message: string) => {
+        if (!message.startsWith("wifi:")) return;
+        try {
+          const network = JSON.parse(message.slice(5)) as SensorWifiNetwork;
+          if (network.ssid) found.set(network.ssid, network);
+        } catch {
+          /* Ignore a malformed result and continue receiving the scan. */
+        }
+      };
       const timeout = setTimeout(
         () =>
           reject(
@@ -154,7 +164,7 @@ export async function scanSensorWifiNetworks(setup: SensorSetupQr): Promise<Sens
               "The sensor did not return Wi-Fi networks. Confirm it is powered, flashed with EcoChef firmware and in setup mode.",
             ),
           ),
-        15_000,
+        25_000,
       );
       monitor = device?.monitorCharacteristicForService(
         ECOCHEF_PROVISIONING_SERVICE,
@@ -167,12 +177,12 @@ export async function scanSensorWifiNetworks(setup: SensorSetupQr): Promise<Sens
           }
           const message = base64ToText(characteristic?.value);
           if (message.startsWith("wifi:")) {
-            try {
-              const network = JSON.parse(message.slice(5)) as SensorWifiNetwork;
-              if (network.ssid) found.set(network.ssid, network);
-            } catch {
-              /* Ignore a malformed advertisement and keep scanning. */
-            }
+            saveNetwork(message);
+          } else if (message.startsWith("wifi_part:")) {
+            networkMessage += message.slice(10);
+          } else if (message === "wifi_end") {
+            saveNetwork(networkMessage);
+            networkMessage = "";
           }
           if (message === "wifi_scan_done") {
             clearTimeout(timeout);

@@ -114,7 +114,15 @@ void applyConfiguration(const String& json) {
       network["secure"] = WiFi.encryptionType(index) != WIFI_AUTH_OPEN;
       String message = "wifi:";
       serializeJson(network, message);
-      reportStatus(message.c_str());
+      // The default BLE notification payload can be only 20 bytes. Stream each
+      // result in small framed pieces so network details are not truncated when
+      // the phone and ESP32 have not negotiated a larger MTU.
+      for (size_t offset = 0; offset < message.length(); offset += 8) {
+        const String part = "wifi_part:" + message.substring(offset, offset + 8);
+        reportStatus(part.c_str());
+        delay(25);
+      }
+      reportStatus("wifi_end");
       delay(45);
     }
     WiFi.scanDelete();
