@@ -1028,8 +1028,8 @@ function CookNowModal({
           )}
           {flow?.kind === "deduction" && (
             <Text style={cookFlowStyles.copy}>
-              Should EcoChef deduct compatible recipe quantities from your Ingredient List when you
-              finish cooking?
+              Should EcoChef deduct compatible recipe quantities from your saved ingredients when
+              you finish cooking?
             </Text>
           )}
           {flow?.kind === "scheduling" && (

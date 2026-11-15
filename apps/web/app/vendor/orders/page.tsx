@@ -7,6 +7,7 @@ import { createAuthenticatedWebApi } from "../../../src/lib/api";
 import { StoreRequired } from "../components/store-required";
 import { ThemedSelectControl } from "../components/themed-controls";
 import { DownloadOutcome, type DownloadResult } from "../components/download-outcome";
+import { drawPdfLogo, loadPdfLogo } from "../components/pdf-logo";
 import { buildOrdersCsv, filterOrders, orderMonth, orderStatus, type Order } from "./order-export";
 import { OrderChat } from "./order-chat";
 
@@ -524,6 +525,7 @@ export default function Orders() {
 }
 
 function OrderDetail({ order, close }: { order: Order; close: () => void }) {
+  const [pdfError, setPdfError] = useState("");
   return (
     <div className="modal-backdrop">
       <article className="modal-card order-detail">
@@ -566,13 +568,28 @@ function OrderDetail({ order, close }: { order: Order; close: () => void }) {
             <small>Total bill</small>RM {Number(order.total).toFixed(2)}
           </strong>
           {order.status === "completed" ? (
-            <button className="cta" onClick={() => createOrderPdf(order)}>
+            <button
+              className="cta"
+              onClick={() => {
+                setPdfError("");
+                void createOrderPdf(order).catch((cause) =>
+                  setPdfError(
+                    cause instanceof Error ? cause.message : "The PDF could not be created.",
+                  ),
+                );
+              }}
+            >
               <FileText size={16} /> Generate PDF Slip
             </button>
           ) : (
             <small>PDF slip is available after completion.</small>
           )}
         </footer>
+        {pdfError ? (
+          <p role="alert" className="product-form-error">
+            {pdfError}
+          </p>
+        ) : null}
       </article>
     </div>
   );
@@ -587,7 +604,8 @@ function download(blob: Blob, name: string) {
   anchor.remove();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
-function createOrderPdf(order: Order) {
+async function createOrderPdf(order: Order) {
+  const logo = await loadPdfLogo();
   const clean = (value: unknown) =>
     String(value ?? "")
       .replace(/[^\x20-\x7E]/g, " ")
@@ -608,13 +626,13 @@ function createOrderPdf(order: Order) {
   ) => `${rgb(colour)} rg BT /F1 ${size} Tf ${x} ${y} Td (${clean(value)}) Tj ET`;
   const content = [
     `${rgb(colors.primaryStrong)} rg 0 714 595 128 re f`,
-    text("ECOCHEF", 48, 800, printSize.title, colors.surface),
-    text("ORDER FULFILMENT SLIP", 48, 774, printSize.body, colors.primarySoft),
+    drawPdfLogo(48, 762, 160),
+    text("ORDER FULFILMENT SLIP", 225, 760, printSize.body, colors.primarySoft),
     text(`#${order.id.slice(0, 8).toUpperCase()}`, 420, 798, printSize.secondary, colors.surface),
     text(
       new Date(order.order_date).toLocaleString("en-MY"),
-      330,
-      775,
+      225,
+      784,
       printSize.caption,
       colors.primarySoft,
     ),
@@ -644,9 +662,10 @@ function createOrderPdf(order: Order) {
   const objects = [
     "<< /Type /Catalog /Pages 2 0 R >>",
     "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
-    "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 5 0 R >> >> /Contents 4 0 R >>",
+    "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 5 0 R >> /XObject << /Logo 6 0 R >> >> /Contents 4 0 R >>",
     `<< /Length ${content.length} >>\nstream\n${content}\nendstream`,
     `<< /Type /Font /Subtype /Type1 /BaseFont /${typography.print.fontFamily} >>`,
+    logo.imageObject,
   ];
   let pdf = "%PDF-1.4\n",
     offset = pdf.length;

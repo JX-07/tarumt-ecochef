@@ -268,7 +268,7 @@ export function ShoppingListSheet({
       setChecked(new Set());
       setCompletionReviewOpen(false);
       onMessage(
-        `${selected.length} item${selected.length === 1 ? "" : "s"} added to your Ingredient List.`,
+        `${selected.length} item${selected.length === 1 ? "" : "s"} added to In Kitchen.`,
         "success",
       );
     } catch (next) {
@@ -531,7 +531,7 @@ export function ShoppingListSheet({
               }}
             >
               <Ionicons name="basket-outline" size={16} color={colors.textMuted} />
-              <Text style={s.navText}>Ingredient List</Text>
+              <Text style={s.navText}>In Kitchen</Text>
             </Pressable>
             <Pressable
               style={s.nav}
@@ -572,7 +572,7 @@ export function ShoppingListSheet({
                 </Text>
                 <Text style={s.helpNote}>
                   These are helpful estimates, not safety guarantees. They assume normal storage.
-                  You can change any date later in Ingredient List.
+                  You can change any date later on the In Kitchen screen.
                 </Text>
                 <Pressable style={s.helpDone} onPress={() => setExpiryHelpOpen(false)}>
                   <Text style={s.helpDoneText}>Got it</Text>

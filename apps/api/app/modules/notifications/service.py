@@ -1,6 +1,6 @@
 import json
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from decimal import Decimal
 from urllib.error import URLError
 from urllib.request import Request, urlopen
@@ -10,7 +10,6 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
-
 
 logger = logging.getLogger(__name__)
 EXPO_PUSH_URL = "https://exp.host/--/api/v2/push/send"
@@ -142,9 +141,7 @@ def sync_consumer_notifications(session: Session, user_id: UUID) -> None:
             days = int(row.days_left)
             if days < 0:
                 title = f"{row.ingredient_name} may have gone bad"
-                message = (
-                    "Check it before using it and remove it from your Ingredient List if needed."
-                )
+                message = "Check it before using it and remove it from In Kitchen if needed."
             elif days == 0:
                 title = f"{row.ingredient_name} expires today"
                 message = "Use it today to reduce food waste."
@@ -277,7 +274,7 @@ def record_sensor_alert(
     if not enabled:
         return False
     # One alert per sensor/code/hour prevents noisy repeated readings from flooding the user.
-    hour = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H")
+    hour = datetime.now(UTC).strftime("%Y-%m-%dT%H")
     return create_notification(
         session,
         user_id=user_id,

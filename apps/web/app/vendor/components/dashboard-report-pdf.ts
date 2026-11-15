@@ -1,5 +1,6 @@
 import { colors, typography } from "@ecochef/design-tokens";
 import type { DashboardData } from "../dashboard-types";
+import { drawPdfLogo, loadPdfLogo, type PdfLogo } from "./pdf-logo";
 
 const PAGE_WIDTH = 595;
 const PAGE_HEIGHT = 842;
@@ -87,22 +88,25 @@ class Report {
   pages: string[][] = [];
   commands: string[] = [];
   y = 0;
-  constructor(private readonly period: string) {
+  constructor(
+    private readonly period: string,
+    private readonly logo: PdfLogo,
+  ) {
     this.newPage();
   }
   newPage() {
     this.commands = [];
     this.pages.push(this.commands);
     this.rect(0, PAGE_HEIGHT - 94, PAGE_WIDTH, 94, colors.primaryStrong);
-    this.text("ECOCHEF", MARGIN, PAGE_HEIGHT - 35, print.title, colors.surface, true);
+    this.commands.push(drawPdfLogo(MARGIN, PAGE_HEIGHT - 75, 160));
     this.text(
       "BUSINESS PERFORMANCE SUMMARY",
-      MARGIN,
-      PAGE_HEIGHT - 57,
+      220,
+      PAGE_HEIGHT - 40,
       print.label,
       colors.primarySoft,
     );
-    this.text(this.period, MARGIN, PAGE_HEIGHT - 77, print.caption, colors.surface);
+    this.text(this.period, 220, PAGE_HEIGHT - 62, print.caption, colors.surface);
     this.y = PAGE_HEIGHT - 119;
   }
   ensure(height: number) {
@@ -281,6 +285,7 @@ class Report {
       "",
       `<< /Type /Font /Subtype /Type1 /BaseFont /${typography.print.fontFamily} /Encoding /WinAnsiEncoding >>`,
       `<< /Type /Font /Subtype /Type1 /BaseFont /${typography.print.fontFamily}-Bold /Encoding /WinAnsiEncoding >>`,
+      this.logo.imageObject,
     ];
     const pageIds: number[] = [];
     this.pages.forEach((page) => {
@@ -289,7 +294,7 @@ class Report {
         streamId = pageId + 1;
       pageIds.push(pageId);
       objects.push(
-        `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${PAGE_WIDTH} ${PAGE_HEIGHT}] /Resources << /Font << /F1 3 0 R /F2 4 0 R >> >> /Contents ${streamId} 0 R >>`,
+        `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${PAGE_WIDTH} ${PAGE_HEIGHT}] /Resources << /Font << /F1 3 0 R /F2 4 0 R >> /XObject << /Logo 5 0 R >> >> /Contents ${streamId} 0 R >>`,
       );
       objects.push(`<< /Length ${content.length} >>\nstream\n${content}\nendstream`);
     });
@@ -313,10 +318,14 @@ class Report {
 }
 
 /** Produce a compact, paginated report directly from authorized dashboard data. */
-export function buildDashboardReportPdf(data: DashboardData, storeName = data.store.name): Blob {
+export async function buildDashboardReportPdf(
+  data: DashboardData,
+  storeName = data.store.name,
+): Promise<Blob> {
   const annual = data.period.key === "year";
   const report = new Report(
     `${data.period.label} | ${date(data.period.start_date)} - ${date(data.period.end_date)}`,
+    await loadPdfLogo(),
   );
   report.paragraph(storeName, colors.text, print.heading);
   report.paragraph(`Generated ${date(data.generated_at, true)} | ${data.period.timezone}`);
@@ -420,8 +429,11 @@ export function buildDashboardReportPdf(data: DashboardData, storeName = data.st
   return report.blob();
 }
 
-export function downloadDashboardReportPdf(data: DashboardData, storeName = data.store.name): void {
-  const blob = buildDashboardReportPdf(data, storeName);
+export async function downloadDashboardReportPdf(
+  data: DashboardData,
+  storeName = data.store.name,
+): Promise<void> {
+  const blob = await buildDashboardReportPdf(data, storeName);
   const url = URL.createObjectURL(blob),
     anchor = document.createElement("a");
   const period =

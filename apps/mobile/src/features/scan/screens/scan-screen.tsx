@@ -562,7 +562,7 @@ function IngredientResults({
           <>
             <Ionicons name="add" size={21} color={colors.surface} />
             <Text style={styles.primaryButtonText}>
-              Add {items.length} {items.length === 1 ? "Item" : "Items"} to Ingredient List
+              Add {items.length} {items.length === 1 ? "Item" : "Items"} to In Kitchen
             </Text>
           </>
         )}
@@ -610,7 +610,7 @@ function AppDialog({
           <Text style={styles.dialogBody}>
             {discard
               ? "Your current detected ingredients and edits will be discarded."
-              : `${dialog.count} ${dialog.count === 1 ? "item is" : "items are"} now in your ingredient list.`}
+              : `${dialog.count} ${dialog.count === 1 ? "item is" : "items are"} now saved to In Kitchen.`}
           </Text>
           {discard ? (
             <View style={styles.dialogActions}>
@@ -623,7 +623,7 @@ function AppDialog({
             </View>
           ) : (
             <Pressable onPress={onConfirm} style={styles.dialogPrimaryFull}>
-              <Text style={styles.dialogPrimaryText}>View Ingredient List</Text>
+              <Text style={styles.dialogPrimaryText}>View In Kitchen</Text>
             </Pressable>
           )}
         </View>

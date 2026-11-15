@@ -41,8 +41,8 @@ function bytesToBase64(value: string): string {
   return result;
 }
 
-function base64ToText(value?: string | null): string {
-  if (!value) return "";
+function base64ToBytes(value?: string | null): Uint8Array {
+  if (!value) return new Uint8Array();
   const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
   const bytes: number[] = [];
   const clean = value.replace(/=+$/, "");
@@ -58,7 +58,11 @@ function base64ToText(value?: string | null): string {
       bytes.push((buffer >> bits) & 255);
     }
   }
-  return new TextDecoder().decode(new Uint8Array(bytes));
+  return new Uint8Array(bytes);
+}
+
+function base64ToText(value?: string | null): string {
+  return new TextDecoder().decode(base64ToBytes(value));
 }
 
 async function requestBluetoothPermission(): Promise<void> {
@@ -94,9 +98,11 @@ async function findDevice(manager: BleManager, bleName: string): Promise<Device>
     const timeout = setTimeout(() => {
       manager.stopDeviceScan();
       reject(
-        new Error("Sensor not found. Hold its setup button until the light pulses, then retry."),
+        new Error(
+          "Sensor not found. Power-cycle the ESP32, close other Bluetooth apps and try again.",
+        ),
       );
-    }, 10_000);
+    }, 15_000);
     // Match the factory BLE name instead of filtering by service UUID. Some ESP32
     // advertising stacks move the 128-bit service UUID into the scan response when
     // the name does not fit in the primary advertising packet, and Android can then
@@ -108,7 +114,13 @@ async function findDevice(manager: BleManager, bleName: string): Promise<Device>
         reject(new Error("EcoChef could not scan for the sensor. Check Bluetooth and try again."));
         return;
       }
-      if (device && (device.localName === bleName || device.name === bleName)) {
+      const advertisesEcoChefService = device?.serviceUUIDs?.some(
+        (uuid) => uuid.toLowerCase() === ECOCHEF_PROVISIONING_SERVICE,
+      );
+      if (
+        device &&
+        (device.localName === bleName || device.name === bleName || advertisesEcoChefService)
+      ) {
         clearTimeout(timeout);
         manager.stopDeviceScan();
         resolve(device);
@@ -139,75 +151,93 @@ export async function scanSensorWifiNetworks(setup: SensorSetupQr): Promise<Sens
   await requestBluetoothPermission();
   const manager = new BleManager();
   let device: Device | undefined;
-  let monitor: Subscription | undefined;
   try {
     await waitForPoweredOn(manager);
     device = await findDevice(manager, setup.bleName);
     device = await device.connect({ timeout: 15_000 });
     device = await prepareConnectedDevice(device);
-    const networks = await new Promise<SensorWifiNetwork[]>((resolve, reject) => {
-      const found = new Map<string, SensorWifiNetwork>();
-      let networkMessage = "";
-      const saveNetwork = (message: string) => {
-        if (!message.startsWith("wifi:")) return;
-        try {
-          const network = JSON.parse(message.slice(5)) as SensorWifiNetwork;
-          if (network.ssid) found.set(network.ssid, network);
-        } catch {
-          /* Ignore a malformed result and continue receiving the scan. */
-        }
-      };
-      const timeout = setTimeout(
-        () =>
-          reject(
-            new Error(
-              "The sensor did not return Wi-Fi networks. Confirm it is powered, flashed with EcoChef firmware and in setup mode.",
-            ),
-          ),
-        25_000,
-      );
-      monitor = device?.monitorCharacteristicForService(
-        ECOCHEF_PROVISIONING_SERVICE,
-        ECOCHEF_STATUS_CHARACTERISTIC,
-        (error, characteristic) => {
-          if (error) {
-            clearTimeout(timeout);
-            reject(new Error("Bluetooth connection to the sensor was lost."));
-            return;
-          }
-          const message = base64ToText(characteristic?.value);
-          if (message.startsWith("wifi:")) {
-            saveNetwork(message);
-          } else if (message.startsWith("wifi_part:")) {
-            networkMessage += message.slice(10);
-          } else if (message === "wifi_end") {
-            saveNetwork(networkMessage);
-            networkMessage = "";
-          }
-          if (message === "wifi_scan_done") {
-            clearTimeout(timeout);
-            resolve([...found.values()].sort((left, right) => right.rssi - left.rssi));
-          }
-        },
-      );
-      // Give Android time to finish enabling notifications (the CCCD write)
-      // before the ESP32 starts sending scan results.
-      void wait(300)
-        .then(() =>
-          device?.writeCharacteristicWithResponseForService(
+    await device.writeCharacteristicWithResponseForService(
+      ECOCHEF_PROVISIONING_SERVICE,
+      ECOCHEF_CONFIG_CHARACTERISTIC,
+      bytesToBase64("S\n"),
+    );
+    let count: number | undefined;
+    for (let attempt = 0; attempt < 60; attempt++) {
+      const status = base64ToText(
+        (
+          await device.readCharacteristicForService(
             ECOCHEF_PROVISIONING_SERVICE,
-            ECOCHEF_CONFIG_CHARACTERISTIC,
-            bytesToBase64(`${JSON.stringify({ v: 1, action: "scan_wifi" })}\n`),
-          ),
-        )
-        .catch((error) => {
-          clearTimeout(timeout);
-          reject(error);
-        });
-    });
-    return networks;
+            ECOCHEF_STATUS_CHARACTERISTIC,
+          )
+        ).value,
+      );
+      const match = /^wifi_scan_ready:(\d+)$/.exec(status);
+      if (match) {
+        count = Number(match[1]);
+        break;
+      }
+      if (status.startsWith("error:")) throw new Error(status.slice(6));
+      await wait(500);
+    }
+    if (count === undefined || count > 16) {
+      throw new Error("The sensor did not return a Wi-Fi scan. Flash the latest EcoChef firmware.");
+    }
+    const found = new Map<string, SensorWifiNetwork>();
+    for (let index = 0; index < count; index++) {
+      const bytes: number[] = [];
+      let complete = false;
+      for (let part = 0; part < 32; part++) {
+        const offset = bytes.length;
+        await device.writeCharacteristicWithResponseForService(
+          ECOCHEF_PROVISIONING_SERVICE,
+          ECOCHEF_CONFIG_CHARACTERISTIC,
+          bytesToBase64(`G${index},${offset}\n`),
+        );
+        const prefix = `W${index},${offset}:`;
+        let response: Uint8Array | undefined;
+        for (let attempt = 0; attempt < 10; attempt++) {
+          const characteristic = await device.readCharacteristicForService(
+            ECOCHEF_PROVISIONING_SERVICE,
+            ECOCHEF_STATUS_CHARACTERISTIC,
+          );
+          const value = base64ToBytes(characteristic.value);
+          const marker = new TextDecoder().decode(value.slice(0, prefix.length));
+          if (marker === prefix || new TextDecoder().decode(value) === `E${index},${offset}`) {
+            response = value;
+            break;
+          }
+          await wait(50);
+        }
+        if (!response) throw new Error("A Wi-Fi result was not returned over Bluetooth.");
+        if (new TextDecoder().decode(response) === `E${index},${offset}`) {
+          complete = true;
+          break;
+        }
+        const payload = response.slice(prefix.length);
+        if (!payload.length) throw new Error("An empty Wi-Fi result was returned over Bluetooth.");
+        bytes.push(...payload);
+      }
+      if (!complete) throw new Error("A Wi-Fi result was incomplete over Bluetooth.");
+      try {
+        const network = JSON.parse(
+          new TextDecoder().decode(new Uint8Array(bytes)),
+        ) as SensorWifiNetwork;
+        if (
+          typeof network.ssid !== "string" ||
+          !network.ssid ||
+          typeof network.rssi !== "number" ||
+          !Number.isFinite(network.rssi) ||
+          typeof network.secure !== "boolean"
+        ) {
+          throw new Error("Invalid Wi-Fi result");
+        }
+        found.set(network.ssid, network);
+      } catch {
+        throw new Error("A Wi-Fi result was corrupted over Bluetooth. Try scanning again.");
+      }
+    }
+    return [...found.values()].sort((left, right) => right.rssi - left.rssi);
   } finally {
-    monitor?.remove();
     if (device) await device.cancelConnection().catch(() => undefined);
     manager.destroy();
   }

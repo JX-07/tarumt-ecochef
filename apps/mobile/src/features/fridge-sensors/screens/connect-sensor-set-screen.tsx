@@ -183,6 +183,7 @@ export function ConnectSensorSetScreen() {
       return;
     }
     setWifiUnavailable(undefined);
+    setWifiNetworks([]);
     setWifiPickerOpen(true);
     setWifiScanning(true);
     setError(undefined);
@@ -417,10 +418,6 @@ export function ConnectSensorSetScreen() {
           setSsid(network.ssid);
           setWifiPickerOpen(false);
         }}
-        onManual={(value) => {
-          setSsid(value);
-          setWifiPickerOpen(false);
-        }}
       />
     </KeyboardAvoidingView>
   );
@@ -448,7 +445,6 @@ function WifiPicker({
   unavailableMessage,
   onClose,
   onSelect,
-  onManual,
 }: {
   visible: boolean;
   loading: boolean;
@@ -456,16 +452,8 @@ function WifiPicker({
   unavailableMessage?: string;
   onClose: () => void;
   onSelect: (network: SensorWifiNetwork) => void;
-  onManual: (ssid: string) => void;
 }) {
   const insets = useSafeAreaInsets();
-  const [manual, setManual] = useState(false);
-  const [value, setValue] = useState("");
-  useEffect(() => {
-    if (!visible) return;
-    setManual(false);
-    setValue("");
-  }, [visible]);
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <KeyboardAvoidingView
@@ -487,23 +475,7 @@ function WifiPicker({
               <Ionicons name="close" size={20} color={colors.text} />
             </Pressable>
           </View>
-          {manual ? (
-            <>
-              <Field
-                label="Wi-Fi network name"
-                value={value}
-                placeholder="Network name"
-                autoCapitalize="none"
-                onChangeText={setValue}
-              />
-              <PrimaryButton
-                label="Use this network"
-                onPress={() => {
-                  if (value.trim()) onManual(value.trim());
-                }}
-              />
-            </>
-          ) : unavailableMessage ? (
+          {unavailableMessage ? (
             <View style={s.noNetworks}>
               <Ionicons name="phone-portrait-outline" size={31} color={colors.warning} />
               <Text style={s.wifiLoadingTitle}>Physical phone required</Text>
@@ -553,16 +525,10 @@ function WifiPicker({
               <Ionicons name="wifi-outline" size={28} color={colors.textMuted} />
               <Text style={s.wifiLoadingTitle}>No networks returned</Text>
               <Text style={s.wifiLoadingCopy}>
-                Check the physical sensor or enter the network name manually.
+                Check that a 2.4 GHz network is nearby, then close this sheet and scan again.
               </Text>
             </View>
           )}
-          {!manual ? (
-            <Pressable style={s.manualNetwork} onPress={() => setManual(true)}>
-              <Ionicons name="create-outline" size={18} color={colors.primaryStrong} />
-              <Text style={s.rescanText}>Enter network name manually</Text>
-            </Pressable>
-          ) : null}
         </View>
       </KeyboardAvoidingView>
     </Modal>
@@ -1136,14 +1102,6 @@ const s = StyleSheet.create({
     fontWeight: typography.weight.semibold,
   },
   openNetwork: { color: colors.textMuted, fontSize: typography.mobile.rawSize.s9 },
-  manualNetwork: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: spacing[2],
-    marginTop: spacing[3],
-    padding: spacing[3],
-  },
   error: {
     flexDirection: "row",
     alignItems: "flex-start",

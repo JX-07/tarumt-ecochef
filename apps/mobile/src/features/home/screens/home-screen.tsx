@@ -262,9 +262,7 @@ export function HomeScreen() {
               </View>
               <View style={styles.flex}>
                 <Text style={styles.expiryTitle}>{expiryTitle}</Text>
-                <Text style={styles.helper}>
-                  Review your Ingredient List before these items expire.
-                </Text>
+                <Text style={styles.helper}>Check In Kitchen before these items expire.</Text>
               </View>
               <Text style={styles.cookLink}>View</Text>
               <Ionicons name="chevron-forward" size={14} color={colors.warningStrong} />
@@ -406,7 +404,7 @@ export function HomeScreen() {
           )}
 
           <SectionHeader
-            title="INGREDIENT LIST"
+            title="IN KITCHEN"
             action="Manage"
             onAction={() => router.push("/ingredients" as never)}
           />
@@ -446,7 +444,7 @@ export function HomeScreen() {
             </ScrollView>
           ) : (
             <EmptyCard
-              text="Your Ingredient List is empty."
+              text="No ingredients in your kitchen yet."
               action="Add ingredients"
               onPress={() => router.push("/ingredients" as never)}
             />

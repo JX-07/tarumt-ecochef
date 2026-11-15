@@ -196,7 +196,7 @@ export function InventoryScreen() {
       setError(
         nextError instanceof Error
           ? nextError.message
-          : "Your ingredient list could not be loaded.",
+          : "Your saved ingredients could not be loaded.",
       );
     } finally {
       setLoading(false);
@@ -278,7 +278,7 @@ export function InventoryScreen() {
       } else {
         Alert.alert(
           "Expired ingredients removed",
-          `${removedIds.size} expired ${removedIds.size === 1 ? "item has" : "items have"} been removed from your ingredient list.`,
+          `${removedIds.size} expired ${removedIds.size === 1 ? "item has" : "items have"} been removed from In Kitchen.`,
         );
       }
     } finally {
@@ -305,7 +305,7 @@ export function InventoryScreen() {
         <Pressable accessibilityLabel="Go back" style={styles.roundButton} onPress={leaveInventory}>
           <Ionicons name="chevron-back" size={20} color={palette.c687586} />
         </Pressable>
-        <Text style={styles.title}>Ingredient List</Text>
+        <Text style={styles.title}>In Kitchen</Text>
         <View style={styles.headerActions}>
           <Pressable
             accessibilityLabel="Scan ingredients"
@@ -1002,8 +1002,8 @@ function DeleteConfirmation({
           </View>
           <Text style={styles.confirmTitle}>Remove ingredient?</Text>
           <Text style={styles.confirmCopy}>
-            <Text style={styles.confirmName}>{item?.name}</Text> will be removed from your
-            ingredient list. This action cannot be undone.
+            <Text style={styles.confirmName}>{item?.name}</Text> will be removed from In Kitchen.
+            This action cannot be undone.
           </Text>
           <View style={styles.confirmActions}>
             <Pressable style={styles.cancelButton} disabled={deleting} onPress={onCancel}>
@@ -1054,7 +1054,7 @@ function BulkDeleteConfirmation({
           <Text style={styles.confirmTitle}>Remove all expired items?</Text>
           <Text style={styles.confirmCopy}>
             {count} expired {count === 1 ? "ingredient" : "ingredients"} will be permanently removed
-            from your ingredient list. This action cannot be undone.
+            from In Kitchen. This action cannot be undone.
           </Text>
           <View style={styles.confirmActions}>
             <Pressable style={styles.cancelButton} disabled={deleting} onPress={onCancel}>

@@ -424,7 +424,7 @@ export function CookingModeScreen() {
       setVoiceNotice({
         title: "Could not finish cooking",
         message:
-          next instanceof Error ? next.message : "EcoChef could not update your Ingredient List.",
+          next instanceof Error ? next.message : "EcoChef could not update your saved ingredients.",
       });
       setFinishing(false);
     }

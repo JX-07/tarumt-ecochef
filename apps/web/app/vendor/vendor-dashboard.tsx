@@ -320,7 +320,7 @@ function DashboardExport({
         Number(year),
         month === "all" ? undefined : Number(month),
       );
-      downloadDashboardReportPdf(report, report.store.name);
+      await downloadDashboardReportPdf(report, report.store.name);
       close();
       setOutcome({
         success: true,

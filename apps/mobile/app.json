@@ -2,6 +2,7 @@
   "expo": {
     "name": "EcoChef",
     "slug": "ecochef",
+    "icon": "./assets/icon.png",
     "scheme": "ecochef",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
@@ -45,6 +46,10 @@
     ],
     "android": {
       "package": "com.ecochef.mobile",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#FFFFFF"
+      },
       "permissions": [
         "android.permission.BLUETOOTH_SCAN",
         "android.permission.BLUETOOTH_CONNECT",

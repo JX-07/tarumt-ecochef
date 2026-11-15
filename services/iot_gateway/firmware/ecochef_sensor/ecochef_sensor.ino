@@ -24,6 +24,8 @@ DHT dht(DHT_PIN, DHT_TYPE);
 NimBLECharacteristic* statusCharacteristic = nullptr;
 String configBuffer;
 String wifiSsid, wifiPassword, readingUrl, sensorKey;
+String wifiScanResults[16];
+int wifiScanResultCount = 0;
 unsigned long lastReadingAt = 0;
 unsigned long lastStatusAt = 0;
 unsigned long lastDiagnosticsAt = 0;
@@ -98,37 +100,48 @@ void saveConfiguration() {
 }
 
 void applyConfiguration(const String& json) {
-  StaticJsonDocument<768> config;
-  if (deserializeJson(config, json) || config["v"] != 1) { reportStatus("error:Invalid setup data."); return; }
-  if (config["action"] == "scan_wifi") {
+  if (json.startsWith("G")) {
+    const int separator = json.indexOf(',');
+    if (separator < 2) return;
+    const int index = json.substring(1, separator).toInt();
+    const int offset = json.substring(separator + 1).toInt();
+    if (index < 0 || index >= wifiScanResultCount || offset < 0) return;
+    const String prefix = "W" + String(index) + "," + String(offset) + ":";
+    if (offset >= wifiScanResults[index].length()) {
+      statusCharacteristic->setValue(("E" + String(index) + "," + String(offset)).c_str());
+    } else {
+      // The response fits the default 20-byte BLE characteristic payload.
+      const String result = prefix + wifiScanResults[index].substring(offset, offset + 20 - prefix.length());
+      statusCharacteristic->setValue(result.c_str());
+    }
+    return;
+  }
+  if (json == "S") {
     Serial.println("EcoChef app requested a 2.4 GHz Wi-Fi scan");
+    wifiScanResultCount = 0;
+    statusCharacteristic->setValue("wifi_scanning");
     WiFi.mode(WIFI_STA);
     WiFi.disconnect(false, false);
     const int count = WiFi.scanNetworks(false, true, false, 300, 0);
     Serial.printf("Wi-Fi scan completed: %d network(s) found\n", count);
-    // Send one compact notification per network to remain below the default BLE MTU.
-    for (int index = 0; index < count && index < 16; index++) {
-      StaticJsonDocument<128> network;
+    if (count < 0) { reportStatus("error:Wi-Fi scan failed."); return; }
+    for (int index = 0; index < count && wifiScanResultCount < 16; index++) {
+      StaticJsonDocument<256> network;
       network["ssid"] = WiFi.SSID(index);
       network["rssi"] = WiFi.RSSI(index);
       network["secure"] = WiFi.encryptionType(index) != WIFI_AUTH_OPEN;
-      String message = "wifi:";
-      serializeJson(network, message);
-      // The default BLE notification payload can be only 20 bytes. Stream each
-      // result in small framed pieces so network details are not truncated when
-      // the phone and ESP32 have not negotiated a larger MTU.
-      for (size_t offset = 0; offset < message.length(); offset += 8) {
-        const String part = "wifi_part:" + message.substring(offset, offset + 8);
-        reportStatus(part.c_str());
-        delay(25);
-      }
-      reportStatus("wifi_end");
-      delay(45);
+      if (network["ssid"].as<String>().isEmpty()) continue;
+      wifiScanResults[wifiScanResultCount] = "";
+      serializeJson(network, wifiScanResults[wifiScanResultCount]);
+      wifiScanResultCount++;
     }
     WiFi.scanDelete();
-    reportStatus("wifi_scan_done");
+    Serial.printf("BLE Wi-Fi result protocol v3: %d network(s) ready for pull\n", wifiScanResultCount);
+    reportStatus(("wifi_scan_ready:" + String(wifiScanResultCount)).c_str());
     return;
   }
+  StaticJsonDocument<768> config;
+  if (deserializeJson(config, json) || config["v"] != 1) { reportStatus("error:Invalid setup data."); return; }
   wifiSsid = config["ssid"].as<String>();
   wifiPassword = config["password"].as<String>();
   readingUrl = config["readingUrl"].as<String>();
