@@ -6,6 +6,8 @@
 #include <NimBLEDevice.h>
 #include <Preferences.h>
 #include <WiFi.h>
+#include <freertos/FreeRTOS.h>
+#include <freertos/queue.h>
 
 static const char* DEVICE_CODE = "ENOSE-F57630";
 static const char* BLE_NAME = "EcoChef-F57630";
@@ -23,6 +25,10 @@ Preferences preferences;
 DHT dht(DHT_PIN, DHT_TYPE);
 NimBLECharacteristic* statusCharacteristic = nullptr;
 String configBuffer;
+struct PendingConfiguration {
+  char json[768];
+};
+QueueHandle_t configurationQueue = nullptr;
 String wifiSsid, wifiPassword, readingUrl, sensorKey;
 String wifiScanResults[16];
 int wifiScanResultCount = 0;
@@ -171,7 +177,21 @@ class ConfigCallbacks : public NimBLECharacteristicCallbacks {
     if (newline < 0) return;
     const String message = configBuffer.substring(0, newline);
     configBuffer = configBuffer.substring(newline + 1);
-    applyConfiguration(message);
+    if (message == "S" || message.startsWith("G")) {
+      applyConfiguration(message);
+      return;
+    }
+    PendingConfiguration pending;
+    if (message.length() >= sizeof(pending.json)) {
+      reportStatus("error:Setup data is too large.");
+      return;
+    }
+    message.toCharArray(pending.json, sizeof(pending.json));
+    // Wi-Fi connection and the test upload can take over 30 seconds. Acknowledge
+    // the GATT write first, then process the setup on the Arduino loop task.
+    if (xQueueSend(configurationQueue, &pending, 0) != pdTRUE) {
+      reportStatus("error:Sensor setup is already in progress.");
+    }
   }
 };
 
@@ -181,6 +201,7 @@ class ServerCallbacks : public NimBLEServerCallbacks {
   }
 
   void onDisconnect(NimBLEServer*, NimBLEConnInfo&, int) override {
+    configBuffer = "";
     Serial.println("Bluetooth disconnected; setup advertising restarted");
     NimBLEDevice::startAdvertising();
   }
@@ -213,6 +234,11 @@ void loadConfiguration() {
 
 void setup() {
   Serial.begin(115200);
+  configurationQueue = xQueueCreate(1, sizeof(PendingConfiguration));
+  if (!configurationQueue) {
+    Serial.println("Could not allocate the Bluetooth setup queue");
+    while (true) delay(1000);
+  }
   analogReadResolution(12);
   dht.begin();
   loadConfiguration();
@@ -225,6 +251,11 @@ void setup() {
 }
 
 void loop() {
+  PendingConfiguration pending;
+  if (configurationQueue && xQueueReceive(configurationQueue, &pending, 0) == pdTRUE) {
+    delay(150); // Let the final Bluetooth write response reach the phone first.
+    applyConfiguration(String(pending.json));
+  }
   if (millis() - lastReadingAt >= 30000) {
     lastReadingAt = millis();
     postReading();
