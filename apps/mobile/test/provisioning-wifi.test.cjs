@@ -12,7 +12,7 @@ const compiled = ts.transpileModule(source, {
   compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
 }).outputText;
 
-function createScanner(networks, corrupt = false) {
+function createScanner(networks, corrupt = false, legacy = false) {
   const results = networks.map((network) => Buffer.from(JSON.stringify(network), "utf8"));
   let status = Buffer.from("idle");
   const device = {
@@ -30,7 +30,9 @@ function createScanner(networks, corrupt = false) {
     async writeCharacteristicWithResponseForService(_service, _characteristic, value) {
       const command = Buffer.from(value, "base64").toString("utf8").trim();
       if (command === "S") {
-        status = Buffer.from(`wifi_scan_ready:${results.length}`);
+        status = Buffer.from(
+          legacy ? "error:Invalid setup data." : `wifi_scan_ready:${results.length}`,
+        );
       } else {
         const match = /^G(\d+),(\d+)$/.exec(command);
         assert.ok(match, `Unexpected command: ${command}`);
@@ -107,4 +109,8 @@ test("rejects a damaged BLE result instead of displaying zero networks", async (
     createScanner([{ ssid: "Kitchen", rssi: -50, secure: true }], true),
     /corrupted over Bluetooth/,
   );
+});
+
+test("identifies firmware that does not understand the v3 scan command", async () => {
+  await assert.rejects(createScanner([], false, true), /older EcoChef firmware/);
 });

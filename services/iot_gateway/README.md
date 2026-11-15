@@ -18,6 +18,14 @@ Before manufacturing or local hardware testing:
 3. Put its device code and BLE name into the firmware build for that unit.
 4. Flash the firmware and print the generated QR payload on the enclosure or quick-start card.
 
+The Wi-Fi picker requires the current firmware's BLE result protocol v3. After uploading
+`firmware/ecochef_sensor/ecochef_sensor.ino`, startup prints
+`EcoChef firmware: BLE Wi-Fi protocol v3` and a scan prints
+`BLE Wi-Fi result protocol v3: ...` at 115200 baud. An ESP32 that responds with
+`Invalid setup data.` to the picker still has older firmware; rebuild the mobile app and
+flash the ESP32 from this same source revision. The setup code in PostgreSQL does not
+update firmware on the physical board.
+
 ## Firmware diagnostics
 
 EcoChef's mobile pairing flow creates a private ingestion key for each ESP32 electronic nose.

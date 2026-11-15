@@ -157,15 +157,16 @@ def claim_fridge_sensor(
 ) -> ClaimFridgeSensorResponse:
     """Claim a factory-provisioned sensor using the one-time secret in its QR label."""
     setup_code_hash = _hash_ingest_key(request.setup_code) if request.setup_code else None
+    lookup_column = "device_code" if request.device_code else "setup_code_hash"
+    lookup_value = request.device_code or setup_code_hash
     device = session.execute(
-        text("""
+        text(f"""
         SELECT device_code, claim_secret_hash, setup_code_hash, ble_name, claimed_at
         FROM sensor_provisioning_devices
-        WHERE (:device_code IS NOT NULL AND device_code = :device_code)
-           OR (:setup_code_hash IS NOT NULL AND setup_code_hash = :setup_code_hash)
+        WHERE {lookup_column} = :lookup_value
         FOR UPDATE
     """),
-        {"device_code": request.device_code, "setup_code_hash": setup_code_hash},
+        {"lookup_value": lookup_value},
     ).one_or_none()
     supplied_hash = (
         _hash_ingest_key(request.claim_secret) if request.claim_secret else setup_code_hash

@@ -23,8 +23,8 @@ export function parseSensorSetupQr(value: string): SensorSetupQr {
   return { version: 1, deviceCode, claimSecret, bleName };
 }
 
-function bytesToBase64(value: string): string {
-  const bytes = new TextEncoder().encode(value);
+function bytesToBase64(value: string | Uint8Array): string {
+  const bytes = typeof value === "string" ? new TextEncoder().encode(value) : value;
   const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
   let result = "";
   for (let index = 0; index < bytes.length; index += 3) {
@@ -176,7 +176,15 @@ export async function scanSensorWifiNetworks(setup: SensorSetupQr): Promise<Sens
         count = Number(match[1]);
         break;
       }
-      if (status.startsWith("error:")) throw new Error(status.slice(6));
+      if (status.startsWith("error:")) {
+        const detail = status.slice(6);
+        if (/^Invalid setup data\.?$/i.test(detail)) {
+          throw new Error(
+            "This ESP32 has older EcoChef firmware. Flash the latest ecochef_sensor.ino (Wi-Fi protocol v3), then try again.",
+          );
+        }
+        throw new Error(detail);
+      }
       await wait(500);
     }
     if (count === undefined || count > 16) {
@@ -293,12 +301,15 @@ export async function provisionSensor(
       );
     });
     const payload = `${JSON.stringify({ v: 1, ...config })}\n`;
-    // BLE writes are deliberately chunked so provisioning works before MTU negotiation on both platforms.
-    for (let offset = 0; offset < payload.length; offset += 120) {
+    const payloadBytes = new TextEncoder().encode(payload);
+    // Allow Android to enable notifications before the ESP32 reports connection status.
+    await wait(300);
+    // The 20-byte chunks also work when MTU negotiation falls back to the BLE minimum.
+    for (let offset = 0; offset < payloadBytes.length; offset += 20) {
       await device.writeCharacteristicWithResponseForService(
         ECOCHEF_PROVISIONING_SERVICE,
         ECOCHEF_CONFIG_CHARACTERISTIC,
-        bytesToBase64(payload.slice(offset, offset + 120)),
+        bytesToBase64(payloadBytes.slice(offset, offset + 20)),
       );
     }
     await completion;

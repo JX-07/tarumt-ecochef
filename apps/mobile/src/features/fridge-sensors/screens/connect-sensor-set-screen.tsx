@@ -2,7 +2,7 @@ import { colors, spacing, typography } from "@ecochef/design-tokens";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { CameraView, useCameraPermissions, type BarcodeScanningResult } from "expo-camera";
 import { router } from "expo-router";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -12,6 +12,8 @@ import {
   ScrollView,
   StyleSheet,
   View,
+  type LayoutChangeEvent,
+  type ScrollViewInstance,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { apiBaseUrl } from "../../../lib/api-url";
@@ -43,6 +45,9 @@ export function ConnectSensorSetScreen() {
   const [fridgeName, setFridgeName] = useState("");
   const [ssid, setSsid] = useState("");
   const [wifiPassword, setWifiPassword] = useState("");
+  const [passwordVisible, setPasswordVisible] = useState(false);
+  const scrollRef = useRef<ScrollViewInstance>(null);
+  const passwordFieldY = useRef(0);
   const [wifiNetworks, setWifiNetworks] = useState<SensorWifiNetwork[]>([]);
   const [wifiPickerOpen, setWifiPickerOpen] = useState(false);
   const [wifiScanning, setWifiScanning] = useState(false);
@@ -139,6 +144,7 @@ export function ConnectSensorSetScreen() {
         setStatus,
       );
       setWifiPassword("");
+      setPasswordVisible(false);
       setStep("verify");
     } catch (nextError) {
       setError(
@@ -235,8 +241,9 @@ export function ConnectSensorSetScreen() {
     }
   };
   return (
-    <KeyboardAvoidingView style={s.root} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+    <KeyboardAvoidingView style={s.root} behavior={Platform.OS === "ios" ? "padding" : "height"}>
       <ScrollView
+        ref={scrollRef}
         contentContainerStyle={[
           s.content,
           { paddingTop: insets.top + PAGE_TOP_GAP, paddingBottom: insets.bottom + spacing[10] },
@@ -333,14 +340,52 @@ export function ConnectSensorSetScreen() {
               </View>
               <Ionicons name="chevron-down" size={19} color={colors.textMuted} />
             </Pressable>
-            <Field
-              label="Wi-Fi password"
-              value={wifiPassword}
-              placeholder="Wi-Fi password"
-              autoCapitalize="none"
-              secureTextEntry
-              onChangeText={setWifiPassword}
-            />
+            <View
+              style={s.field}
+              onLayout={(event: LayoutChangeEvent) => {
+                passwordFieldY.current = event.nativeEvent.layout.y;
+              }}
+            >
+              <Text style={s.fieldLabel}>Wi-Fi password</Text>
+              <View style={s.passwordInputRow}>
+                <TextInput
+                  accessibilityLabel="Wi-Fi password"
+                  value={wifiPassword}
+                  placeholder="Wi-Fi password"
+                  placeholderTextColor={colors.textSubtle}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  secureTextEntry={!passwordVisible}
+                  onChangeText={setWifiPassword}
+                  onFocus={() =>
+                    setTimeout(
+                      () =>
+                        scrollRef.current?.scrollTo({
+                          y: Math.max(0, passwordFieldY.current - spacing[4]),
+                          animated: true,
+                        }),
+                      250,
+                    )
+                  }
+                  style={s.passwordInputText}
+                />
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={
+                    passwordVisible ? "Hide Wi-Fi password" : "Show Wi-Fi password"
+                  }
+                  onPress={() => setPasswordVisible((visible) => !visible)}
+                  hitSlop={8}
+                  style={s.passwordToggle}
+                >
+                  <Ionicons
+                    name={passwordVisible ? "eye-off-outline" : "eye-outline"}
+                    size={21}
+                    color={colors.textMuted}
+                  />
+                </Pressable>
+              </View>
+            </View>
             <View style={s.privacy}>
               <Ionicons name="lock-closed-outline" size={18} color={colors.primaryStrong} />
               <Text style={s.privacyText}>
@@ -888,6 +933,28 @@ const s = StyleSheet.create({
     backgroundColor: colors.surface,
     color: colors.text,
     fontSize: typography.mobile.rawSize.s14,
+  },
+  passwordInputRow: {
+    minHeight: 50,
+    flexDirection: "row",
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: spacing[3],
+    backgroundColor: colors.surface,
+  },
+  passwordInputText: {
+    flex: 1,
+    minHeight: 50,
+    paddingHorizontal: spacing[3],
+    color: colors.text,
+    fontSize: typography.mobile.rawSize.s14,
+  },
+  passwordToggle: {
+    width: 50,
+    height: 50,
+    alignItems: "center",
+    justifyContent: "center",
   },
   wifiSelect: {
     minHeight: 58,
