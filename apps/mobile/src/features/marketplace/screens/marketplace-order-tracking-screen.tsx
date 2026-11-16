@@ -113,6 +113,7 @@ export function MarketplaceOrderTrackingScreen() {
       setPaymentStatus(result.status === "cancelled" ? "refunded" : paymentStatus);
       setCanCancel(false);
       setCancelOpen(false);
+      router.replace("/(tabs)" as never);
     } catch (cause) {
       setCancelError(cause instanceof Error ? cause.message : "The order could not be cancelled.");
     } finally {
@@ -141,10 +142,24 @@ export function MarketplaceOrderTrackingScreen() {
               <Ionicons name="close" size={spacing[6]} color={colors.text} />
             </Pressable>
           </View>
-          <View style={styles.success}>
-            <Ionicons name="checkmark-circle" size={spacing[8]} color={colors.success} />
+          <View
+            style={[
+              styles.success,
+              orderStatus === "cancellation_pending" && styles.refundPendingCard,
+            ]}
+          >
+            <Ionicons
+              name={orderStatus === "cancellation_pending" ? "time" : "checkmark-circle"}
+              size={spacing[8]}
+              color={orderStatus === "cancellation_pending" ? colors.warningStrong : colors.success}
+            />
             <View style={styles.successCopy}>
-              <Text style={styles.successTitle}>
+              <Text
+                style={[
+                  styles.successTitle,
+                  orderStatus === "cancellation_pending" && styles.refundPendingTitle,
+                ]}
+              >
                 {orderStatus === "cancellation_pending"
                   ? "Refund requested"
                   : paymentStatus === "refunded"
@@ -159,7 +174,12 @@ export function MarketplaceOrderTrackingScreen() {
             </View>
           </View>
           <View style={styles.hero}>
-            <View style={styles.heroIcon}>
+            <View
+              style={[
+                styles.heroIcon,
+                orderStatus === "cancellation_pending" && styles.refundPendingIcon,
+              ]}
+            >
               <Ionicons
                 name={
                   orderStatus === "cancellation_pending"
@@ -170,7 +190,9 @@ export function MarketplaceOrderTrackingScreen() {
                 }
                 size={spacing[8]}
                 color={
-                  orderStatus === "cancellation_pending" ? colors.danger : colors.primaryStrong
+                  orderStatus === "cancellation_pending"
+                    ? colors.warningStrong
+                    : colors.primaryStrong
                 }
               />
             </View>
@@ -396,6 +418,11 @@ const styles = StyleSheet.create({
     fontSize: textSize.secondaryTextHeavy,
     fontWeight: textWeight.bold,
   },
+  refundPendingCard: {
+    borderColor: colors.warningBorder,
+    backgroundColor: colors.warningSoft,
+  },
+  refundPendingTitle: { color: colors.warningStrong },
   successText: { marginTop: spacing[1], color: colors.textMuted, fontSize: textSize.caption },
   hero: { alignItems: "center", paddingVertical: spacing[8] },
   heroIcon: {
@@ -406,6 +433,7 @@ const styles = StyleSheet.create({
     borderRadius: spacing[8],
     backgroundColor: colors.primarySoft,
   },
+  refundPendingIcon: { backgroundColor: colors.warningSoft },
   title: {
     marginTop: spacing[4],
     color: colors.text,

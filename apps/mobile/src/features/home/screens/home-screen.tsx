@@ -145,12 +145,17 @@ export function HomeScreen() {
       const visible = (
         await Promise.all(
           history.orders.map(async (order) => {
-            const refunded =
-              order.payment_status.toLowerCase() === "refunded" &&
-              ["cancelled", "refunded"].includes(order.status.toLowerCase());
-            if (refunded) {
+            if (order.cancellation_reason?.startsWith("Cancelled by the customer"))
+              return undefined;
+            const refundUpdate =
+              order.status.toLowerCase() === "cancellation_pending" ||
+              (order.payment_status.toLowerCase() === "refunded" &&
+                ["cancelled", "refunded"].includes(order.status.toLowerCase()));
+            if (refundUpdate) {
+              const phase =
+                order.payment_status.toLowerCase() === "refunded" ? "refunded" : "processing";
               const acknowledged = await AsyncStorage.getItem(
-                `ecochef.refund-ack.${user?.uid ?? "guest"}.${order.id}`,
+                `ecochef.refund-ack.${user?.uid ?? "guest"}.${order.id}.${phase}`,
               );
               return acknowledged ? undefined : order;
             }
@@ -341,12 +346,14 @@ export function HomeScreen() {
     const order = refundNoticeOrder;
     setRefundNoticeOrder(undefined);
 
-    if (!order || order.payment_status.toLowerCase() !== "refunded") return;
+    if (!order) return;
 
-    // Dismiss the refunded tracker only after the user closes the details.
+    // Dismiss refund updates after the user acknowledges the details.
     setActiveOrders((orders) => orders.filter((item) => item.id !== order.id));
     void AsyncStorage.setItem(
-      `ecochef.refund-ack.${user?.uid ?? "guest"}.${order.id}`,
+      `ecochef.refund-ack.${user?.uid ?? "guest"}.${order.id}.${
+        order.payment_status.toLowerCase() === "refunded" ? "refunded" : "processing"
+      }`,
       "1",
     ).catch(() => undefined);
   };
@@ -871,7 +878,7 @@ export function HomeScreen() {
             ? "Your order has been refunded by the business owner. The amount will be returned to your original payment method. Please allow up to 14 days for it to appear."
             : "The business owner has cancelled your order and requested a refund. The money will be returned to your original payment method within 14 days."
         }${refundNoticeOrder?.cancellation_reason ? `\n\nReason: ${refundNoticeOrder.cancellation_reason}` : ""}`}
-        tone="error"
+        tone={refundNoticeOrder?.payment_status.toLowerCase() === "refunded" ? "error" : "warning"}
         onClose={closeRefundNotice}
       />
     </>
@@ -889,17 +896,18 @@ function HomeOrderTracker({
     order.status.toLowerCase(),
     order.fulfillment_method === "pickup",
   );
-  const refundUpdate =
-    order.status.toLowerCase() === "cancellation_pending" ||
-    order.payment_status.toLowerCase() === "refunded";
+  const refundPending = order.status.toLowerCase() === "cancellation_pending";
   const refundComplete = order.payment_status.toLowerCase() === "refunded";
+  const refundUpdate = refundPending || refundComplete;
+  const refundColor = refundPending ? colors.warningStrong : colors.danger;
   return (
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={`Track order from ${order.shop}`}
       style={({ pressed }) => [
         styles.orderTracker,
-        refundUpdate && styles.refundedOrderTracker,
+        refundPending && styles.pendingRefundOrderTracker,
+        refundComplete && styles.refundedOrderTracker,
         styles.shadow,
         pressed && styles.pressed,
       ]}
@@ -915,21 +923,27 @@ function HomeOrderTracker({
         } as never);
       }}
     >
-      <View style={[styles.orderTrackerIcon, refundUpdate && styles.refundedOrderTrackerIcon]}>
+      <View
+        style={[
+          styles.orderTrackerIcon,
+          refundPending && styles.pendingRefundOrderTrackerIcon,
+          refundComplete && styles.refundedOrderTrackerIcon,
+        ]}
+      >
         <Ionicons
           name={display.icon}
           size={22}
-          color={refundUpdate ? colors.danger : colors.primaryStrong}
+          color={refundUpdate ? refundColor : colors.primaryStrong}
         />
       </View>
       <View style={styles.flex}>
         <View style={styles.orderTrackerHeading}>
-          <Text style={[styles.orderTrackerEyebrow, refundUpdate && { color: colors.danger }]}>
+          <Text style={[styles.orderTrackerEyebrow, refundUpdate && { color: refundColor }]}>
             {refundUpdate ? "REFUND UPDATE" : "LIVE ORDER"}
           </Text>
           <Text style={styles.orderTrackerId}>#{order.id.slice(0, 8).toUpperCase()}</Text>
         </View>
-        <Text style={[styles.orderTrackerTitle, refundUpdate && { color: colors.danger }]}>
+        <Text style={[styles.orderTrackerTitle, refundUpdate && { color: refundColor }]}>
           {display.title}
         </Text>
         <Text style={styles.orderTrackerShop} numberOfLines={1}>
@@ -957,7 +971,7 @@ function HomeOrderTracker({
       <Ionicons
         name="chevron-forward"
         size={18}
-        color={refundUpdate ? colors.danger : colors.primaryStrong}
+        color={refundUpdate ? refundColor : colors.primaryStrong}
       />
     </Pressable>
   );
@@ -1170,6 +1184,10 @@ const styles = StyleSheet.create({
     borderColor: colors.danger,
     backgroundColor: colors.dangerSoft,
   },
+  pendingRefundOrderTracker: {
+    borderColor: colors.warningBorder,
+    backgroundColor: colors.warningSoft,
+  },
   orderTrackerIcon: {
     width: 46,
     height: 46,
@@ -1179,6 +1197,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.primarySoft,
   },
   refundedOrderTrackerIcon: { backgroundColor: colors.dangerSoft },
+  pendingRefundOrderTrackerIcon: { backgroundColor: colors.warningSoft },
   orderTrackerHeading: {
     flexDirection: "row",
     alignItems: "center",

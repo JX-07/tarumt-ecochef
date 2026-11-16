@@ -1,9 +1,9 @@
 import { Text } from "./themed-text";
-import { palette, typography } from "@ecochef/design-tokens";
+import { colors, palette, typography } from "@ecochef/design-tokens";
 import { Ionicons } from "@expo/vector-icons";
 import { Modal, Pressable, StyleSheet, View } from "react-native";
 
-type Tone = "success" | "error" | "info";
+type Tone = "success" | "error" | "info" | "warning";
 
 export function AppMessageModal({
   visible,
@@ -23,15 +23,29 @@ export function AppMessageModal({
   onAction?: () => void;
 }) {
   const color =
-    tone === "error" ? palette.cb42331 : tone === "success" ? palette.c12ad55 : palette.c3877c8;
+    tone === "error"
+      ? palette.cb42331
+      : tone === "success"
+        ? palette.c12ad55
+        : tone === "warning"
+          ? colors.warningStrong
+          : palette.c3877c8;
   const background =
-    tone === "error" ? palette.cfff0f1 : tone === "success" ? palette.ce7f7ed : palette.cecf4ff;
+    tone === "error"
+      ? palette.cfff0f1
+      : tone === "success"
+        ? palette.ce7f7ed
+        : tone === "warning"
+          ? colors.warningSoft
+          : palette.cecf4ff;
   const icon: keyof typeof Ionicons.glyphMap =
     tone === "error"
       ? "alert-circle-outline"
       : tone === "success"
         ? "checkmark-circle-outline"
-        : "information-circle-outline";
+        : tone === "warning"
+          ? "time-outline"
+          : "information-circle-outline";
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <View style={styles.overlay}>

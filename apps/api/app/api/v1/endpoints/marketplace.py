@@ -1,5 +1,6 @@
 import base64
 import json
+import logging
 import re
 from collections import defaultdict
 from datetime import UTC, date, datetime, timedelta, timezone
@@ -51,6 +52,7 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 CurrentConsumer = Depends(require_roles(AccountRole.consumer))
 MONEY = Decimal("0.01")
 DEFAULT_DELIVERY_FEE = Decimal("2.50")
@@ -2256,8 +2258,15 @@ def cancel_delayed_order(
         raise HTTPException(status.HTTP_502_BAD_GATEWAY, str(error)) from error
     from app.api.v1.endpoints.stripe import _handle_order_cancellation_refund
 
-    completed = _handle_order_cancellation_refund(refund, session)
-    session.commit()
+    try:
+        completed = _handle_order_cancellation_refund(refund, session)
+        session.commit()
+    except Exception:
+        session.rollback()
+        logger.exception(
+            "Customer refund finalisation failed for order %s; awaiting Stripe retry", order_id
+        )
+        return {"status": "cancellation_pending"}
     if refund.status in {"failed", "canceled"}:
         raise HTTPException(status.HTTP_502_BAD_GATEWAY, "The refund could not be completed.")
     return {"status": "cancelled" if completed else "cancellation_pending"}
