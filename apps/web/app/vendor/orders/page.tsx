@@ -26,6 +26,7 @@ export default function Orders() {
     [selected, setSelected] = useState<Order>(),
     [chatOrder, setChatOrder] = useState<Order>();
   const [cancelOrder, setCancelOrder] = useState<Order>();
+  const [refundMessage, setRefundMessage] = useState("");
   const [cancelling, setCancelling] = useState(false);
   const [cancelError, setCancelError] = useState("");
   const [cancellationFeedback, setCancellationFeedback] = useState<{
@@ -146,6 +147,13 @@ export default function Orders() {
   };
   const confirmCancellation = async () => {
     if (!cancelOrder || cancelling) return;
+    if (
+      cancelOrder.status !== "cancellation_pending" &&
+      refundMessage.trim().split(/\s+/).filter(Boolean).length < 10
+    ) {
+      setCancelError("Write at least 10 words explaining the refund to the customer.");
+      return;
+    }
     setCancelling(true);
     setCancelError("");
     setCancellationFeedback(undefined);
@@ -153,6 +161,7 @@ export default function Orders() {
       const result = await api.updateVendorOrderStatus<{ status: string }>(
         cancelOrder.id,
         "cancelled",
+        refundMessage.trim(),
       );
       setOrders((current) =>
         current.map((order) =>
@@ -165,6 +174,7 @@ export default function Orders() {
         /* The saved status is shown; the regular refresh will retry. */
       }
       setCancelOrder(undefined);
+      setRefundMessage("");
       if (result.status === "cancelled" || result.status === "cancellation_pending")
         setCancellationFeedback({ orderId: cancelOrder.id, status: result.status });
     } catch (cause) {
@@ -361,6 +371,7 @@ export default function Orders() {
                       }
                       onClick={() => {
                         setCancelError("");
+                        setRefundMessage("");
                         setCancelOrder(order);
                       }}
                     >
@@ -479,6 +490,24 @@ export default function Orders() {
                   ? `The refund for order #${cancelOrder.id.slice(0, 8).toUpperCase()} has started. Check its latest status and finish cancellation when Stripe confirms it.`
                   : `Order #${cancelOrder.id.slice(0, 8).toUpperCase()} will be cancelled, RM ${Number(cancelOrder.total).toFixed(2)} will be refunded to the customer’s original payment method, and its products will return to stock.`}
               </p>
+              {cancelOrder.status !== "cancellation_pending" ? (
+                <label className="refund-message-field">
+                  <span>Refund message to customer</span>
+                  <textarea
+                    value={refundMessage}
+                    minLength={10}
+                    rows={4}
+                    placeholder="Explain clearly why this order is being refunded. This message will appear in chat, notifications, and the customer’s order tracker."
+                    onChange={(event) => {
+                      setRefundMessage(event.target.value);
+                      setCancelError("");
+                    }}
+                  />
+                  <small>
+                    {refundMessage.trim().split(/\s+/).filter(Boolean).length}/10 words minimum
+                  </small>
+                </label>
+              ) : null}
               {cancelError ? (
                 <p role="alert" className="product-form-error">
                   {cancelError}
@@ -489,14 +518,21 @@ export default function Orders() {
                   type="button"
                   className="neutral-button"
                   disabled={cancelling}
-                  onClick={() => setCancelOrder(undefined)}
+                  onClick={() => {
+                    setCancelOrder(undefined);
+                    setRefundMessage("");
+                  }}
                 >
                   Keep order
                 </button>
                 <button
                   type="button"
                   className="danger-button"
-                  disabled={cancelling}
+                  disabled={
+                    cancelling ||
+                    (cancelOrder.status !== "cancellation_pending" &&
+                      refundMessage.trim().split(/\s+/).filter(Boolean).length < 10)
+                  }
                   onClick={() => void confirmCancellation()}
                 >
                   {cancelling

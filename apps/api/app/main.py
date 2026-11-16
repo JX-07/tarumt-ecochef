@@ -1,12 +1,12 @@
 import logging
 import re
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from uuid import uuid4
 
 from fastapi import FastAPI, Request, status
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.api.v1.router import api_router
@@ -49,7 +49,7 @@ def error_response(
             "error": error,
             "message": message,
             "details": details,
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
         },
     )
 
@@ -70,13 +70,24 @@ def cors_error_headers(request: Request) -> dict[str, str] | None:
 
 
 @app.exception_handler(RequestValidationError)
-async def validation_exception_handler(_: Request, exc: RequestValidationError) -> JSONResponse:
+async def validation_exception_handler(
+    request: Request, exc: RequestValidationError
+) -> JSONResponse:
+    details = []
+    for item in exc.errors():
+        sanitized = {key: value for key, value in item.items() if key != "ctx"}
+        if context := item.get("ctx"):
+            sanitized["ctx"] = {
+                key: str(value) if isinstance(value, Exception) else value
+                for key, value in context.items()
+            }
+        details.append(sanitized)
     return error_response(
         error="validation_error",
         message="Request validation failed.",
         status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-        details=exc.errors(),
-        headers=cors_error_headers(_),
+        details=details,
+        headers=cors_error_headers(request),
     )
 
 

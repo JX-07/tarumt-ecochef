@@ -16,6 +16,7 @@ import {
   FlatList,
   Image,
   Modal,
+  Platform,
   Pressable,
   RefreshControl,
   StyleSheet,
@@ -221,8 +222,11 @@ export function StorefrontScreen() {
       setCartTotal((current) => Math.max(0, current + totalDelta));
     },
     applyServerCart: (cart) => {
-      setCartCount(cart.item_count);
-      setCartTotal(Number(cart.total));
+      const storeItems = cart.items.filter((item) => item.product.store_id === storeId);
+      setCartCount(
+        storeItems.reduce((total, item) => total + Number(item.product.cart_quantity), 0),
+      );
+      setCartTotal(storeItems.reduce((total, item) => total + Number(item.line_total), 0));
     },
     showError: setError,
   });
@@ -249,8 +253,11 @@ export function StorefrontScreen() {
         ]);
         setStore(nextStore);
         setHeroImageFailed(false);
-        setCartCount(cart.item_count);
-        setCartTotal(Number(cart.total));
+        const storeItems = cart.items.filter((item) => item.product.store_id === storeId);
+        setCartCount(
+          storeItems.reduce((total, item) => total + Number(item.product.cart_quantity), 0),
+        );
+        setCartTotal(storeItems.reduce((total, item) => total + Number(item.line_total), 0));
         cartSync.seed(nextStore.products, cart.id);
       } catch (reason) {
         setError(reason instanceof Error ? reason.message : "This shop could not be loaded.");
@@ -376,7 +383,10 @@ export function StorefrontScreen() {
             <Pressable
               accessibilityRole="button"
               accessibilityLabel="Back to marketplace"
-              style={styles.circle}
+              style={({ pressed }) => [
+                styles.circle,
+                pressed && { opacity: 0.72, transform: [{ scale: 1.08 }] },
+              ]}
               onPress={() => router.back()}
             >
               <Ionicons name="chevron-back" size={textSize.bodyTextHeavy} color={colors.text} />
@@ -600,7 +610,10 @@ export function StorefrontScreen() {
               accessibilityRole="button"
               accessibilityLabel="Back to marketplace"
               onPress={() => router.back()}
-              style={styles.searchBack}
+              style={({ pressed }) => [
+                styles.searchBack,
+                pressed && { opacity: 0.72, transform: [{ scale: 1.08 }] },
+              ]}
             >
               <Ionicons name="chevron-back" size={textSize.bodyTextHeavy} color={colors.text} />
             </Pressable>
@@ -626,7 +639,6 @@ export function StorefrontScreen() {
         transparent
         animationType="fade"
         statusBarTranslucent
-        navigationBarTranslucent
         onRequestClose={() => setOptionsOpen(false)}
       >
         <View style={styles.optionsOverlay}>
@@ -634,7 +646,12 @@ export function StorefrontScreen() {
           <Animated.View
             style={[
               styles.optionsSheet,
-              { paddingBottom: Math.max(insets.bottom, spacing[4]) },
+              {
+                paddingBottom: Math.max(
+                  insets.bottom,
+                  Platform.OS === "android" ? spacing[8] : spacing[4],
+                ),
+              },
               optionsSheetMotion,
             ]}
           >

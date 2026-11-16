@@ -6,6 +6,8 @@ import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  Animated,
+  Easing,
   Modal,
   Pressable,
   RefreshControl,
@@ -72,6 +74,32 @@ export function FridgeSensorDetailScreen() {
   const [removing, setRemoving] = useState(false);
   const requestId = useRef(0);
   const finishingCalibration = useRef(false);
+  const optionsAnimation = useRef(new Animated.Value(0)).current;
+
+  const openOptions = () => {
+    optionsAnimation.setValue(0);
+    setOptionsOpen(true);
+    requestAnimationFrame(() => {
+      Animated.timing(optionsAnimation, {
+        toValue: 1,
+        duration: 220,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }).start();
+    });
+  };
+
+  const closeOptions = (after?: () => void) => {
+    Animated.timing(optionsAnimation, {
+      toValue: 0,
+      duration: 160,
+      easing: Easing.in(Easing.cubic),
+      useNativeDriver: true,
+    }).start(() => {
+      setOptionsOpen(false);
+      after?.();
+    });
+  };
 
   useEffect(() => {
     if (!sensorId) return;
@@ -167,7 +195,7 @@ export function FridgeSensorDetailScreen() {
       void load();
       const timer = setInterval(() => {
         void load("background");
-      }, 15_000);
+      }, 2_000);
       return () => {
         clearInterval(timer);
         requestId.current++;
@@ -248,7 +276,7 @@ export function FridgeSensorDetailScreen() {
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Go back"
-            style={({ pressed }) => [styles.circleButton, pressed && styles.pressed]}
+            style={({ pressed }) => [styles.circleButton, pressed && styles.backPressed]}
             onPress={() => router.back()}
           >
             <Ionicons name="chevron-back" size={22} color={colors.text} />
@@ -260,9 +288,9 @@ export function FridgeSensorDetailScreen() {
             accessibilityRole="button"
             accessibilityLabel="Sensor options"
             style={({ pressed }) => [styles.circleButton, pressed && styles.pressed]}
-            onPress={() => setOptionsOpen(true)}
+            onPress={openOptions}
           >
-            <Ionicons name="ellipsis-horizontal" size={22} color={colors.textMuted} />
+            <Ionicons name="ellipsis-vertical" size={22} color={colors.textMuted} />
           </Pressable>
         </View>
 
@@ -285,72 +313,78 @@ export function FridgeSensorDetailScreen() {
           <Text style={styles.statusDescription}>{status.description}</Text>
         </View>
 
-        {odour ? (
-          <View
-            style={[
-              styles.odourStatusCard,
-              { borderColor: odour.color, backgroundColor: odour.tint },
-            ]}
-          >
-            <Ionicons name={odour.icon} size={22} color={odour.color} />
-            <View style={styles.flex}>
-              <Text style={[styles.odourStatusTitle, { color: odour.color }]}>{odour.title}</Text>
-              <Text style={styles.odourStatusText}>{odour.text}</Text>
-            </View>
-          </View>
-        ) : null}
-
-        {calibrationEndsAt ? (
-          <View style={styles.calibrationProgress}>
-            <View style={styles.calibrationProgressIcon}>
-              <Ionicons name="timer-outline" size={22} color={colors.primaryStrong} />
-            </View>
-            <View style={styles.flex}>
-              <Text style={styles.calibrationProgressTitle}>Calibrating fridge air</Text>
-              <Text style={styles.calibrationProgressText}>
-                Leave the fridge closed and keep test food away from the sensor.
-              </Text>
-            </View>
-            <Text style={styles.calibrationTimer}>
-              {Math.floor(calibrationSeconds / 60)}:
-              {String(calibrationSeconds % 60).padStart(2, "0")}
-            </Text>
-          </View>
-        ) : calibrationMessage ? (
-          <Text style={styles.calibrationMessage}>{calibrationMessage}</Text>
-        ) : null}
-
-        <View
-          style={[styles.hero, { borderColor: freshness.color, backgroundColor: freshness.tint }]}
-        >
-          <View style={styles.heroTop}>
-            <View style={styles.iconTile}>
-              <MaterialCommunityIcons name="fridge-outline" size={26} color={freshness.color} />
-            </View>
-            <View style={styles.flex}>
-              <Text style={[styles.heroLabel, { color: freshness.color }]}>{freshness.label}</Text>
-              <Text style={styles.heroDevice}>
-                {sensor?.sensor_name} ·{" "}
-                <Text style={sensor?.connection_status === "online" ? styles.liveText : undefined}>
-                  {sensor?.connection_status === "online"
-                    ? "Live"
-                    : sensor?.connection_status === "waiting"
-                      ? "Waiting for readings"
-                      : "Offline"}
-                </Text>
-              </Text>
-            </View>
-          </View>
-          <Text style={styles.heroSummary}>{readingSummary(reading)}</Text>
-          <View style={styles.heroFooter}>
-            <Text style={styles.heroTime}>{relativeTime(sensor?.last_seen_at)}</Text>
-            {reading?.freshness_status !== "unknown" && reading?.confidence != null ? (
-              <Text style={styles.confidence}>
-                {Math.round(reading.confidence * 100)}% model confidence
-              </Text>
+        {sensor?.connection_status === "online" ? (
+          <>
+            {odour ? (
+              <View
+                style={[
+                  styles.odourStatusCard,
+                  { borderColor: odour.color, backgroundColor: odour.tint },
+                ]}
+              >
+                <View style={styles.iconTile}>
+                  <Ionicons name={odour.icon} size={26} color={odour.color} />
+                </View>
+                <View style={styles.flex}>
+                  <Text style={[styles.odourStatusTitle, { color: odour.color }]}>
+                    {odour.title}
+                  </Text>
+                  <Text style={styles.odourStatusText}>{odour.text}</Text>
+                </View>
+              </View>
             ) : null}
-          </View>
-        </View>
+
+            {calibrationEndsAt ? (
+              <View style={styles.calibrationProgress}>
+                <View style={styles.calibrationProgressIcon}>
+                  <Ionicons name="timer-outline" size={22} color={colors.primaryStrong} />
+                </View>
+                <View style={styles.flex}>
+                  <Text style={styles.calibrationProgressTitle}>Calibrating fridge air</Text>
+                  <Text style={styles.calibrationProgressText}>
+                    Leave the fridge closed and keep test food away from the sensor.
+                  </Text>
+                </View>
+                <Text style={styles.calibrationTimer}>
+                  {Math.floor(calibrationSeconds / 60)}:
+                  {String(calibrationSeconds % 60).padStart(2, "0")}
+                </Text>
+              </View>
+            ) : calibrationMessage ? (
+              <Text style={styles.calibrationMessage}>{calibrationMessage}</Text>
+            ) : null}
+
+            <View
+              style={[
+                styles.hero,
+                { borderColor: freshness.color, backgroundColor: freshness.tint },
+              ]}
+            >
+              <View style={styles.heroTop}>
+                <View style={styles.iconTile}>
+                  <MaterialCommunityIcons name="fridge-outline" size={26} color={freshness.color} />
+                </View>
+                <View style={styles.flex}>
+                  <Text style={[styles.heroLabel, { color: freshness.color }]}>
+                    {freshness.label}
+                  </Text>
+                  <Text style={styles.heroDevice}>
+                    {sensor.sensor_name} · <Text style={styles.liveText}>Live</Text>
+                  </Text>
+                </View>
+              </View>
+              <Text style={styles.heroSummary}>{readingSummary(reading)}</Text>
+              <View style={styles.heroFooter}>
+                <Text style={styles.heroTime}>{relativeTime(sensor.last_seen_at)}</Text>
+                {reading?.freshness_status !== "unknown" && reading?.confidence != null ? (
+                  <Text style={styles.confidence}>
+                    {Math.round(reading.confidence * 100)}% model confidence
+                  </Text>
+                ) : null}
+              </View>
+            </View>
+          </>
+        ) : null}
 
         <View style={styles.sectionRow}>
           <Text style={styles.sectionTitle}>SENSOR TRENDS</Text>
@@ -397,7 +431,9 @@ export function FridgeSensorDetailScreen() {
             windowEnd={historyWindowEnd}
           />
         </View>
-        <Text style={styles.sectionTitle}>GAS READINGS RIGHT NOW</Text>
+        <Text style={styles.sectionTitle}>
+          {sensor?.connection_status === "online" ? "GAS READINGS RIGHT NOW" : "LAST GAS READINGS"}
+        </Text>
         <Text style={styles.metricIntro}>
           Each number is a raw sensor response. Steady readings are easier to interpret; if several
           keep rising, check your stored food. A high number alone does not mean food is spoiled.
@@ -468,7 +504,7 @@ export function FridgeSensorDetailScreen() {
               { start: 0, end: 4, color: colors.successSoft },
               { start: 4, end: 12, color: colors.dangerSoft },
             ]}
-            reference="FoodSafety.gov: keep the fridge at 4°C or below. Below 0°C may freeze food."
+            reference="Best range: 0°C–4°C. Food stays safely chilled without freezing."
             note={temperatureNote(reading)}
           />
         </View>
@@ -503,54 +539,83 @@ export function FridgeSensorDetailScreen() {
             unit="%"
             bands={[
               { start: 0, end: 50, color: colors.warningSoft },
-              { start: 50, end: 99, color: colors.primarySoft },
-              { start: 99, end: 100, color: colors.warningSoft },
+              { start: 50, end: 60, color: colors.successSoft },
+              { start: 60, end: 100, color: colors.warningSoft },
             ]}
-            reference="UMN Extension: typical fridge air is around 50–60%; produce may need more. 100% is saturated."
+            reference="Typical fridge range: 50%–60%. Keep produce covered or in the crisper drawer so it does not dry out."
             note={humidityNote(reading)}
           />
         </View>
-        <Text style={styles.humidityHelp}>
-          {reading
-            ? `${Math.round(reading.humidity_percent)}% means the fridge air holds about that share of the moisture it could hold at this temperature. `
-            : "Humidity measures moisture in the fridge air. "}
-          It does not measure moisture inside food.
-        </Text>
       </ScrollView>
 
       <Modal
         visible={optionsOpen}
         transparent
-        animationType="fade"
-        onRequestClose={() => setOptionsOpen(false)}
+        animationType="none"
+        onRequestClose={() => closeOptions()}
       >
         <View style={styles.optionsOverlay}>
-          <Pressable style={StyleSheet.absoluteFill} onPress={() => setOptionsOpen(false)} />
-          <View style={[styles.optionsMenu, { top: insets.top + 64 }]}>
-            <Pressable
-              style={styles.optionRow}
-              onPress={() => {
-                setOptionsOpen(false);
-                setCalibrationConfirmOpen(true);
+          <Pressable style={StyleSheet.absoluteFill} onPress={() => closeOptions()} />
+          <Animated.View
+            style={[
+              styles.optionsMenu,
+              { top: insets.top + 64 },
+              {
+                opacity: optionsAnimation,
+                transform: [
+                  {
+                    translateY: optionsAnimation.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [-18, 0],
+                    }),
+                  },
+                  {
+                    scale: optionsAnimation.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [0.72, 1],
+                    }),
+                  },
+                ],
+              },
+            ]}
+          >
+            <View style={styles.optionsPointer} />
+            <Animated.View
+              style={{
+                opacity: optionsAnimation,
+                transform: [
+                  {
+                    translateY: optionsAnimation.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [-14, 0],
+                    }),
+                  },
+                ],
               }}
             >
-              <Ionicons name="speedometer-outline" size={20} color={colors.primaryStrong} />
-              <Text style={styles.optionText}>
-                {gasCalibration ? "Calibrate again" : "Calibrate"}
-              </Text>
-            </Pressable>
-            <View style={styles.optionDivider} />
-            <Pressable
-              style={styles.optionRow}
-              onPress={() => {
-                setOptionsOpen(false);
-                setRemoveOpen(true);
-              }}
-            >
-              <Ionicons name="trash-outline" size={20} color={colors.danger} />
-              <Text style={[styles.optionText, styles.optionDanger]}>Remove</Text>
-            </Pressable>
-          </View>
+              <Pressable
+                style={styles.optionRow}
+                onPress={() => closeOptions(() => setCalibrationConfirmOpen(true))}
+              >
+                <View style={styles.optionIcon}>
+                  <Ionicons name="speedometer-outline" size={20} color={colors.primaryStrong} />
+                </View>
+                <Text style={styles.optionText}>
+                  {gasCalibration ? "Calibrate again" : "Calibrate"}
+                </Text>
+              </Pressable>
+              <View style={styles.optionDivider} />
+              <Pressable
+                style={styles.optionRow}
+                onPress={() => closeOptions(() => setRemoveOpen(true))}
+              >
+                <View style={[styles.optionIcon, styles.optionDangerIcon]}>
+                  <Ionicons name="trash-outline" size={20} color={colors.danger} />
+                </View>
+                <Text style={[styles.optionText, styles.optionDanger]}>Remove</Text>
+              </Pressable>
+            </Animated.View>
+          </Animated.View>
         </View>
       </Modal>
 
@@ -733,14 +798,7 @@ function odourStatus(
   connection?: SensorConnectionStatus,
 ) {
   if (!calibrated) return undefined;
-  if (connection !== "online")
-    return {
-      title: "Odour monitoring paused",
-      text: "The sensor is offline, so EcoChef cannot compare new readings with the baseline.",
-      icon: "cloud-offline-outline" as const,
-      color: colors.warningStrong,
-      tint: colors.warningSoft,
-    };
+  if (connection !== "online") return undefined;
   if (gas.kind === "multiple_changes")
     return {
       title: "Odour anomaly detected",
@@ -836,7 +894,8 @@ function gasScaleGuide(reference: GasChannelReference | undefined, min: number, 
   if (!reference)
     return {
       bands: [{ start: min, end: max, color: colors.primarySoft }],
-      reference: "Raw sensor scale: 0–4095. More readings will establish a recent reference.",
+      reference:
+        "EcoChef is learning this sensor’s usual level. Lower or higher is not good or bad by itself.",
     };
   const riseAt = Math.round(reference.riseAt);
   const boundary = Math.max(min, Math.min(max, reference.riseAt));
@@ -845,34 +904,33 @@ function gasScaleGuide(reference: GasChannelReference | undefined, min: number, 
       { start: min, end: boundary, color: colors.primarySoft },
       { start: boundary, end: max, color: colors.warningSoft },
     ],
-    reference: `Earlier level: ${Math.round(reference.baseline)} raw. Rise guide: ${riseAt} raw${boundary < max ? " (amber)" : ""}. Not a spoilage limit.`,
+    reference: `Usual level: ${Math.round(reference.baseline)}. Above ${riseAt} is higher than normal for this fridge${boundary < max ? " and appears amber" : ""}.`,
   };
 }
 
 function gasChange(values: number[]) {
-  if (values.length < 2) return "More readings will show whether this is changing.";
+  if (values.length < 2) return "Waiting for enough readings to show a clear trend.";
   const difference = Math.round(values[values.length - 1] - values[0]);
-  if (difference === 0) return "No change during the selected period.";
-  return `${difference > 0 ? "Up" : "Down"} ${Math.abs(difference)} during the selected period.`;
+  if (difference === 0) return "Steady: this reading has not changed during the selected period.";
+  return `${difference > 0 ? "Rising" : "Falling"}: changed by ${Math.abs(difference)} during this period. Check food when several gas readings rise together.`;
 }
 
 function temperatureNote(reading?: FridgeSensorReading) {
   if (!reading) return "Waiting for a reading.";
   if (reading.temperature_c > 4)
-    return "Above the recommended fridge temperature. Check the setting or door.";
-  if (reading.temperature_c < 0) return "Below freezing; some foods may freeze.";
-  return "Within the recommended fridge temperature range.";
+    return "Too warm: lower the fridge setting and make sure the door is fully closed.";
+  if (reading.temperature_c < 0)
+    return "Too cold: food may freeze. Raise the setting slightly if this continues.";
+  return "Optimal: food is being kept within the recommended chilled range.";
 }
 
 function humidityNote(reading?: FridgeSensorReading) {
   if (!reading) return "Waiting for a reading.";
   if (reading.humidity_percent < 50)
-    return "Drier than a typical fridge. Keep leafy produce covered or in the crisper.";
-  if (reading.humidity_percent >= 95)
-    return "Very moist air can suit some produce. Wipe away any visible condensation.";
-  if (reading.humidity_percent >= 80)
-    return "Moist air can help leafy produce. Wipe away any visible condensation.";
-  return "Moderate air moisture. Check uncovered produce regularly.";
+    return "Too dry: keep fruit and vegetables covered or place them in the crisper drawer.";
+  if (reading.humidity_percent > 60)
+    return "More humid than usual: wipe away condensation and keep raw meat, fish and leftovers covered.";
+  return "Typical range: keep produce in the crisper and keep meat, fish and leftovers covered.";
 }
 
 function odourSeries(readings: FridgeSensorReading[]) {
@@ -916,7 +974,6 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: spacing[2],
-    marginTop: spacing[2],
   },
   statusTitle: {
     flex: 1,
@@ -994,11 +1051,11 @@ const styles = StyleSheet.create({
     backgroundColor: colors.primarySoft,
   },
   calibrationProgressIcon: {
-    width: 42,
-    height: 42,
+    width: 48,
+    height: 48,
     alignItems: "center",
     justifyContent: "center",
-    borderRadius: 21,
+    borderRadius: 16,
     backgroundColor: colors.surface,
   },
   calibrationProgressTitle: {
@@ -1068,12 +1125,6 @@ const styles = StyleSheet.create({
   spacedSectionTitle: { marginTop: spacing[10] },
   conditionGrid: { gap: spacing[3] },
   gasGrid: { gap: spacing[3], marginBottom: spacing[4] },
-  humidityHelp: {
-    marginTop: spacing[2],
-    color: colors.textMuted,
-    fontSize: typography.mobile.rawSize.s10,
-    lineHeight: 16,
-  },
   conditionCard: {
     padding: spacing[4],
     borderWidth: 1,
@@ -1220,7 +1271,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing[5],
     backgroundColor: colors.overlay,
   },
-  optionsOverlay: { flex: 1, backgroundColor: colors.overlay },
+  optionsOverlay: { flex: 1 },
   optionsMenu: {
     position: "absolute",
     right: spacing[4],
@@ -1236,6 +1287,18 @@ const styles = StyleSheet.create({
     shadowRadius: 18,
     elevation: 10,
   },
+  optionsPointer: {
+    position: "absolute",
+    top: -7,
+    right: 15,
+    width: 14,
+    height: 14,
+    borderTopWidth: 1,
+    borderLeftWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+    transform: [{ rotate: "45deg" }],
+  },
   optionRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -1248,6 +1311,15 @@ const styles = StyleSheet.create({
     fontSize: typography.mobile.rawSize.s12,
     fontWeight: typography.weight.bold,
   },
+  optionIcon: {
+    width: 36,
+    height: 36,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 18,
+    backgroundColor: colors.primarySoft,
+  },
+  optionDangerIcon: { backgroundColor: colors.dangerSoft },
   optionDanger: { color: colors.danger },
   optionDivider: { height: 1, marginHorizontal: spacing[3], backgroundColor: colors.border },
   confirmCard: {
@@ -1364,6 +1436,7 @@ const styles = StyleSheet.create({
     fontWeight: typography.weight.extrabold,
   },
   loader: { marginTop: spacing[16] },
-  pressed: { opacity: 0.72 },
+  pressed: { opacity: 0.72, transform: [{ scale: 0.92 }] },
+  backPressed: { opacity: 0.72, transform: [{ scale: 1.08 }] },
   flex: { flex: 1 },
 });

@@ -57,7 +57,10 @@ export function ProductReviewsScreen() {
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Back to purchase history"
-            style={styles.back}
+            style={({ pressed }) => [
+              styles.back,
+              pressed && { opacity: 0.72, transform: [{ scale: 1.08 }] },
+            ]}
             onPress={() =>
               router.canGoBack()
                 ? router.back()
@@ -204,7 +207,11 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     backgroundColor: colors.primaryStrong,
   },
-  rateButtonText: { color: colors.surface, fontSize: 12, fontWeight: "700" },
+  rateButtonText: {
+    color: colors.surface,
+    fontSize: typography.mobile.rawSize.s12,
+    fontWeight: typography.weight.bold,
+  },
   error: {
     marginTop: spacing[4],
     color: colors.danger,

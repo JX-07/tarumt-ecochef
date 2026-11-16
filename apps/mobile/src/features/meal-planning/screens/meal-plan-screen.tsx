@@ -2,6 +2,7 @@ import { apiBaseUrl } from "../../../lib/api-url";
 import { Text } from "../../../shared/components/themed-text";
 import { colors, palette, typography } from "@ecochef/design-tokens";
 import { Ionicons } from "@expo/vector-icons";
+import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { router, useLocalSearchParams, useNavigation } from "expo-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
@@ -22,14 +23,13 @@ import { createMobileApi } from "../../../lib/api";
 import { AppMessageModal } from "../../../shared/components/app-message-modal";
 import { PAGE_TOP_GAP, PageHeader } from "../../../shared/components/page-header";
 import type { MealPlanCalendar, MealPlanEntry, MealSlot, PlannedShoppingList } from "../types";
-import { ShoppingListSheet, type ShoppingCompletionItem } from "../components/shopping-list-sheet";
 import { displayMealTime, TimePickerSheet } from "../components/time-picker-sheet";
 import { DatePickerSheet } from "../components/date-picker-sheet";
 import { getCookedMeals, wasMealCooked } from "../cooking-history";
-import { ingredientEmojiFor } from "../../../shared/ingredient-icons";
 import { registerShoppingReturn } from "../shopping-return";
 
 const GREEN = palette.c12ad55;
+const PRIMARY_MEAL_SLOTS = new Set<MealSlot>(["breakfast", "lunch", "dinner"]);
 const slots: {
   value: MealSlot;
   label: string;
@@ -93,7 +93,6 @@ export function MealPlanScreen() {
     message: string;
     tone: "success" | "error" | "info";
   }>();
-  const [shoppingOpen, setShoppingOpen] = useState(false);
   const [weekCalendarOpen, setWeekCalendarOpen] = useState(false);
   const [editCalendarOpen, setEditCalendarOpen] = useState(false);
   const [removeConfirm, setRemoveConfirm] = useState(false);
@@ -110,10 +109,6 @@ export function MealPlanScreen() {
       setLoading(false);
     }
   }, [api, start]);
-  const loadShopping = useCallback(
-    (from: string, to: string) => api.getMyShoppingList<PlannedShoppingList>(from, to),
-    [api],
-  );
   useEffect(() => {
     void load();
   }, [load]);
@@ -134,10 +129,10 @@ export function MealPlanScreen() {
   }, [params.date]);
   useEffect(() => {
     if (params.shopping === "1") {
-      setShoppingOpen(true);
       router.setParams({ shopping: "" });
+      router.push({ pathname: "/shopping-list", params: { date: selected } } as never);
     }
-  }, [params.shopping]);
+  }, [params.shopping, selected]);
   useEffect(
     () =>
       registerShoppingReturn((returnDate) => {
@@ -146,7 +141,6 @@ export function MealPlanScreen() {
           setSelected(returnDate);
           setStart(weekStart(date));
         }
-        setShoppingOpen(true);
       }),
     [],
   );
@@ -264,7 +258,9 @@ export function MealPlanScreen() {
             <Pressable
               accessibilityLabel="Open shopping list"
               style={styles.listButton}
-              onPress={() => setShoppingOpen(true)}
+              onPress={() =>
+                router.push({ pathname: "/shopping-list", params: { date: selected } } as never)
+              }
             >
               <Ionicons name="basket-outline" size={15} color={palette.cfff} />
               <Text style={styles.listButtonText}>List</Text>
@@ -275,7 +271,13 @@ export function MealPlanScreen() {
       {/* @ts-ignore monthButton is attached below to keep the compact screen stylesheet stable. */}
       <View style={styles.calendarLayer}>
         <View style={styles.weekHead}>
-          <Pressable style={styles.arrow} onPress={() => changeWeek(-1)}>
+          <Pressable
+            style={({ pressed }) => [
+              styles.arrow,
+              pressed && { opacity: 0.72, transform: [{ scale: 0.92 }] },
+            ]}
+            onPress={() => changeWeek(-1)}
+          >
             <Ionicons name="chevron-back" size={23} color={palette.c6f7d8d} />
           </Pressable>
           <Pressable style={styles.monthButton} onPress={() => setWeekCalendarOpen(true)}>
@@ -347,140 +349,229 @@ export function MealPlanScreen() {
           </View>
         ) : (
           <>
-            <View style={styles.nutrition}>
-              <Text style={styles.panelLabel}>TODAY’S PLAN</Text>
-              <View style={styles.summaryRow}>
-                <PlanMetric
-                  icon="restaurant-outline"
-                  value={items.length}
-                  label="Meals planned"
-                  color={palette.c168a4a}
-                  tint={palette.ce9f8ef}
-                />
-                <PlanMetric
-                  icon="time-outline"
-                  value={totalCookTime}
-                  suffix=" min"
-                  label="Cooking time"
-                  color={palette.c417fcb}
-                  tint={palette.ceaf3fe}
-                />
-                <PlanMetric
-                  icon="cart-outline"
-                  value={dayShopping?.missing_count ?? 0}
-                  label="Missing items"
-                  color={palette.cd66b35}
-                  tint={palette.cfff1e7}
-                />
-              </View>
-              <Pressable style={styles.shoppingSummary} onPress={() => setShoppingOpen(true)}>
-                <Ionicons name="basket-outline" size={15} color={GREEN} />
-                <Text style={styles.shoppingSummaryText}>
-                  {dayShopping
-                    ? `${dayShopping.available_count} ingredient${dayShopping.available_count === 1 ? "" : "s"} already in your kitchen`
-                    : "Checking your kitchen inventory…"}
-                </Text>
-                <Ionicons name="chevron-forward" size={15} color={palette.c8b97a3} />
-              </Pressable>
-            </View>
-            <View style={styles.timelineHead}>
-              <Text style={styles.panelLabel}>TODAY’S TIMELINE</Text>
-              <Text style={styles.orderHint}>Earliest to latest</Text>
-            </View>
-            {timelineSlots.map((slot, index, visibleSlots) => {
-              const slotItems = items.filter((item) => item.meal_slot === slot.value);
-              return (
-                <View key={slot.value} style={styles.timelineRow}>
-                  <View style={styles.timeColumn}>
-                    <Text style={styles.timelineTime}>
-                      {slotItems[0]?.scheduled_time
-                        ? displayMealTime(slotItems[0].scheduled_time)
-                        : "--:--"}
-                    </Text>
-                    <View style={styles.timelineDot} />
-                    {index < visibleSlots.length - 1 && <View style={styles.timelineLine} />}
-                  </View>
-                  <View style={styles.timelineBody}>
-                    <Text style={styles.slotTitle}>{slot.label}</Text>
-                    {slotItems.length ? (
-                      slotItems.map((item) => (
-                        <Pressable
-                          key={item.id}
-                          style={styles.card}
-                          onPress={() =>
-                            router.push({
-                              pathname: "/recipes/[recipeId]",
-                              params: { recipeId: item.recipe_id },
-                            })
-                          }
-                        >
-                          {item.image_url ? (
-                            <Image source={{ uri: item.image_url }} style={styles.image} />
-                          ) : (
-                            <View style={styles.imageFallback}>
-                              <Text style={styles.food}>🍽️</Text>
-                            </View>
-                          )}
-                          <View style={styles.cardBody}>
-                            {item.shared_group_id ? (
-                              <Text style={[styles.metaText, { color: colors.primaryStrong }]}>
-                                Group Schedule · Added by {item.added_by_name ?? "group member"}
-                              </Text>
-                            ) : null}
-                            {item.shared_group_id && item.shared_group_name ? (
-                              <Text style={styles.metaText}>From {item.shared_group_name}</Text>
-                            ) : null}
-                            <Text style={styles.cardTitle} numberOfLines={2}>
-                              {item.title}
-                            </Text>
-                            <Text style={styles.metaText}>{item.total_time} min</Text>
-                          </View>
-                          <Pressable
-                            style={styles.cookAction}
-                            onPress={(event) => {
-                              event.stopPropagation();
-                              router.push({
-                                pathname: "/recipes/[recipeId]/cook",
-                                params: {
-                                  recipeId: item.recipe_id,
-                                  plannedDate: item.scheduled_date,
-                                },
-                              });
-                            }}
-                          >
-                            <Text style={styles.cookActionText}>
-                              {wasMealCooked(cooked, item.recipe_id, item.scheduled_date)
-                                ? "Cook again"
-                                : "Cook now"}
-                            </Text>
-                          </Pressable>
-                          <Pressable
-                            disabled={item.can_edit === false}
-                            accessibilityElementsHidden={item.can_edit === false}
-                            accessibilityLabel={`Edit ${item.title}`}
-                            style={[styles.more, item.can_edit === false && { display: "none" }]}
-                            onPress={(event) => {
-                              event.stopPropagation();
-                              openEdit(item);
-                            }}
-                          >
-                            <Ionicons name="pencil-outline" size={17} color={palette.ca4acb5} />
-                          </Pressable>
-                        </Pressable>
-                      ))
-                    ) : (
-                      <Pressable
-                        style={styles.quickAdd}
-                        onPress={() => router.push("/(tabs)/recipes")}
-                      >
-                        <Ionicons name="add" size={17} color={palette.c95a0af} />
-                        <Text style={styles.quickAddText}>Quick Add · {slot.label}</Text>
-                      </Pressable>
-                    )}
-                  </View>
+            {items.length === 0 ? (
+              <View style={styles.emptyPlan}>
+                <View style={styles.emptyPlanIcon}>
+                  <Ionicons name="restaurant-outline" size={34} color={palette.c9aa4b2} />
                 </View>
-              );
-            })}
+                <Text style={styles.emptyPlanTitle}>Add a Recipe to Prepare for Cooking!</Text>
+              </View>
+            ) : (
+              <>
+                <View style={styles.nutrition}>
+                  <Text style={styles.panelLabel}>TODAY’S PLAN</Text>
+                  <View style={styles.summaryRow}>
+                    <PlanMetric
+                      icon="restaurant-outline"
+                      value={items.length}
+                      label="Meals planned"
+                      color={palette.c168a4a}
+                      tint={palette.ce9f8ef}
+                    />
+                    <PlanMetric
+                      icon="time-outline"
+                      value={totalCookTime}
+                      suffix=" min"
+                      label="Cooking time"
+                      color={palette.c417fcb}
+                      tint={palette.ceaf3fe}
+                    />
+                    <PlanMetric
+                      icon="cart-outline"
+                      value={dayShopping?.missing_count ?? 0}
+                      label="Missing items"
+                      color={palette.cd66b35}
+                      tint={palette.cfff1e7}
+                    />
+                  </View>
+                  <Pressable
+                    style={styles.shoppingSummary}
+                    onPress={() =>
+                      router.push({
+                        pathname: "/shopping-list",
+                        params: { date: selected },
+                      } as never)
+                    }
+                  >
+                    <Ionicons name="basket-outline" size={15} color={GREEN} />
+                    <Text style={styles.shoppingSummaryText}>
+                      {dayShopping
+                        ? `${dayShopping.available_count} ingredient${dayShopping.available_count === 1 ? "" : "s"} already in your kitchen`
+                        : "Checking your kitchen inventory…"}
+                    </Text>
+                    <Ionicons name="chevron-forward" size={15} color={palette.c8b97a3} />
+                  </Pressable>
+                </View>
+                <View style={styles.timelineHead}>
+                  <Text style={styles.panelLabel}>TODAY’S TIMELINE</Text>
+                  <Text style={styles.orderHint}>Earliest to latest</Text>
+                </View>
+                {timelineSlots.map((slot, index, visibleSlots) => {
+                  const slotItems = items.filter((item) => item.meal_slot === slot.value);
+                  const isPrimary = PRIMARY_MEAL_SLOTS.has(slot.value);
+                  const hasPreviousMeal = visibleSlots
+                    .slice(0, index)
+                    .some((candidate) => items.some((item) => item.meal_slot === candidate.value));
+                  const hasFollowingMeal = visibleSlots
+                    .slice(index + 1)
+                    .some((candidate) => items.some((item) => item.meal_slot === candidate.value));
+                  return (
+                    <View key={slot.value} style={styles.timelineRow}>
+                      <View style={styles.timeColumn}>
+                        {slotItems.length > 0 && (
+                          <View
+                            style={[styles.timelineDot, !isPrimary && styles.secondaryTimelineDot]}
+                          />
+                        )}
+                        {hasFollowingMeal && (slotItems.length > 0 || hasPreviousMeal) && (
+                          <View
+                            style={[
+                              styles.timelineLine,
+                              slotItems.length === 0 && styles.timelineLineThrough,
+                            ]}
+                          />
+                        )}
+                      </View>
+                      <View
+                        style={[styles.timelineBody, !isPrimary && styles.secondaryTimelineBody]}
+                      >
+                        <Text style={[styles.slotTitle, !isPrimary && styles.secondarySlotTitle]}>
+                          {slot.label}
+                        </Text>
+                        {slotItems.length ? (
+                          slotItems.map((item) => {
+                            const completed = wasMealCooked(
+                              cooked,
+                              item.recipe_id,
+                              item.scheduled_date,
+                            );
+                            return (
+                              <Pressable
+                                key={item.id}
+                                style={[styles.card, !isPrimary && styles.secondaryCard]}
+                                onPress={() =>
+                                  router.push({
+                                    pathname: "/recipes/[recipeId]",
+                                    params: { recipeId: item.recipe_id },
+                                  })
+                                }
+                              >
+                                {item.image_url ? (
+                                  <Image source={{ uri: item.image_url }} style={styles.image} />
+                                ) : (
+                                  <View style={styles.imageFallback}>
+                                    <Text style={styles.food}>🍽️</Text>
+                                  </View>
+                                )}
+                                <View style={styles.cardBody}>
+                                  {item.shared_group_id ? (
+                                    <Text
+                                      style={[styles.metaText, { color: colors.primaryStrong }]}
+                                    >
+                                      Group Schedule · Added by{" "}
+                                      {item.added_by_name ?? "group member"}
+                                    </Text>
+                                  ) : null}
+                                  {item.shared_group_id && item.shared_group_name ? (
+                                    <Text style={styles.metaText}>
+                                      From {item.shared_group_name}
+                                    </Text>
+                                  ) : null}
+                                  <Text style={styles.cardTitle} numberOfLines={2}>
+                                    {item.title}
+                                  </Text>
+                                  <View style={styles.mealTimingRow}>
+                                    {item.scheduled_time ? (
+                                      <View style={styles.mealTimingItem}>
+                                        <Ionicons
+                                          name="alarm-outline"
+                                          size={14}
+                                          color={palette.c6f7d8d}
+                                        />
+                                        <Text style={styles.mealTimeText}>
+                                          {displayMealTime(item.scheduled_time)}
+                                        </Text>
+                                      </View>
+                                    ) : null}
+                                    <View style={styles.mealTimingItem}>
+                                      <Ionicons
+                                        name="time-outline"
+                                        size={14}
+                                        color={palette.c8a95a2}
+                                      />
+                                      <Text style={styles.durationText}>{item.total_time} min</Text>
+                                    </View>
+                                  </View>
+                                </View>
+                                {completed ? (
+                                  <Ionicons
+                                    accessibilityLabel="Cooking completed"
+                                    name="checkmark-circle"
+                                    size={28}
+                                    color={colors.success}
+                                  />
+                                ) : (
+                                  <>
+                                    <Pressable
+                                      accessibilityRole="button"
+                                      accessibilityLabel={`Cook ${item.title}`}
+                                      style={styles.cookAction}
+                                      onPress={(event) => {
+                                        event.stopPropagation();
+                                        router.push({
+                                          pathname: "/recipes/[recipeId]/cook",
+                                          params: {
+                                            recipeId: item.recipe_id,
+                                            plannedDate: item.scheduled_date,
+                                          },
+                                        });
+                                      }}
+                                    >
+                                      <MaterialCommunityIcons
+                                        name="chef-hat"
+                                        size={20}
+                                        color={palette.c118447}
+                                      />
+                                    </Pressable>
+                                    <Pressable
+                                      disabled={item.can_edit === false}
+                                      accessibilityElementsHidden={item.can_edit === false}
+                                      accessibilityLabel={`Edit ${item.title}`}
+                                      style={[
+                                        styles.more,
+                                        item.can_edit === false && { display: "none" },
+                                      ]}
+                                      onPress={(event) => {
+                                        event.stopPropagation();
+                                        openEdit(item);
+                                      }}
+                                    >
+                                      <Ionicons
+                                        name="pencil-outline"
+                                        size={18}
+                                        color={palette.ca4acb5}
+                                      />
+                                    </Pressable>
+                                  </>
+                                )}
+                              </Pressable>
+                            );
+                          })
+                        ) : (
+                          <Pressable
+                            style={styles.quickAdd}
+                            onPress={() => router.push("/(tabs)/recipes")}
+                          >
+                            <Ionicons name="add" size={17} color={palette.c95a0af} />
+                            <Text style={styles.quickAddText}>Quick Add · {slot.label}</Text>
+                          </Pressable>
+                        )}
+                      </View>
+                    </View>
+                  );
+                })}
+              </>
+            )}
           </>
         )}
       </ScrollView>
@@ -531,7 +622,6 @@ export function MealPlanScreen() {
               <Text style={[editTimeStyles.text, !editTime && editTimeStyles.placeholder]}>
                 {displayMealTime(editTime)}
               </Text>
-              <Ionicons name="chevron-down" size={18} color={palette.c596779} />
             </Pressable>
             <View style={styles.sheetActions}>
               <Pressable
@@ -600,27 +690,6 @@ export function MealPlanScreen() {
         message={message?.message ?? ""}
         tone={message?.tone}
         onClose={() => setMessage(undefined)}
-      />
-      <ShoppingListSheet
-        visible={shoppingOpen}
-        selectedDate={selected}
-        load={loadShopping}
-        onComplete={async (completed: ShoppingCompletionItem[]) => {
-          await api.addInventoryItems(
-            completed.map((item) => ({
-              name: item.name,
-              quantity: item.quantity,
-              expiry_date: item.expiry_date,
-              category: "Shopping list",
-              source: "shopping",
-              icon: ingredientEmojiFor(item.name),
-            })),
-          );
-        }}
-        onClose={() => setShoppingOpen(false)}
-        onMessage={(copy, tone = "info") => {
-          setMessage({ title: "Shopping List", message: copy, tone });
-        }}
       />
     </View>
   );
@@ -803,66 +872,87 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   orderHint: { color: palette.ca5adb5, fontSize: typography.mobile.rawSize.s8 },
-  timelineRow: { flexDirection: "row", minHeight: 87 },
-  timeColumn: { width: 52, alignItems: "center", paddingTop: 24 },
-  timelineTime: {
-    color: palette.c909aa7,
-    fontSize: typography.mobile.rawSize.s8,
-    fontWeight: typography.weight.bold,
-  },
+  timelineRow: { flexDirection: "row", minHeight: 87, marginBottom: 10 },
+  timeColumn: { width: 22, alignItems: "center", paddingTop: 24 },
   timelineDot: {
     position: "absolute",
     right: 0,
-    top: 28,
+    top: 64,
     width: 7,
     height: 7,
     borderRadius: 4,
     backgroundColor: GREEN,
   },
+  secondaryTimelineDot: {
+    right: 1,
+    top: 65,
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: palette.cb8dfc7,
+  },
   timelineLine: {
     position: "absolute",
     right: 3,
-    top: 35,
-    bottom: -12,
+    top: 71,
+    bottom: -75,
     width: 1,
     backgroundColor: palette.ccfe9d8,
   },
+  timelineLineThrough: { top: 0 },
   timelineBody: { flex: 1, paddingLeft: 12 },
+  secondaryTimelineBody: { paddingLeft: 14 },
   slotTitle: {
-    marginBottom: 7,
+    marginBottom: 10,
     color: palette.c344357,
     fontSize: typography.mobile.rawSize.s12,
     fontWeight: typography.weight.black,
   },
+  secondarySlotTitle: { color: palette.c6f7d8d, fontSize: typography.mobile.rawSize.s11 },
   card: {
-    minHeight: 63,
+    minHeight: 82,
     flexDirection: "row",
     alignItems: "center",
-    marginBottom: 9,
-    padding: 8,
+    marginBottom: 14,
+    padding: 10,
     borderWidth: 1,
     borderColor: palette.ce4e6e3,
     borderRadius: 14,
     backgroundColor: palette.cfff,
   },
-  image: { width: 44, height: 44, borderRadius: 22 },
+  secondaryCard: { marginLeft: 7 },
+  image: { width: 52, height: 52, borderRadius: 26 },
   imageFallback: {
-    width: 44,
-    height: 44,
+    width: 52,
+    height: 52,
     alignItems: "center",
     justifyContent: "center",
-    borderRadius: 22,
+    borderRadius: 26,
     backgroundColor: palette.ceaf3ec,
   },
-  food: { fontSize: typography.mobile.rawSize.s21 },
-  cardBody: { flex: 1, paddingHorizontal: 10 },
+  food: { fontSize: typography.mobile.rawSize.s23 },
+  cardBody: { flex: 1, paddingHorizontal: 11 },
   cardTitle: {
     color: palette.c1d3044,
-    fontSize: typography.mobile.rawSize.s12,
+    fontSize: typography.mobile.rawSize.s14,
+    lineHeight: 19,
     fontWeight: typography.weight.extrabold,
   },
   meta: { flexDirection: "row", alignItems: "center", gap: 5, marginTop: 7 },
-  metaText: { marginTop: 3, color: palette.c8a95a2, fontSize: typography.mobile.rawSize.s9 },
+  metaText: { marginTop: 3, color: palette.c8a95a2, fontSize: typography.mobile.rawSize.s10 },
+  mealTimingRow: { flexDirection: "row", alignItems: "center", gap: 12, marginTop: 6 },
+  mealTimingItem: { flexDirection: "row", alignItems: "center", gap: 4 },
+  mealTimeText: {
+    color: palette.c53645b,
+    fontSize: typography.mobile.rawSize.s10,
+    lineHeight: 14,
+    fontWeight: typography.weight.extrabold,
+  },
+  durationText: {
+    color: palette.c8a95a2,
+    fontSize: typography.mobile.rawSize.s10,
+    lineHeight: 14,
+  },
   more: {
     width: 30,
     height: 30,
@@ -872,19 +962,13 @@ const styles = StyleSheet.create({
     backgroundColor: palette.cf2f4f5,
   },
   cookAction: {
-    minWidth: 64,
-    height: 30,
+    width: 34,
+    height: 34,
     alignItems: "center",
     justifyContent: "center",
     marginRight: 6,
-    paddingHorizontal: 8,
-    borderRadius: 9,
+    borderRadius: 11,
     backgroundColor: palette.ce8f7ed,
-  },
-  cookActionText: {
-    color: palette.c118447,
-    fontSize: typography.mobile.rawSize.s8,
-    fontWeight: typography.weight.black,
   },
   quickAdd: {
     height: 53,
@@ -902,6 +986,24 @@ const styles = StyleSheet.create({
     color: palette.c919caa,
     fontSize: typography.mobile.rawSize.s11,
     fontWeight: typography.weight.bold,
+  },
+  emptyPlan: { alignItems: "center", justifyContent: "center", paddingVertical: 88 },
+  emptyPlanIcon: {
+    width: 72,
+    height: 72,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 24,
+    backgroundColor: palette.cf2f4f5,
+  },
+  emptyPlanTitle: {
+    maxWidth: 260,
+    marginTop: 16,
+    color: palette.c6f7d8d,
+    fontSize: typography.mobile.rawSize.s15,
+    lineHeight: 22,
+    fontWeight: typography.weight.extrabold,
+    textAlign: "center",
   },
   state: { alignItems: "center", paddingVertical: 50 },
   stateTitle: {

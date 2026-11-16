@@ -5,7 +5,7 @@ import { Ionicons } from "@expo/vector-icons";
 import * as FileSystem from "expo-file-system/legacy";
 import * as ImagePicker from "expo-image-picker";
 import { router } from "expo-router";
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Animated,
@@ -13,6 +13,7 @@ import {
   KeyboardAvoidingView,
   LayoutAnimation,
   Modal,
+  PanResponder,
   Platform,
   Pressable,
   ScrollView,
@@ -113,7 +114,10 @@ function Header({
         <Pressable
           accessibilityLabel={showModeSwitcher ? "Back to home" : "Back to scan photo"}
           onPress={onBack}
-          style={styles.iconButton}
+          style={({ pressed }) => [
+            styles.iconButton,
+            pressed && { opacity: 0.72, transform: [{ scale: 1.08 }] },
+          ]}
         >
           <Ionicons name="chevron-back" size={21} color={colors.text} />
         </Pressable>
@@ -320,26 +324,37 @@ function FreshnessResults({
   expanded,
   onToggle,
   onScanAgain,
+  onOpenImage,
+  onAddToKitchen,
 }: {
   result: FreshnessResult;
   image: SelectedImage;
   expanded: Set<number>;
   onToggle: (index: number) => void;
   onScanAgain: () => void;
+  onOpenImage: () => void;
+  onAddToKitchen: () => void;
 }) {
   return (
     <View style={styles.resultsContent}>
-      <Image source={{ uri: image.uri }} style={styles.resultImage} />
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel="Open assessed photo full screen"
+        onPress={onOpenImage}
+        style={styles.resultImageButton}
+      >
+        <Image source={{ uri: image.uri }} style={styles.resultImage} />
+        <View style={styles.expandImageHint}>
+          <Ionicons name="expand-outline" size={16} color={colors.surface} />
+          <Text style={styles.expandImageHintText}>Tap to enlarge</Text>
+        </View>
+      </Pressable>
       <View style={styles.resultsTitleRow}>
         <View>
           <Text style={styles.resultsTitle}>Freshness assessment</Text>
           <Text style={styles.resultsSubtitle}>
             {result.items.length} visible {result.items.length === 1 ? "item" : "items"}
           </Text>
-        </View>
-        <View style={styles.aiPill}>
-          <Ionicons name="sparkles" size={13} color={colors.primaryStrong} />
-          <Text style={styles.aiPillText}>EcoChef freshness AI</Text>
         </View>
       </View>
       {result.items.length ? (
@@ -358,6 +373,14 @@ function FreshnessResults({
         <Ionicons name="information-circle-outline" size={18} color={colors.warningStrong} />
         <Text style={styles.disclaimerText}>{result.disclaimer}</Text>
       </View>
+      {result.items.length ? (
+        <Pressable onPress={onAddToKitchen} style={styles.primaryButton}>
+          <Ionicons name="basket-outline" size={20} color={colors.surface} />
+          <Text style={styles.primaryButtonText}>
+            Add assessed {result.items.length === 1 ? "food" : "foods"} to In Kitchen
+          </Text>
+        </Pressable>
+      ) : null}
       <Pressable onPress={onScanAgain} style={styles.secondaryButton}>
         <Ionicons name="scan-outline" size={19} color={colors.text} />
         <Text style={styles.secondaryButtonText}>Scan Another Item</Text>
@@ -524,10 +547,6 @@ function IngredientResults({
           <Text style={styles.resultsTitle}>Detected Ingredients</Text>
           <Text style={styles.resultsSubtitle}>Review and edit before adding to your list.</Text>
         </View>
-        <View style={styles.aiPill}>
-          <Ionicons name="sparkles" size={13} color={colors.primaryStrong} />
-          <Text style={styles.aiPillText}>EcoChef detector</Text>
-        </View>
       </View>
       {items.length ? (
         items.map((item) => (
@@ -571,7 +590,11 @@ function IngredientResults({
   );
 }
 
-type DialogState = { kind: "discard" } | { kind: "success"; count: number } | undefined;
+type DialogState =
+  | { kind: "discard" }
+  | { kind: "success"; count: number }
+  | { kind: "freshness-add"; count: number }
+  | undefined;
 
 function AppDialog({
   dialog,
@@ -584,6 +607,7 @@ function AppDialog({
 }) {
   if (!dialog) return null;
   const discard = dialog.kind === "discard";
+  const freshnessAdd = dialog.kind === "freshness-add";
   return (
     <Modal transparent animationType="fade" visible onRequestClose={onClose}>
       <View style={styles.modalOverlay}>
@@ -591,30 +615,42 @@ function AppDialog({
           <View
             style={[
               styles.dialogIcon,
-              { backgroundColor: discard ? colors.warningSoft : colors.successSoft },
+              {
+                backgroundColor: discard || freshnessAdd ? colors.warningSoft : colors.successSoft,
+              },
             ]}
           >
             <Ionicons
-              name={discard ? "refresh-outline" : "checkmark"}
+              name={discard ? "refresh-outline" : freshnessAdd ? "basket-outline" : "checkmark"}
               size={26}
-              color={discard ? colors.warningStrong : colors.success}
+              color={discard || freshnessAdd ? colors.warningStrong : colors.success}
             />
           </View>
           <Text style={styles.dialogTitle}>
-            {discard ? "Scan another photo?" : "Ingredients added"}
+            {discard
+              ? "Scan another photo?"
+              : freshnessAdd
+                ? "Add assessed food?"
+                : "Ingredients added"}
           </Text>
           <Text style={styles.dialogBody}>
             {discard
               ? "Your current detected ingredients and edits will be discarded."
-              : `${dialog.count} ${dialog.count === 1 ? "item is" : "items are"} now saved to In Kitchen.`}
+              : freshnessAdd
+                ? `${dialog.count} assessed ${dialog.count === 1 ? "food will" : "foods will"} be prepared for review before adding to In Kitchen.`
+                : `${dialog.count} ${dialog.count === 1 ? "item is" : "items are"} now saved to In Kitchen.`}
           </Text>
-          {discard ? (
+          {discard || freshnessAdd ? (
             <View style={styles.dialogActions}>
               <Pressable onPress={onClose} style={styles.dialogSecondary}>
-                <Text style={styles.dialogSecondaryText}>Keep editing</Text>
+                <Text style={styles.dialogSecondaryText}>
+                  {discard ? "Keep editing" : "Not now"}
+                </Text>
               </Pressable>
               <Pressable onPress={onConfirm} style={styles.dialogPrimary}>
-                <Text style={styles.dialogPrimaryText}>Scan again</Text>
+                <Text style={styles.dialogPrimaryText}>
+                  {discard ? "Scan again" : "Review food"}
+                </Text>
               </Pressable>
             </View>
           ) : (
@@ -722,6 +758,153 @@ function ManualIngredientModal({
   );
 }
 
+function UploadingImageModal({
+  visible,
+  progress,
+}: {
+  visible: boolean;
+  progress: Animated.Value;
+}) {
+  return (
+    <Modal transparent animationType="fade" visible={visible} statusBarTranslucent>
+      <View style={styles.modalOverlay}>
+        <View style={styles.uploadDialog}>
+          <View style={styles.uploadIcon}>
+            <Ionicons name="cloud-upload-outline" size={28} color={colors.primaryStrong} />
+          </View>
+          <Text style={styles.dialogTitle}>Uploading Image</Text>
+          <Text style={styles.dialogBody}>EcoChef is preparing and assessing your photo.</Text>
+          <View style={styles.uploadProgressTrack}>
+            <Animated.View
+              style={[
+                styles.uploadProgressFill,
+                {
+                  transform: [
+                    {
+                      scaleX: progress.interpolate({
+                        inputRange: [0, 1],
+                        outputRange: [0.02, 1],
+                      }),
+                    },
+                  ],
+                },
+              ]}
+            />
+          </View>
+          <Text style={styles.uploadHint}>Please keep EcoChef open</Text>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
+function FullscreenImageModal({
+  visible,
+  uri,
+  onClose,
+}: {
+  visible: boolean;
+  uri?: string;
+  onClose: () => void;
+}) {
+  const scale = useRef(new Animated.Value(1)).current;
+  const translateY = useRef(new Animated.Value(0)).current;
+  const scaleValue = useRef(1);
+  const pinchStartDistance = useRef(0);
+  const pinchStartScale = useRef(1);
+
+  useEffect(() => {
+    if (!visible) return;
+    scaleValue.current = 1;
+    scale.setValue(1);
+    translateY.setValue(0);
+  }, [scale, translateY, visible]);
+
+  const responder = useMemo(
+    () =>
+      PanResponder.create({
+        onStartShouldSetPanResponder: (event) => event.nativeEvent.touches.length >= 2,
+        onMoveShouldSetPanResponder: (event, gesture) =>
+          event.nativeEvent.touches.length >= 2 || Math.abs(gesture.dy) > 8,
+        onPanResponderGrant: (event) => {
+          const touches = event.nativeEvent.touches;
+          if (touches.length >= 2) {
+            pinchStartDistance.current = Math.hypot(
+              touches[0].pageX - touches[1].pageX,
+              touches[0].pageY - touches[1].pageY,
+            );
+            pinchStartScale.current = scaleValue.current;
+          }
+        },
+        onPanResponderMove: (event, gesture) => {
+          const touches = event.nativeEvent.touches;
+          if (touches.length >= 2) {
+            const distance = Math.hypot(
+              touches[0].pageX - touches[1].pageX,
+              touches[0].pageY - touches[1].pageY,
+            );
+            if (!pinchStartDistance.current) pinchStartDistance.current = distance;
+            const next = Math.max(
+              1,
+              Math.min(4, pinchStartScale.current * (distance / pinchStartDistance.current)),
+            );
+            scaleValue.current = next;
+            scale.setValue(next);
+            translateY.setValue(0);
+          } else if (scaleValue.current <= 1.05) {
+            translateY.setValue(gesture.dy);
+          }
+        },
+        onPanResponderRelease: (_, gesture) => {
+          pinchStartDistance.current = 0;
+          if (scaleValue.current <= 1.05 && Math.abs(gesture.dy) > 140) {
+            onClose();
+            return;
+          }
+          Animated.spring(translateY, {
+            toValue: 0,
+            speed: 22,
+            bounciness: 2,
+            useNativeDriver: true,
+          }).start();
+        },
+        onPanResponderTerminate: () => {
+          pinchStartDistance.current = 0;
+          Animated.spring(translateY, {
+            toValue: 0,
+            useNativeDriver: true,
+          }).start();
+        },
+      }),
+    [onClose, scale, translateY],
+  );
+
+  return (
+    <Modal visible={visible} animationType="fade" statusBarTranslucent onRequestClose={onClose}>
+      <View style={styles.fullscreenImageRoot} {...responder.panHandlers}>
+        {uri ? (
+          <Animated.Image
+            source={{ uri }}
+            resizeMode="contain"
+            style={[styles.fullscreenImage, { transform: [{ translateY }, { scale }] }]}
+          />
+        ) : null}
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Close full-screen image"
+          onPress={onClose}
+          style={styles.fullscreenClose}
+        >
+          <Ionicons name="close" size={25} color={colors.text} />
+        </Pressable>
+        <View pointerEvents="none" style={styles.fullscreenHint}>
+          <Text style={styles.fullscreenHintText}>Pinch to zoom · Swipe up or down to close</Text>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
 export function ScanScreen() {
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
@@ -739,10 +922,33 @@ export function ScanScreen() {
   const [adding, setAdding] = useState(false);
   const [manualOpen, setManualOpen] = useState(false);
   const [dialog, setDialog] = useState<DialogState>();
+  const [uploadingImage, setUploadingImage] = useState(false);
+  const [fullscreenImageOpen, setFullscreenImageOpen] = useState(false);
+  const uploadProgress = useRef(new Animated.Value(0)).current;
   const modeTranslateX = useRef(new Animated.Value(0)).current;
   const modeOpacity = useRef(new Animated.Value(1)).current;
   const modeTransitioning = useRef(false);
   const scanRequestId = useRef(0);
+
+  function beginUpload() {
+    uploadProgress.stopAnimation();
+    uploadProgress.setValue(0);
+    setUploadingImage(true);
+    Animated.timing(uploadProgress, {
+      toValue: 0.88,
+      duration: 8_000,
+      useNativeDriver: true,
+    }).start();
+  }
+
+  function finishUpload() {
+    uploadProgress.stopAnimation();
+    Animated.timing(uploadProgress, {
+      toValue: 1,
+      duration: 180,
+      useNativeDriver: true,
+    }).start(() => setUploadingImage(false));
+  }
 
   function reset(nextMode = mode) {
     scanRequestId.current += 1;
@@ -810,12 +1016,15 @@ export function ScanScreen() {
               base64: true,
             });
       if (result.canceled || !result.assets[0]) return;
+      beginUpload();
       const selected = await normalizeAsset(result.assets[0]);
       setImage(selected);
       setPhase("processing");
       const requestId = ++scanRequestId.current;
       await analyze(selected, requestId);
     } catch (nextError) {
+      uploadProgress.stopAnimation();
+      setUploadingImage(false);
       setPhase("capture");
       setError(
         nextError instanceof Error
@@ -836,6 +1045,7 @@ export function ScanScreen() {
         setFreshness(result);
         setPhase("freshness-result");
         setExpandedFreshness(result.items.length ? new Set([0]) : new Set());
+        finishUpload();
         await saveScanHistory({
           id: id("freshness"),
           mode: "freshness",
@@ -862,6 +1072,7 @@ export function ScanScreen() {
         setIngredientProvider(result.provider);
         setExpandedIngredient(editable[0]?.id);
         setPhase("ingredients-result");
+        finishUpload();
         await saveScanHistory({
           id: id("ingredients"),
           mode: "ingredients",
@@ -872,6 +1083,8 @@ export function ScanScreen() {
       }
     } catch (nextError) {
       if (requestId !== scanRequestId.current) return;
+      uploadProgress.stopAnimation();
+      setUploadingImage(false);
       setPhase("capture");
       setImage(undefined);
       setError(
@@ -954,6 +1167,34 @@ export function ScanScreen() {
     }
   }
 
+  function reviewFreshnessItems() {
+    if (!freshness?.items.length) return;
+    const editable = freshness.items.map((item) => ({
+      id: id("freshness-item"),
+      name: item.name,
+      amount: "1",
+      unit: "pcs",
+      expiryDate: localDateAfter(
+        item.status === "spoiled"
+          ? 0
+          : item.status === "use_soon"
+            ? 1
+            : item.status === "fresh"
+              ? 5
+              : 3,
+      ),
+      category: "",
+      confidence: item.confidence,
+    }));
+    setDialog(undefined);
+    setMode("ingredients");
+    setIngredients(editable);
+    setIngredientProvider(undefined);
+    setExpandedIngredient(editable[0]?.id);
+    setPhase("ingredients-result");
+    setError(undefined);
+  }
+
   return (
     <View style={[styles.root, { paddingTop: insets.top }]}>
       <Header
@@ -989,6 +1230,10 @@ export function ScanScreen() {
             expanded={expandedFreshness}
             onToggle={toggleFreshness}
             onScanAgain={() => reset()}
+            onOpenImage={() => setFullscreenImageOpen(true)}
+            onAddToKitchen={() =>
+              setDialog({ kind: "freshness-add", count: freshness.items.length })
+            }
           />
         ) : null}
         {phase === "ingredients-result" ? (
@@ -1023,6 +1268,12 @@ export function ScanScreen() {
           setExpandedIngredient(item.id);
         }}
       />
+      <UploadingImageModal visible={uploadingImage} progress={uploadProgress} />
+      <FullscreenImageModal
+        visible={fullscreenImageOpen}
+        uri={image?.uri}
+        onClose={() => setFullscreenImageOpen(false)}
+      />
       <AppDialog
         dialog={dialog}
         onClose={() => setDialog(undefined)}
@@ -1030,9 +1281,11 @@ export function ScanScreen() {
           if (dialog?.kind === "discard") {
             setDialog(undefined);
             reset("ingredients");
+          } else if (dialog?.kind === "freshness-add") {
+            reviewFreshnessItems();
           } else {
             setDialog(undefined);
-            router.push("/ingredients");
+            router.replace({ pathname: "/ingredients", params: { returnTo: "home" } });
           }
         }}
       />
@@ -1195,11 +1448,29 @@ const styles = StyleSheet.create({
   },
   progressFill: { width: "68%", height: "100%", borderRadius: 4, backgroundColor: colors.primary },
   resultsContent: { paddingTop: 18, gap: 12 },
+  resultImageButton: { position: "relative", overflow: "hidden", borderRadius: 20 },
   resultImage: {
     width: "100%",
     height: 190,
     borderRadius: 20,
     backgroundColor: colors.surfaceMuted,
+  },
+  expandImageHint: {
+    position: "absolute",
+    right: 10,
+    bottom: 10,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    paddingHorizontal: 9,
+    paddingVertical: 6,
+    borderRadius: 14,
+    backgroundColor: colors.overlayStrong,
+  },
+  expandImageHintText: {
+    color: colors.surface,
+    fontSize: typography.mobile.rawSize.s10,
+    fontWeight: typography.weight.bold,
   },
   resultsTitleRow: {
     flexDirection: "row",
@@ -1216,20 +1487,6 @@ const styles = StyleSheet.create({
     marginTop: 3,
     color: colors.textMuted,
     fontSize: typography.mobile.rawSize.s12,
-  },
-  aiPill: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    paddingHorizontal: 9,
-    paddingVertical: 6,
-    borderRadius: 20,
-    backgroundColor: colors.primarySoft,
-  },
-  aiPillText: {
-    color: colors.primaryStrong,
-    fontSize: typography.mobile.rawSize.s10,
-    fontWeight: typography.weight.extrabold,
   },
   countBadge: {
     minWidth: 31,
@@ -1477,6 +1734,41 @@ const styles = StyleSheet.create({
     borderRadius: 22,
     backgroundColor: colors.surface,
   },
+  uploadDialog: {
+    width: "100%",
+    maxWidth: 360,
+    padding: 24,
+    alignItems: "center",
+    borderRadius: 22,
+    backgroundColor: colors.surface,
+  },
+  uploadIcon: {
+    width: 58,
+    height: 58,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 29,
+    backgroundColor: colors.primarySoft,
+  },
+  uploadProgressTrack: {
+    width: "100%",
+    height: 8,
+    marginTop: 20,
+    overflow: "hidden",
+    borderRadius: 4,
+    backgroundColor: colors.border,
+  },
+  uploadProgressFill: {
+    width: "100%",
+    height: "100%",
+    borderRadius: 4,
+    backgroundColor: colors.primaryStrong,
+  },
+  uploadHint: {
+    marginTop: 9,
+    color: colors.textMuted,
+    fontSize: typography.mobile.rawSize.s11,
+  },
   dialogIcon: {
     width: 52,
     height: 52,
@@ -1551,4 +1843,35 @@ const styles = StyleSheet.create({
     backgroundColor: colors.border,
   },
   sheetTitleRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  fullscreenImageRoot: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: colors.consumerCanvasDark,
+  },
+  fullscreenImage: { width: "100%", height: "100%" },
+  fullscreenClose: {
+    position: "absolute",
+    top: 50,
+    left: 18,
+    width: 42,
+    height: 42,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 21,
+    backgroundColor: colors.surface,
+  },
+  fullscreenHint: {
+    position: "absolute",
+    bottom: 42,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 18,
+    backgroundColor: colors.overlayStrong,
+  },
+  fullscreenHintText: {
+    color: colors.surface,
+    fontSize: typography.mobile.rawSize.s11,
+    fontWeight: typography.weight.bold,
+  },
 });

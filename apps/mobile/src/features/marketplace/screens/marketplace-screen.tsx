@@ -137,6 +137,7 @@ export function MarketplaceScreen() {
   const profileRef = useRef<ConsumerProfile | undefined>(undefined);
   const addressIdRef = useRef<string | undefined>(undefined);
   const loadGeneration = useRef(0);
+  const listRef = useRef<FlatList<MarketplaceListItem>>(null);
   const [addressOpen, setAddressOpen] = useState(false);
   const [timeOpen, setTimeOpen] = useState(false);
   const [arrivalAt, setArrivalAt] = useState(getMarketplaceArrival());
@@ -195,6 +196,19 @@ export function MarketplaceScreen() {
     () =>
       navigation.addListener("blur", () => {
         if (!returning.current) allowShoppingReturn.current = false;
+      }),
+    [navigation],
+  );
+  useEffect(
+    () =>
+      (
+        navigation as unknown as {
+          addListener: (name: "tabPress", listener: () => void) => () => void;
+        }
+      ).addListener("tabPress", () => {
+        requestAnimationFrame(() => {
+          listRef.current?.scrollToOffset({ offset: 0, animated: false });
+        });
       }),
     [navigation],
   );
@@ -439,7 +453,13 @@ export function MarketplaceScreen() {
     <>
       <View style={styles.header}>
         {returnTo === "shopping" ? (
-          <Pressable onPress={leave} style={styles.back}>
+          <Pressable
+            onPress={leave}
+            style={({ pressed }) => [
+              styles.back,
+              pressed && { opacity: 0.72, transform: [{ scale: 1.08 }] },
+            ]}
+          >
             <Ionicons name="chevron-back" size={21} color={colors.text} />
           </Pressable>
         ) : null}
@@ -479,14 +499,14 @@ export function MarketplaceScreen() {
         }
         style={styles.planShopping}
       >
-        <Ionicons name="calendar-outline" size={24} color={colors.primaryStrong} />
+        <Ionicons name="calendar-outline" size={21} color={colors.primaryStrong} />
         <View style={{ flex: 1 }}>
           <Text style={styles.planShoppingTitle}>Shop for my plan</Text>
           <Text style={styles.planShoppingCopy}>
             Find the ingredients missing from your planned meals
           </Text>
         </View>
-        <Ionicons name="chevron-forward" size={20} color={colors.primaryStrong} />
+        <Ionicons name="chevron-forward" size={19} color={colors.primaryStrong} />
       </Pressable>
       <View style={styles.search}>
         <Ionicons name="search-outline" size={19} color={colors.textSubtle} />
@@ -539,6 +559,7 @@ export function MarketplaceScreen() {
   return (
     <View style={styles.root}>
       <FlatList
+        ref={listRef}
         data={loading && !stores.stores.length ? [] : marketplaceRows}
         keyExtractor={(item) => item.key}
         renderItem={({ item }) =>
@@ -617,13 +638,15 @@ const styles = StyleSheet.create({
   },
   planShoppingTitle: {
     color: colors.primaryStrong,
-    fontSize: typography.mobile.size.bodyTextHeavy,
+    fontSize: typography.mobile.size.secondaryInteraction,
     fontWeight: typography.weight.bold,
   },
   planShoppingCopy: {
     color: colors.textMuted,
-    fontSize: typography.mobile.size.secondaryInteraction,
-    marginTop: 4,
+    fontSize: typography.mobile.size.caption,
+    lineHeight: 18,
+    fontWeight: typography.weight.semibold,
+    marginTop: 3,
   },
 
   root: { flex: 1, backgroundColor: colors.consumerCanvas },

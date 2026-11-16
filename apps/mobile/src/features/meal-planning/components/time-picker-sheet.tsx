@@ -1,24 +1,12 @@
-import { Text } from "../../../shared/components/themed-text";
+import { Text, TextInput } from "../../../shared/components/themed-text";
 import { palette, typography } from "@ecochef/design-tokens";
 import { Ionicons } from "@expo/vector-icons";
-import { useEffect, useRef, useState } from "react";
-import {
-  Animated,
-  FlatList,
-  Modal,
-  NativeScrollEvent,
-  NativeSyntheticEvent,
-  Pressable,
-  StyleSheet,
-  View,
-} from "react-native";
+import { useEffect, useState } from "react";
+import { Animated, Modal, Pressable, StyleSheet, View } from "react-native";
 import { useBottomSheetSlide } from "../../../shared/hooks/use-bottom-sheet-slide";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 const GREEN = palette.c12ad55;
-const WHEEL_ITEM_HEIGHT = 44;
-const hours = Array.from({ length: 12 }, (_, index) => index + 1);
-const minutes = Array.from({ length: 59 }, (_, index) => index + 1);
 const display = (value: string) => {
   const [hour, minute] = value.split(":").map(Number);
   const suffix = hour >= 12 ? "PM" : "AM";
@@ -48,10 +36,10 @@ export function TimePickerSheet({
     const now = new Date();
     const [rawHour, rawMinute] = value?.slice(0, 5).split(":").map(Number) ?? [
       now.getHours(),
-      Math.max(1, now.getMinutes()),
+      now.getMinutes(),
     ];
     setHour(rawHour % 12 || 12);
-    setMinute(Number.isFinite(rawMinute) && rawMinute > 0 ? rawMinute : 1);
+    setMinute(Number.isFinite(rawMinute) && rawMinute >= 0 ? rawMinute : 0);
     setPeriod(rawHour >= 12 ? "PM" : "AM");
   }, [visible, value]);
   const apply = () => {
@@ -79,29 +67,69 @@ export function TimePickerSheet({
               <Ionicons name="close" size={18} color={palette.c5f6c7d} />
             </Pressable>
           </View>
-          <View style={wheelStyles.labels}>
-            <Text style={wheelStyles.label}>HOUR</Text>
-            <Text style={wheelStyles.label}>MINUTE</Text>
-            <Text style={wheelStyles.periodLabel}>PERIOD</Text>
-          </View>
           <View style={styles.picker}>
-            <WheelColumn
-              key={`hour-${visible}-${value}`}
-              values={hours}
-              selected={hour}
-              format={(item) => String(item)}
-              onChange={setHour}
-              onWrap={() => setPeriod((current) => (current === "AM" ? "PM" : "AM"))}
-            />
-            <Text style={wheelStyles.colon}>:</Text>
-            <WheelColumn
-              key={`minute-${visible}-${value}`}
-              values={minutes}
-              selected={minute}
-              format={(item) => String(item).padStart(2, "0")}
-              onChange={setMinute}
-            />
-            <View style={wheelStyles.periods}>
+            <View style={styles.column}>
+              <Text style={styles.columnLabel}>HOUR</Text>
+              <Pressable
+                accessibilityLabel="Increase hour"
+                style={styles.step}
+                onPress={() => setHour((current) => (current === 12 ? 1 : current + 1))}
+              >
+                <Ionicons name="add" size={23} color={GREEN} />
+              </Pressable>
+              <TextInput
+                accessibilityLabel="Hour"
+                value={String(hour)}
+                keyboardType="number-pad"
+                maxLength={2}
+                selectTextOnFocus
+                style={[styles.valueBox, styles.value]}
+                onChangeText={(text) => {
+                  if (!/^\d{1,2}$/.test(text)) return;
+                  const next = Number(text);
+                  if (next >= 1 && next <= 12) setHour(next);
+                }}
+              />
+              <Pressable
+                accessibilityLabel="Decrease hour"
+                style={styles.step}
+                onPress={() => setHour((current) => (current === 1 ? 12 : current - 1))}
+              >
+                <Ionicons name="remove" size={23} color={GREEN} />
+              </Pressable>
+            </View>
+            <Text style={styles.colon}>:</Text>
+            <View style={styles.column}>
+              <Text style={styles.columnLabel}>MINUTE</Text>
+              <Pressable
+                accessibilityLabel="Increase minute"
+                style={styles.step}
+                onPress={() => setMinute((current) => (current + 1) % 60)}
+              >
+                <Ionicons name="add" size={23} color={GREEN} />
+              </Pressable>
+              <TextInput
+                accessibilityLabel="Minute"
+                value={String(minute).padStart(2, "0")}
+                keyboardType="number-pad"
+                maxLength={2}
+                selectTextOnFocus
+                style={[styles.valueBox, styles.value]}
+                onChangeText={(text) => {
+                  if (!/^\d{1,2}$/.test(text)) return;
+                  const next = Number(text);
+                  if (next >= 0 && next <= 59) setMinute(next);
+                }}
+              />
+              <Pressable
+                accessibilityLabel="Decrease minute"
+                style={styles.step}
+                onPress={() => setMinute((current) => (current + 59) % 60)}
+              >
+                <Ionicons name="remove" size={23} color={GREEN} />
+              </Pressable>
+            </View>
+            <View style={styles.periods}>
               {(["AM", "PM"] as const).map((item) => (
                 <Pressable
                   key={item}
@@ -152,88 +180,6 @@ export function TimePickerSheet({
         </Animated.View>
       </View>
     </Modal>
-  );
-}
-
-function WheelColumn({
-  values,
-  selected,
-  format,
-  onChange,
-  onWrap,
-}: {
-  values: number[];
-  selected: number;
-  format: (value: number) => string;
-  onChange: (value: number) => void;
-  onWrap?: () => void;
-}) {
-  const scrollRef = useRef<FlatList<number>>(null);
-  const repeated = Array.from(
-    { length: values.length * 61 },
-    (_, index) => values[index % values.length],
-  );
-  const baseIndex = 30 * values.length + Math.max(0, values.indexOf(selected));
-  const absoluteIndex = useRef(baseIndex);
-  useEffect(() => {
-    absoluteIndex.current = baseIndex;
-    requestAnimationFrame(() =>
-      scrollRef.current?.scrollToOffset({ offset: baseIndex * WHEEL_ITEM_HEIGHT, animated: false }),
-    );
-  }, [values.length]);
-  const finish = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
-    const index = Math.max(
-      0,
-      Math.min(
-        repeated.length - 1,
-        Math.round(event.nativeEvent.contentOffset.y / WHEEL_ITEM_HEIGHT),
-      ),
-    );
-    const previousCycle = Math.floor(absoluteIndex.current / values.length);
-    const nextCycle = Math.floor(index / values.length);
-    const wraps = Math.abs(nextCycle - previousCycle);
-    absoluteIndex.current = index;
-    if (onWrap && wraps % 2 === 1) onWrap();
-    onChange(repeated[index]);
-  };
-  return (
-    <View style={wheelStyles.frame}>
-      <View pointerEvents="none" style={wheelStyles.selection} />
-      <FlatList
-        ref={scrollRef}
-        data={repeated}
-        keyExtractor={(_, index) => String(index)}
-        renderItem={({ item, index }) => (
-          <View style={wheelStyles.item}>
-            <Text
-              style={[
-                wheelStyles.itemText,
-                index === absoluteIndex.current && wheelStyles.itemTextSelected,
-              ]}
-            >
-              {format(item)}
-            </Text>
-          </View>
-        )}
-        showsVerticalScrollIndicator={false}
-        snapToInterval={WHEEL_ITEM_HEIGHT}
-        decelerationRate="fast"
-        nestedScrollEnabled
-        contentContainerStyle={wheelStyles.content}
-        getItemLayout={(_, index) => ({
-          length: WHEEL_ITEM_HEIGHT,
-          offset: WHEEL_ITEM_HEIGHT * index,
-          index,
-        })}
-        initialNumToRender={7}
-        maxToRenderPerBatch={7}
-        windowSize={5}
-        onMomentumScrollEnd={finish}
-        onScrollEndDrag={(event) => {
-          if (Math.abs(event.nativeEvent.velocity?.y ?? 0) < 0.1) finish(event);
-        }}
-      />
-    </View>
   );
 }
 
@@ -317,6 +263,8 @@ const styles = StyleSheet.create({
     color: palette.c173d2a,
     fontSize: typography.mobile.rawSize.s31,
     fontWeight: typography.weight.black,
+    padding: 0,
+    textAlign: "center",
   },
   colon: {
     marginTop: 24,
@@ -342,32 +290,6 @@ const styles = StyleSheet.create({
     fontWeight: typography.weight.black,
   },
   periodTextActive: { color: palette.cfff },
-  minuteShortcuts: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 7,
-    marginTop: 12,
-  },
-  shortcutLabel: {
-    marginRight: 3,
-    color: palette.c8a94a1,
-    fontSize: typography.mobile.rawSize.s9,
-    fontWeight: typography.weight.bold,
-  },
-  shortcut: {
-    minWidth: 39,
-    height: 31,
-    alignItems: "center",
-    justifyContent: "center",
-    borderRadius: 10,
-    backgroundColor: palette.ceef5f0,
-  },
-  shortcutText: {
-    color: palette.c16884b,
-    fontSize: typography.mobile.rawSize.s10,
-    fontWeight: typography.weight.black,
-  },
   preview: {
     height: 44,
     flexDirection: "row",
@@ -418,61 +340,4 @@ const timeActionStyles = StyleSheet.create({
     fontSize: typography.mobile.rawSize.s11,
     fontWeight: typography.weight.extrabold,
   },
-});
-const wheelStyles = StyleSheet.create({
-  labels: { flexDirection: "row", alignItems: "center", justifyContent: "center", marginTop: 17 },
-  label: {
-    width: 112,
-    color: palette.c7b8796,
-    fontSize: typography.mobile.rawSize.s9,
-    fontWeight: typography.weight.black,
-    letterSpacing: 0.7,
-    textAlign: "center",
-  },
-  periodLabel: {
-    width: 55,
-    color: palette.c7b8796,
-    fontSize: typography.mobile.rawSize.s9,
-    fontWeight: typography.weight.black,
-    letterSpacing: 0.7,
-    textAlign: "center",
-  },
-  frame: {
-    width: 92,
-    height: 220,
-    overflow: "hidden",
-    borderRadius: 16,
-    backgroundColor: palette.cf8faf9,
-  },
-  selection: {
-    position: "absolute",
-    left: 5,
-    right: 5,
-    top: 88,
-    height: 44,
-    borderWidth: 1,
-    borderColor: palette.ca9ddbd,
-    borderRadius: 12,
-    backgroundColor: palette.ceaf8ef,
-  },
-  content: { paddingVertical: 88 },
-  item: { height: 44, alignItems: "center", justifyContent: "center" },
-  itemText: {
-    color: palette.c9aa49f,
-    fontSize: typography.mobile.rawSize.s18,
-    fontWeight: typography.weight.semibold,
-  },
-  itemTextSelected: {
-    color: palette.c173d2a,
-    fontSize: typography.mobile.rawSize.s25,
-    fontWeight: typography.weight.black,
-  },
-  colon: {
-    width: 20,
-    color: palette.c506071,
-    fontSize: typography.mobile.rawSize.s28,
-    fontWeight: typography.weight.black,
-    textAlign: "center",
-  },
-  periods: { gap: 9, justifyContent: "center" },
 });

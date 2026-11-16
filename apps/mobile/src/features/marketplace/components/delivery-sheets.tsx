@@ -7,6 +7,7 @@ import {
   ActivityIndicator,
   Animated,
   Modal,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -41,7 +42,6 @@ export function DeliveryChoiceSheet({
       visible={visible}
       transparent
       statusBarTranslucent
-      navigationBarTranslucent
       animationType="fade"
       onRequestClose={onClose}
     >
@@ -107,6 +107,7 @@ function Option({
 
 // Malaysia store time stays consistent even when the customer's phone is abroad.
 const malaysiaDate = (date: Date) => new Date(date.getTime() + 8 * 60 * 60 * 1000);
+const DELIVERY_SELECTION_BUFFER_MS = 2 * 60 * 1000;
 const dateKey = (date: Date) => malaysiaDate(date).toISOString().slice(0, 10);
 const displayTime = (date: Date) =>
   date.toLocaleTimeString("en-MY", {
@@ -210,7 +211,8 @@ export function DeliveryTimeSheet({
     !!draftValue &&
     !loading &&
     !loadError &&
-    (!selectedSlot?.available || new Date(draftValue).getTime() < tick + 30 * 60 * 1000);
+    (!selectedSlot?.available ||
+      new Date(draftValue).getTime() < tick + 30 * 60 * 1000 + DELIVERY_SELECTION_BUFFER_MS);
   const confirm = () => {
     if (!draftValue || invalid || loading || loadError || !selectedSlot?.available) return;
     onSelect(draftValue);
@@ -225,14 +227,17 @@ export function DeliveryTimeSheet({
       visible={visible}
       transparent
       statusBarTranslucent
-      navigationBarTranslucent
       animationType="fade"
       onRequestClose={onClose}
     >
       <View style={styles.overlay}>
         <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
         <Animated.View
-          style={[styles.timeSheet, { paddingBottom: Math.max(insets.bottom, 12) }, sheetMotion]}
+          style={[
+            styles.timeSheet,
+            { paddingBottom: Math.max(insets.bottom, Platform.OS === "android" ? 28 : 12) },
+            sheetMotion,
+          ]}
         >
           <View style={styles.grabber} />
           <View style={styles.sheetHead}>
@@ -311,7 +316,7 @@ export function DeliveryTimeSheet({
               <>
                 <Text style={styles.copy}>
                   {scheduledOnly
-                    ? "Shop opening hours and capacity checked. The final 30 minutes before closing are excluded."
+                    ? "Shop opening hours and capacity checked. You can choose any listed time while the shop is open."
                     : availability?.cart_checked
                       ? "Based on the items currently in your basket."
                       : "Add items to your basket to check each shop's capacity."}

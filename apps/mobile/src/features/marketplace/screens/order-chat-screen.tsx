@@ -11,6 +11,7 @@ import {
   Animated,
   Image,
   KeyboardAvoidingView,
+  Modal,
   Platform,
   Pressable,
   ScrollView,
@@ -55,6 +56,7 @@ export function OrderChatScreen() {
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [openPhoto, setOpenPhoto] = useState<string>();
   const scrollRef = useRef<ScrollViewInstance>(null);
   const typingTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
@@ -175,7 +177,10 @@ export function OrderChatScreen() {
       <View style={[styles.header, { paddingTop: insets.top + spacing[2] }]}>
         <Pressable
           accessibilityLabel="Back"
-          style={styles.iconButton}
+          style={({ pressed }) => [
+            styles.iconButton,
+            pressed && { opacity: 0.72, transform: [{ scale: 1.08 }] },
+          ]}
           onPress={() => router.back()}
         >
           <Ionicons name="chevron-back" size={spacing[6]} color={colors.text} />
@@ -230,7 +235,7 @@ export function OrderChatScreen() {
           </View>
         ) : null}
         {chat?.messages.map((item) => (
-          <MessageBubble key={item.id} message={item} />
+          <MessageBubble key={item.id} message={item} onPhotoPress={setOpenPhoto} />
         ))}
         {chat?.other_typing ? <TypingBubble /> : null}
       </ScrollView>
@@ -274,22 +279,58 @@ export function OrderChatScreen() {
           />
         </Pressable>
       </View>
+      <Modal
+        visible={Boolean(openPhoto)}
+        animationType="fade"
+        statusBarTranslucent
+        onRequestClose={() => setOpenPhoto(undefined)}
+      >
+        <View style={styles.photoViewer}>
+          {openPhoto ? (
+            <Image source={{ uri: openPhoto }} style={styles.fullPhoto} resizeMode="contain" />
+          ) : null}
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Close photo"
+            style={[styles.photoViewerClose, { top: insets.top + spacing[3] }]}
+            onPress={() => setOpenPhoto(undefined)}
+          >
+            <Ionicons name="close" size={spacing[6]} color={colors.text} />
+          </Pressable>
+        </View>
+      </Modal>
     </KeyboardAvoidingView>
   );
 }
 
-function MessageBubble({ message }: { message: ChatMessage }) {
-  if (message.message_type === "delivery_alert")
+function MessageBubble({
+  message,
+  onPhotoPress,
+}: {
+  message: ChatMessage;
+  onPhotoPress: (uri: string) => void;
+}) {
+  if (message.message_type === "delivery_alert") {
+    const [alertMessage, developerNote] = (message.body || "").split("\n\n", 2);
+    const refundUpdate = Boolean(developerNote?.includes("within 14 days"));
     return (
       <View style={styles.alertBubble}>
-        <Ionicons name="notifications" size={spacing[5]} color={colors.marketStrong} />
+        <Ionicons
+          name={refundUpdate ? "return-down-back" : "notifications"}
+          size={spacing[5]}
+          color={colors.marketStrong}
+        />
         <View style={styles.alertCopy}>
-          <Text style={styles.alertTitle}>Delivery update</Text>
-          <Text style={styles.alertText}>{message.body}</Text>
+          <Text style={styles.alertTitle}>
+            {refundUpdate ? "Refund update" : "Delivery update"}
+          </Text>
+          <Text style={styles.alertText}>{alertMessage}</Text>
+          {developerNote ? <Text style={styles.alertDeveloperNote}>{developerNote}</Text> : null}
           <Text style={styles.alertTime}>{time(message.created_at)}</Text>
         </View>
       </View>
     );
+  }
   const mine = message.sender_role === "consumer";
   const dataUri =
     message.attachment_data && message.attachment_content_type
@@ -299,7 +340,13 @@ function MessageBubble({ message }: { message: ChatMessage }) {
     <View style={[styles.bubbleRow, mine && styles.bubbleRowMine]}>
       <View style={[styles.bubble, mine && styles.bubbleMine]}>
         {message.message_type === "photo" && dataUri ? (
-          <Image source={{ uri: dataUri }} style={styles.photo} resizeMode="contain" />
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Open chat photo"
+            onPress={() => onPhotoPress(dataUri)}
+          >
+            <Image source={{ uri: dataUri }} style={styles.photo} resizeMode="contain" />
+          </Pressable>
         ) : null}
         {message.message_type === "pdf" ? (
           <Pressable style={styles.pdfCard} onPress={() => void openPdf(message)}>
@@ -474,6 +521,23 @@ const styles = StyleSheet.create({
     borderRadius: spacing[2],
     backgroundColor: colors.surfaceMuted,
   },
+  photoViewer: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: colors.overlayStrong,
+  },
+  fullPhoto: { width: "100%", height: "100%" },
+  photoViewerClose: {
+    position: "absolute",
+    left: spacing[4],
+    width: 44,
+    height: 44,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: spacing[6],
+    backgroundColor: colors.surface,
+  },
   pdfCard: {
     flexDirection: "row",
     alignItems: "center",
@@ -508,6 +572,12 @@ const styles = StyleSheet.create({
     color: colors.text,
     fontSize: size.caption,
     lineHeight: spacing[5],
+  },
+  alertDeveloperNote: {
+    marginTop: spacing[2],
+    color: colors.textMuted,
+    fontSize: typography.mobile.rawSize.s10,
+    lineHeight: spacing[4],
   },
   alertTime: {
     marginTop: spacing[1],

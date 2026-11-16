@@ -1,21 +1,17 @@
-from datetime import date, datetime, timedelta, timezone
-from decimal import Decimal, ROUND_HALF_UP
-from collections import defaultdict
-from math import asin, cos, radians, sin, sqrt
 import base64
 import json
 import re
+from collections import defaultdict
+from datetime import UTC, date, datetime, timedelta, timezone
+from decimal import ROUND_HALF_UP, Decimal
+from math import asin, cos, radians, sin, sqrt
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
 from urllib.request import urlopen
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import text
-from sqlalchemy.orm import Session
-
-from app.db.session import get_db_session
 from app.core.config import get_settings
+from app.db.session import get_db_session
 from app.modules.auth.service import require_roles
 from app.schemas.auth import AccountRole, AuthenticatedUser
 from app.schemas.marketplace import (
@@ -28,18 +24,18 @@ from app.schemas.marketplace import (
     MarketplaceCartStockAdjustment,
     MarketplaceCategoryStore,
     MarketplaceCategoryStoreList,
-    MarketplaceProduct,
-    MarketplacePromotion,
-    MarketplaceReview,
-    MarketplaceReviewList,
-    MarketplaceProductReviewInput,
-    MarketplaceProductReview,
-    MarketplaceProductReviewList,
-    MarketplaceReviewPrompt,
-    MarketplaceReviewPromptList,
     MarketplaceLocation,
     MarketplaceLocationList,
     MarketplaceMapImage,
+    MarketplaceProduct,
+    MarketplaceProductReview,
+    MarketplaceProductReviewInput,
+    MarketplaceProductReviewList,
+    MarketplacePromotion,
+    MarketplaceReview,
+    MarketplaceReviewList,
+    MarketplaceReviewPrompt,
+    MarketplaceReviewPromptList,
     MarketplaceStoreDetail,
     MarketplaceStoreList,
     MarketplaceStoreSummary,
@@ -49,13 +45,16 @@ from app.schemas.marketplace import (
     ShopCartRemoveRequest,
 )
 from app.services import stripe_payments
-from app.services.order_cart import lock_order_cart, consume_order_cart_snapshot
+from app.services.order_cart import consume_order_cart_snapshot, lock_order_cart
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy import text
+from sqlalchemy.orm import Session
 
 router = APIRouter()
 CurrentConsumer = Depends(require_roles(AccountRole.consumer))
 MONEY = Decimal("0.01")
 DEFAULT_DELIVERY_FEE = Decimal("2.50")
-DELIVERY_INCLUDED_DISTANCE_KM = Decimal("3")
+DELIVERY_INCLUDED_DISTANCE_KM = Decimal(3)
 DELIVERY_PRICE_PER_EXTRA_KM = Decimal("0.75")
 PRODUCT_CATEGORIES = (
     "Produce",
@@ -295,7 +294,7 @@ def _consolidate_autocomplete(features: list[dict]) -> list[MarketplaceLocation]
         valid = [(feature, location) for feature, location in valid if location is not None]
         if not valid:
             continue
-        best_feature, best_location = max(
+        _best_feature, best_location = max(
             valid,
             key=lambda pair: (
                 bool((pair[0].get("properties") or {}).get("street"))
@@ -441,14 +440,14 @@ def location_map(
     return MarketplaceMapImage(data_uri=f"data:image/jpeg;base64,{encoded}")
 
 
-def _money(value: Decimal | int | float | None) -> Decimal:
+def _money(value: Decimal | float | None) -> Decimal:
     return Decimal(value or 0).quantize(MONEY, rounding=ROUND_HALF_UP)
 
 
 def _distance_km(a_lat: object, a_lon: object, b_lat: object, b_lon: object) -> float | None:
     if None in (a_lat, a_lon, b_lat, b_lon):
         return None
-    lat1, lon1, lat2, lon2 = map(lambda value: radians(float(value)), (a_lat, a_lon, b_lat, b_lon))
+    lat1, lon1, lat2, lon2 = (radians(float(value)) for value in (a_lat, a_lon, b_lat, b_lon))
     delta_lat, delta_lon = lat2 - lat1, lon2 - lon1
     value = sin(delta_lat / 2) ** 2 + cos(lat1) * cos(lat2) * sin(delta_lon / 2) ** 2
     return round(6371 * 2 * asin(sqrt(value)), 1)
@@ -472,7 +471,7 @@ def _distance_delivery_fee(base_fee: object, distance_km: float | None) -> Decim
         base = DEFAULT_DELIVERY_FEE
     if distance_km is None:
         return base
-    extra_distance = max(Decimal("0"), Decimal(str(distance_km)) - DELIVERY_INCLUDED_DISTANCE_KM)
+    extra_distance = max(Decimal(0), Decimal(str(distance_km)) - DELIVERY_INCLUDED_DISTANCE_KM)
     return _money(base + extra_distance * DELIVERY_PRICE_PER_EXTRA_KM)
 
 
@@ -535,21 +534,40 @@ def _promo_for_cart(session: Session, cart_id: UUID) -> object | None:
     ).one_or_none()
 
 
-def _store_closed_today_sql(alias: str) -> str:
-    # Every browsing/cart/payment check uses the same Malaysia opening hours.
-    local = "now() AT TIME ZONE 'Asia/Kuala_Lumpur'"
+def _store_closed_at_sql(alias: str, timestamp: str) -> str:
+    local = f"({timestamp}) AT TIME ZONE 'Asia/Kuala_Lumpur'"
+    previous_local = f"({local} - interval '1 day')"
     hours = f"COALESCE({alias}.operating_hours_schedule -> to_char({local}, 'FMDay'), {alias}.operating_hours_schedule -> lower(to_char({local}, 'FMDay')))"
+    previous_hours = f"COALESCE({alias}.operating_hours_schedule -> to_char({previous_local}, 'FMDay'), {alias}.operating_hours_schedule -> lower(to_char({previous_local}, 'FMDay')))"
+    current_open = f"""({hours} IS NOT NULL
+        AND NOT COALESCE(({hours} ->> 'closed')::boolean, false)
+        AND (COALESCE(({hours} ->> 'open24Hours')::boolean, false)
+          OR ((({hours} ->> 'close')::time > ({hours} ->> 'open')::time)
+              AND ({local})::time >= ({hours} ->> 'open')::time
+              AND (({hours} ->> 'close')::time = '23:59'::time
+                   OR ({local})::time < (({hours} ->> 'close')::time + interval '1 minute')))
+          OR ((({hours} ->> 'close')::time < ({hours} ->> 'open')::time)
+              AND ({local})::time >= ({hours} ->> 'open')::time)))"""
+    previous_open = f"""({previous_hours} IS NOT NULL
+        AND NOT COALESCE(({previous_hours} ->> 'closed')::boolean, false)
+        AND NOT COALESCE(({previous_hours} ->> 'open24Hours')::boolean, false)
+        AND ({previous_hours} ->> 'close')::time < ({previous_hours} ->> 'open')::time
+        AND ({local})::time < (({previous_hours} ->> 'close')::time + interval '1 minute'))"""
     return f"""(
-        COALESCE(({hours} ->> 'closed')::boolean, false)
-        OR (COALESCE({alias}.operating_hours_schedule, '{{}}'::jsonb) <> '{{}}'::jsonb AND {hours} IS NULL)
-        OR ({hours} IS NOT NULL AND (
-            ({local})::time < COALESCE(({hours} ->> 'open')::time, '00:00'::time)
-            OR ({local})::time >= COALESCE(({hours} ->> 'close')::time, '00:00'::time)))
+        (COALESCE({alias}.operating_hours_schedule, '{{}}'::jsonb) <> '{{}}'::jsonb
+         AND NOT ({current_open} OR {previous_open}))
         OR EXISTS (SELECT 1 FROM store_holiday_closures closure
                    WHERE closure.store_id={alias}.id
                      AND ({local})::date BETWEEN closure.starts_on AND closure.ends_on
-                     AND (closure.whole_day OR ({local})::time < closure.opens_at OR ({local})::time >= closure.closes_at))
+                     AND (closure.whole_day OR ({local})::time < closure.opens_at
+                          OR (closure.closes_at <> '23:59'::time
+                              AND ({local})::time >= closure.closes_at + interval '1 minute')))
     )"""
+
+
+def _store_closed_today_sql(alias: str) -> str:
+    # Browsing and cart displays use the shop's current Malaysia opening hours.
+    return _store_closed_at_sql(alias, "now()")
 
 
 def _cart_rows(session: Session, cart_id: UUID, lock: bool = False) -> list[object]:
@@ -585,7 +603,7 @@ def _active_direct_discount(row: object) -> dict | None:
         end = datetime.fromisoformat(str(discount["ends_at"]).replace("Z", "+00:00"))
     except (KeyError, TypeError, ValueError):
         return None
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     return discount if start <= now <= end else None
 
 
@@ -595,11 +613,9 @@ def _direct_unit_price(row: object) -> Decimal:
     if not discount:
         return price
     if discount.get("type") == "percentage":
-        return _money(
-            price * (Decimal("1") - Decimal(str(discount.get("value", 0))) / Decimal("100"))
-        )
+        return _money(price * (Decimal(1) - Decimal(str(discount.get("value", 0))) / Decimal(100)))
     if discount.get("type") == "fixed_amount":
-        return _money(max(Decimal("0"), price - Decimal(str(discount.get("value", 0)))))
+        return _money(max(Decimal(0), price - Decimal(str(discount.get("value", 0)))))
     return price
 
 
@@ -625,7 +641,7 @@ def _product(row: object, cart_quantity: int = 0) -> MarketplaceProduct:
         else (_money(row.original_price) if row.original_price is not None else None)
     )
     discount = (
-        int(((original - price) / original * 100).quantize(Decimal("1")))
+        int(((original - price) / original * 100).quantize(Decimal(1)))
         if original and original > price
         else 0
     )
@@ -667,16 +683,11 @@ def _cart_response(
     stock_adjustments: list[MarketplaceCartStockAdjustment] = []
     if lock:
         for row in rows:
-            if getattr(row, "store_closed_today", False):
-                raise HTTPException(
-                    409,
-                    "This shop is closed today. Remove its items from your cart before checking out.",
-                )
             if row.store_status != "approved" or row.product_status != "active":
                 raise HTTPException(
                     status.HTTP_409_CONFLICT, f"{row.product_name} is no longer available."
                 )
-            if row.expiry_date is not None and row.expiry_date <= datetime.now(timezone.utc):
+            if row.expiry_date is not None and row.expiry_date <= datetime.now(UTC):
                 raise HTTPException(
                     status.HTTP_409_CONFLICT,
                     f"{row.product_name} has expired and cannot be ordered.",
@@ -722,7 +733,7 @@ def _cart_response(
             rows = _cart_rows(session, cart_id, lock=False)
             if store_id is not None:
                 rows = [row for row in rows if row.store_id == store_id]
-    subtotal = sum((_direct_line_total(row) for row in rows), Decimal("0"))
+    subtotal = sum((_direct_line_total(row) for row in rows), Decimal(0))
     store_distances = {
         row.store_id: _distance_km(
             delivery_latitude,
@@ -736,9 +747,9 @@ def _cart_response(
         row.store_id: _distance_delivery_fee(row.delivery_fee, store_distances[row.store_id])
         for row in rows
     }
-    delivery = sum(store_fees.values(), Decimal("0"))
+    delivery = sum(store_fees.values(), Decimal(0))
     promo_row = _promo_for_cart(session, cart_id)
-    discount = Decimal("0")
+    discount = Decimal(0)
     if promo_row:
         eligible = [
             row
@@ -747,17 +758,17 @@ def _cart_response(
             and (promo_row.product_id is None or row.product_id == promo_row.product_id)
             and (promo_row.product_category is None or row.category == promo_row.product_category)
         ]
-        eligible_total = sum((_direct_line_total(row) for row in eligible), Decimal("0"))
+        eligible_total = sum((_direct_line_total(row) for row in eligible), Decimal(0))
         if eligible_total >= _money(promo_row.minimum_order_amount):
             if promo_row.discount_percent:
-                discount = eligible_total * Decimal(promo_row.discount_percent) / Decimal("100")
+                discount = eligible_total * Decimal(promo_row.discount_percent) / Decimal(100)
             elif promo_row.discount_amount:
                 discount = min(eligible_total, _money(promo_row.discount_amount))
             if promo_row.free_delivery:
                 delivery = (
-                    Decimal("0")
+                    Decimal(0)
                     if promo_row.store_id is None
-                    else delivery - store_fees.get(promo_row.store_id, Decimal("0"))
+                    else delivery - store_fees.get(promo_row.store_id, Decimal(0))
                 )
         else:
             promo_row = None
@@ -1482,15 +1493,22 @@ def remove_cart_promo(
 
 STORE_TIMEZONE = timezone(timedelta(hours=8))
 SLOT_DURATION = timedelta(minutes=30)
+SLOT_SELECTION_BUFFER = timedelta(minutes=2)
 
 
 def _slot_start(value: datetime) -> datetime:
-    value = value.astimezone(timezone.utc)
+    value = value.astimezone(UTC)
     return value.replace(minute=(value.minute // 30) * 30, second=0, microsecond=0)
 
 
 def _slot_problem(
-    cart: MarketplaceCart, slot: datetime, store_id: UUID, limits: object, usage: object
+    cart: MarketplaceCart,
+    slot: datetime,
+    store_id: UUID,
+    limits: object,
+    usage: object,
+    *,
+    availability_time: datetime | None = None,
 ) -> str | None:
     """Shared rules for the advisory picker and the authoritative locked checkout."""
     end = slot + SLOT_DURATION
@@ -1499,23 +1517,30 @@ def _slot_problem(
         return "An item expires before the end of this window. Choose an earlier time or remove it."
     if getattr(limits, "store_status", "approved") != "approved":
         return "This shop is not accepting orders."
-    local = slot.astimezone(STORE_TIMEZONE)
-    local_end = end.astimezone(STORE_TIMEZONE)
+    local = (availability_time or slot).astimezone(STORE_TIMEZONE)
     schedule = getattr(limits, "operating_hours_schedule", None) or {}
     hours = schedule.get(local.strftime("%A")) or schedule.get(local.strftime("%A").lower())
-    if (
-        getattr(limits, "holiday_closed", False)
-        or (schedule and not hours)
-        or (
-            hours
-            and (
-                hours.get("closed")
-                or local.date() != local_end.date()
-                or not str(hours.get("open", "00:00")) <= local.strftime("%H:%M")
-                or local_end.strftime("%H:%M") >= str(hours.get("close", "00:00"))
-            )
-        )
-    ):
+    previous = local - timedelta(days=1)
+    previous_hours = schedule.get(previous.strftime("%A")) or schedule.get(
+        previous.strftime("%A").lower()
+    )
+    local_minutes = local.hour * 60 + local.minute
+
+    def open_at(day_hours: dict[str, str | bool] | None, *, from_previous: bool = False) -> bool:
+        if not day_hours or day_hours.get("closed"):
+            return False
+        if day_hours.get("open24Hours"):
+            return not from_previous
+        open_hour, open_minute = map(int, str(day_hours.get("open", "00:00")).split(":"))
+        close_hour, close_minute = map(int, str(day_hours.get("close", "00:00")).split(":"))
+        opening = open_hour * 60 + open_minute
+        closing = close_hour * 60 + close_minute
+        if closing >= opening:
+            return not from_previous and opening <= local_minutes <= closing
+        return local_minutes <= closing if from_previous else local_minutes >= opening
+
+    store_open = not schedule or open_at(hours) or open_at(previous_hours, from_previous=True)
+    if getattr(limits, "holiday_closed", False) or not store_open:
         return "This shop is closed during this window. Choose a time during its operating hours."
     quantity = sum(item.product.cart_quantity for item in items)
     if usage.orders >= limits.slot_order_limit or usage.items + quantity > limits.slot_item_limit:
@@ -1523,9 +1548,15 @@ def _slot_problem(
     return None
 
 
-def _capacity_store(session: Session, store_id: UUID, slot: datetime, lock: bool = False) -> object:
-    local = slot.astimezone(STORE_TIMEZONE)
-    local_end = (slot + SLOT_DURATION).astimezone(STORE_TIMEZONE)
+def _capacity_store(
+    session: Session,
+    store_id: UUID,
+    slot: datetime,
+    lock: bool = False,
+    *,
+    availability_time: datetime | None = None,
+) -> object:
+    local = (availability_time or slot).astimezone(STORE_TIMEZONE)
     return session.execute(
         text(
             """
@@ -1534,7 +1565,8 @@ def _capacity_store(session: Session, store_id: UUID, slot: datetime, lock: bool
                  WHERE h.store_id = stores.id
                    AND CAST(:local_date AS date) BETWEEN h.starts_on AND h.ends_on
                    AND (h.whole_day OR CAST(:local_time AS time) < h.opens_at
-                        OR CAST(:end_time AS time) >= h.closes_at)) AS holiday_closed
+                        OR (h.closes_at <> '23:59'::time
+                            AND CAST(:end_time AS time) >= h.closes_at + interval '1 minute'))) AS holiday_closed
         FROM stores WHERE id = :id
     """
             + (" FOR UPDATE" if lock else "")
@@ -1543,7 +1575,7 @@ def _capacity_store(session: Session, store_id: UUID, slot: datetime, lock: bool
             "id": store_id,
             "local_date": local.date(),
             "local_time": local.strftime("%H:%M"),
-            "end_time": local_end.strftime("%H:%M"),
+            "end_time": local.strftime("%H:%M"),
         },
     ).one()
 
@@ -1552,11 +1584,11 @@ def _reserve_fulfilment_capacity(
     session: Session, cart: MarketplaceCart, arrival_at: datetime | None
 ) -> datetime:
     """Serialize capacity checks per store; only paid orders consume capacity."""
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     earliest = now + timedelta(minutes=max(30, cart.estimated_delivery_minutes or 0))
     if arrival_at is not None:
         slot = _slot_start(arrival_at)
-        if arrival_at.astimezone(timezone.utc) != slot:
+        if arrival_at.astimezone(UTC) != slot:
             raise HTTPException(422, "Choose a window starting on the hour or half hour.")
         if slot < earliest:
             raise HTTPException(
@@ -1568,7 +1600,14 @@ def _reserve_fulfilment_capacity(
         if slot < earliest:
             slot += SLOT_DURATION
     for store_id in sorted({item.product.store_id for item in cart.items}, key=str):
-        limits = _capacity_store(session, store_id, slot, lock=True)
+        availability_time = slot if arrival_at is not None else now
+        limits = _capacity_store(
+            session,
+            store_id,
+            slot,
+            lock=True,
+            availability_time=availability_time,
+        )
         usage = session.execute(
             text("""
             SELECT COUNT(DISTINCT o.id) AS orders, COALESCE(SUM(item.quantity), 0) AS items
@@ -1578,7 +1617,14 @@ def _reserve_fulfilment_capacity(
         """),
             {"store_id": store_id, "slot": slot},
         ).one()
-        problem = _slot_problem(cart, slot, store_id, limits, usage)
+        problem = _slot_problem(
+            cart,
+            slot,
+            store_id,
+            limits,
+            usage,
+            availability_time=availability_time,
+        )
         if problem:
             raise HTTPException(409, problem)
     return slot
@@ -1594,16 +1640,14 @@ def cart_slot_availability(
     """Advisory availability; checkout rechecks under store locks to prevent races."""
     from types import SimpleNamespace
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     today = now.astimezone(STORE_TIMEZONE).date()
     if not today <= day <= today + timedelta(days=7):
         raise HTTPException(422, "Choose a date within the next seven days.")
     cart = _cart_response(session, current_user.id, store_id=store_id)
     if cart.stock_adjustments:
         session.commit()
-    start = datetime.combine(day, datetime.min.time(), tzinfo=STORE_TIMEZONE).astimezone(
-        timezone.utc
-    )
+    start = datetime.combine(day, datetime.min.time(), tzinfo=STORE_TIMEZONE).astimezone(UTC)
     end = start + timedelta(days=1)
     store_ids = sorted(
         {item.product.store_id for item in cart.items} | ({store_id} if store_id else set()),
@@ -1649,7 +1693,11 @@ def cart_slot_availability(
     if store_id and not any(store.id == store_id for store in stores):
         raise HTTPException(404, "Shop not found.")
     usage_by_slot = {(row.store_id, row.fulfilment_slot): row for row in usage}
-    earliest = now + timedelta(minutes=max(30, cart.estimated_delivery_minutes or 0))
+    earliest = (
+        now
+        + timedelta(minutes=max(30, cart.estimated_delivery_minutes or 0))
+        + SLOT_SELECTION_BUFFER
+    )
     slots = []
     for index in range(48):
         slot = start + index * SLOT_DURATION
@@ -1682,10 +1730,7 @@ def cart_slot_availability(
                 break
         # Hide closed windows in every picker, including the cart's unscoped
         # request. Capacity/stock failures stay visible as disabled choices.
-        if (reason and "closed during this window" in reason) or (
-            store_id
-            and any(store.id == store_id and not store.operating_hours_schedule for store in stores)
-        ):
+        if reason and "closed during this window" in reason:
             continue
         slots.append(
             {
@@ -1794,7 +1839,7 @@ def checkout(
         if request.fulfillment_method == "pickup":
             cart = cart.model_copy(
                 update={
-                    "delivery_fee": Decimal("0"),
+                    "delivery_fee": Decimal(0),
                     "total": _money(cart.total - cart.delivery_fee),
                 }
             )
@@ -1852,17 +1897,17 @@ def checkout(
             )
         ]
         remaining_discount = cart.discount
-        remaining_eligible_total = sum((item.line_total for item in discounted_items), Decimal("0"))
-        vendor_net: dict[UUID, Decimal] = defaultdict(lambda: Decimal("0"))
+        remaining_eligible_total = sum((item.line_total for item in discounted_items), Decimal(0))
+        vendor_net: dict[UUID, Decimal] = defaultdict(lambda: Decimal(0))
         checkout_lines: list[dict] = []
         for item in cart.items:
             is_discounted = item in discounted_items
             if not is_discounted:
-                line_discount = Decimal("0")
+                line_discount = Decimal(0)
             elif item is discounted_items[-1] or remaining_eligible_total <= 0:
                 line_discount = min(remaining_discount, item.line_total)
             else:
-                eligible_total = sum((entry.line_total for entry in discounted_items), Decimal("0"))
+                eligible_total = sum((entry.line_total for entry in discounted_items), Decimal(0))
                 line_discount = _money(cart.discount * item.line_total / eligible_total)
                 line_discount = min(line_discount, remaining_discount, item.line_total)
             net_amount = _money(item.line_total - line_discount)
@@ -1970,20 +2015,6 @@ def checkout(
         raise
 
 
-def _ensure_order_shop_open_today(session: Session, order_id: UUID) -> None:
-    closed = session.execute(
-        text(f"""
-        SELECT EXISTS(SELECT 1 FROM order_items item JOIN stores store ON store.id=item.store_id
-                      WHERE item.order_id=:id AND {_store_closed_today_sql("store")})
-    """),
-        {"id": order_id},
-    ).scalar_one()
-    if closed:
-        raise HTTPException(
-            409, "This shop is closed today. Payment cannot continue for this checkout."
-        )
-
-
 @router.post("/checkout/{order_id}/simulate-payment", response_model=CheckoutStatusResult)
 def simulate_checkout_payment(
     order_id: UUID,
@@ -2024,7 +2055,6 @@ def simulate_checkout_payment(
             f"This checkout cannot be simulated because it is {payment.payment_status}.",
         )
 
-    _ensure_order_shop_open_today(session, order_id)
     inventory = []
     if payment.inventory_deducted_at is None:
         inventory = session.execute(
@@ -2126,7 +2156,8 @@ def checkout_status(
 ) -> CheckoutStatusResult:
     row = session.execute(
         text("""
-        SELECT o.id, o.order_status, o.total_amount, o.order_date, p.payment_status, p.paid_at,
+        SELECT o.id, o.order_status, o.total_amount, o.order_date, o.cancellation_reason,
+               p.payment_status, p.paid_at,
                p.stripe_hosted_invoice_url, p.stripe_invoice_pdf_url,
                (SELECT MAX(COALESCE(store.estimated_delivery_minutes, 30))
                 FROM order_items item JOIN stores store ON store.id=item.store_id
@@ -2154,9 +2185,10 @@ def checkout_status(
         can_cancel=(
             row.payment_status == "paid"
             and row.order_status == "placed"
-            and datetime.now(timezone.utc) >= cancel_available_at
+            and datetime.now(UTC) >= cancel_available_at
         ),
         cancel_available_at=cancel_available_at if row.order_status == "placed" else None,
+        cancellation_reason=row.cancellation_reason,
     )
 
 
@@ -2193,7 +2225,7 @@ def cancel_delayed_order(
             status.HTTP_409_CONFLICT,
             "This order can only be cancelled while it is still waiting for the shop.",
         )
-    if datetime.now(timezone.utc) < cancel_available_at:
+    if datetime.now(UTC) < cancel_available_at:
         raise HTTPException(
             status.HTTP_409_CONFLICT,
             "The shop still has time to confirm this order.",

@@ -55,7 +55,10 @@ export type Shop = {
   helpline_phones?: string[];
   icon_url?: string;
   cover_image_url?: string;
-  operating_hours_schedule?: Record<string, { open: string; close: string; closed: boolean }>;
+  operating_hours_schedule?: Record<
+    string,
+    { open: string; close: string; closed: boolean; open24Hours?: boolean }
+  >;
   is_owner: boolean;
   can_edit_store: boolean;
 };

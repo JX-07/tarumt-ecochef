@@ -222,7 +222,10 @@ export interface MarketplaceStoreDetail extends MarketplaceStoreSummary {
   closed_today?: boolean;
   phone_number?: string;
   operating_hours?: string;
-  operating_hours_schedule?: Record<string, { open: string; close: string; closed: boolean }>;
+  operating_hours_schedule?: Record<
+    string,
+    { open: string; close: string; closed: boolean; open24Hours?: boolean }
+  >;
   holiday_closure?: {
     starts_on: string;
     ends_on: string;
@@ -312,6 +315,7 @@ export interface MarketplaceCheckoutStatus {
   invoice_pdf_url?: string;
   can_cancel: boolean;
   cancel_available_at?: string;
+  cancellation_reason?: string;
 }
 
 export interface VendorProductInput {
@@ -373,7 +377,10 @@ export interface VendorStoreInput {
   contact_email?: string;
   helpline_phones?: string[];
   icon_url?: string;
-  operating_hours_schedule?: Record<string, { open: string; close: string; closed: boolean }>;
+  operating_hours_schedule?: Record<
+    string,
+    { open: string; close: string; closed: boolean; open24Hours?: boolean }
+  >;
 }
 export interface VendorStore extends VendorStoreInput {
   id: string;

@@ -20,6 +20,7 @@ static const uint8_t MQ136_PIN = 34;
 static const uint8_t MQ137_PIN = 35;
 static const uint8_t DHT_PIN = 27;
 static const uint8_t DHT_TYPE = DHT22;
+static const unsigned long READING_INTERVAL_MS = 2000;
 
 Preferences preferences;
 DHT dht(DHT_PIN, DHT_TYPE);
@@ -256,7 +257,7 @@ void loop() {
     delay(150); // Let the final Bluetooth write response reach the phone first.
     applyConfiguration(String(pending.json));
   }
-  if (millis() - lastReadingAt >= 30000) {
+  if (millis() - lastReadingAt >= READING_INTERVAL_MS) {
     lastReadingAt = millis();
     postReading();
   }

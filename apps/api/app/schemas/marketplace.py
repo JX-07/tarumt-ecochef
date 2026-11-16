@@ -287,3 +287,4 @@ class CheckoutStatusResult(BaseModel):
     invoice_pdf_url: str | None = None
     can_cancel: bool = False
     cancel_available_at: datetime | None = None
+    cancellation_reason: str | None = None

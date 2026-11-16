@@ -4,20 +4,12 @@ import { colors, palette, typography } from "@ecochef/design-tokens";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { router } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
-import {
-  ActivityIndicator,
-  Animated,
-  FlatList,
-  Modal,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  View,
-} from "react-native";
+import { ActivityIndicator, FlatList, Pressable, ScrollView, StyleSheet, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useBottomSheetSlide } from "../../../shared/hooks/use-bottom-sheet-slide";
 import { ingredientEmojiFor } from "../../../shared/ingredient-icons";
 import { estimateIngredientExpiry } from "../../../shared/ingredient-expiry";
+import { goBackOrReplace } from "../../../shared/navigation";
+import { PAGE_TOP_GAP } from "../../../shared/components/page-header";
 import type { PlannedShoppingList, ShoppingListItem } from "../types";
 import { DatePickerSheet, dateToIso } from "./date-picker-sheet";
 type Range = "day" | "week" | "month";
@@ -56,23 +48,18 @@ const sumQuantity = (left: string, right: string) => {
   const total = a.amount + b.amount;
   return `${Number.isInteger(total) ? total : Number(total.toFixed(2))}${a.unit ? ` ${a.unit}` : ""}`;
 };
-export function ShoppingListSheet({
-  visible,
+export function ShoppingListPage({
   selectedDate,
   load,
   onComplete,
-  onClose,
   onMessage,
 }: {
-  visible: boolean;
   selectedDate: string;
   load: (a: string, b: string) => Promise<PlannedShoppingList>;
   onComplete: (items: ShoppingCompletionItem[]) => Promise<void>;
-  onClose: () => void;
   onMessage: (m: string, tone?: "success" | "error" | "info") => void;
 }) {
   const insets = useSafeAreaInsets();
-  const sheetMotion = useBottomSheetSlide(visible);
   const [range, setRange] = useState<Range>("day"),
     [chosen, setChosen] = useState(selectedDate),
     [dateStripStart, setDateStripStart] = useState(() => monday(parse(selectedDate))),
@@ -82,6 +69,7 @@ export function ShoppingListSheet({
     [loading, setLoading] = useState(false),
     [completing, setCompleting] = useState(false),
     [expiryHelpOpen, setExpiryHelpOpen] = useState(false),
+    [detailItem, setDetailItem] = useState<Group>(),
     [completionReviewOpen, setCompletionReviewOpen] = useState(false),
     [expiryCalendarItem, setExpiryCalendarItem] = useState<string>(),
     [expiryDays, setExpiryDays] = useState<Record<string, string>>({}),
@@ -89,11 +77,9 @@ export function ShoppingListSheet({
     [error, setError] = useState<string>(),
     [checked, setChecked] = useState<Set<string>>(new Set());
   useEffect(() => {
-    if (visible) {
-      setChosen(selectedDate);
-      setDateStripStart(monday(parse(selectedDate)));
-    }
-  }, [visible, selectedDate]);
+    setChosen(selectedDate);
+    setDateStripStart(monday(parse(selectedDate)));
+  }, [selectedDate]);
   const date = parse(chosen),
     weekStart = monday(date),
     start =
@@ -115,7 +101,6 @@ export function ShoppingListSheet({
     setDateStripVersion((version) => version + 1);
   };
   useEffect(() => {
-    if (!visible) return;
     setLoading(true);
     setError(undefined);
     setChecked(new Set());
@@ -126,7 +111,7 @@ export function ShoppingListSheet({
         setError(next instanceof Error ? next.message : "The shopping list could not be loaded.");
       })
       .finally(() => setLoading(false));
-  }, [visible, range, chosen, load]);
+  }, [range, chosen, load]);
   const groups = useMemo(() => {
     const map = new Map<string, Group>();
     for (const item of data?.items ?? []) {
@@ -281,485 +266,515 @@ export function ShoppingListSheet({
     }
   };
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <View style={s.overlay}>
-        <Pressable accessibilityLabel="Close shopping list" style={s.backdrop} onPress={onClose} />
-        <Animated.View
-          style={[s.sheet, { paddingBottom: Math.max(insets.bottom, 12) }, sheetMotion]}
+    <View
+      style={[
+        s.page,
+        { paddingTop: insets.top + PAGE_TOP_GAP, paddingBottom: Math.max(insets.bottom, 12) },
+      ]}
+    >
+      <View style={s.head}>
+        <Pressable
+          style={({ pressed }) => [
+            s.backButton,
+            pressed && { opacity: 0.72, transform: [{ scale: 1.08 }] },
+          ]}
+          accessibilityRole="button"
+          accessibilityLabel="Back to meal plan"
+          onPress={() => goBackOrReplace("/(tabs)/plan")}
         >
-          <View style={s.head}>
-            <View>
-              <Text style={s.title}>Shopping List</Text>
+          <Ionicons name="chevron-back" size={22} color={palette.c64716d} />
+        </Pressable>
+        <View style={s.headCopy}>
+          <Text style={s.title}>Shopping List</Text>
+          <Text style={s.subtitle}>Everything you need for your planned meals</Text>
+        </View>
+        <Pressable
+          style={s.headerAction}
+          accessibilityRole="button"
+          accessibilityLabel="How expiry dates are estimated"
+          hitSlop={8}
+          onPress={() => setExpiryHelpOpen(true)}
+        >
+          <Ionicons name="help-circle-outline" size={20} color={colors.adminStrong} />
+        </Pressable>
+      </View>
+      <View style={s.tabs}>
+        {(["day", "week", "month"] as Range[]).map((x) => (
+          <Pressable
+            key={x}
+            style={[s.tab, range === x && s.active]}
+            onPress={() => {
+              if (x === "day" && range !== "day") goToToday();
+              setRange(x);
+            }}
+          >
+            <Text style={[s.tabText, range === x && s.activeText]}>
+              {x[0].toUpperCase() + x.slice(1)}
+            </Text>
+          </Pressable>
+        ))}
+      </View>
+      {range === "day" && (
+        <View
+          style={s.dateSection}
+          onLayout={(event) => setDatePageWidth(event.nativeEvent.layout.width - 20)}
+        >
+          <View style={s.dateHeading}>
+            <View style={s.dateLabelRow}>
+              <Ionicons name="calendar-outline" size={13} color={colors.primaryStrong} />
+              <Text style={s.label}>SELECT A PLANNED DATE</Text>
             </View>
-            <View style={s.headActions}>
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel="How expiry dates are estimated"
-                hitSlop={8}
-                onPress={() => setExpiryHelpOpen(true)}
-              >
-                <Ionicons name="help-circle-outline" size={28} color={colors.adminStrong} />
-              </Pressable>
-              <Pressable onPress={onClose}>
-                <Ionicons name="close-circle" size={30} color={colors.textMuted} />
+            <View style={s.dateHeadingActions}>
+              <Pressable style={s.todayButton} onPress={goToToday}>
+                <Ionicons name="locate-outline" size={12} color={colors.surface} />
+                <Text style={s.todayText}>Today</Text>
               </Pressable>
             </View>
           </View>
-          <View style={s.tabs}>
-            {(["day", "week", "month"] as Range[]).map((x) => (
-              <Pressable
-                key={x}
-                style={[s.tab, range === x && s.active]}
-                onPress={() => {
-                  if (x === "day" && range !== "day") goToToday();
-                  setRange(x);
-                }}
-              >
-                <Text style={[s.tabText, range === x && s.activeText]}>
-                  {x[0].toUpperCase() + x.slice(1)}
-                </Text>
-              </Pressable>
-            ))}
-          </View>
-          {range === "day" && (
-            <View
-              style={s.dateSection}
-              onLayout={(event) => setDatePageWidth(event.nativeEvent.layout.width - 20)}
-            >
-              <View style={s.dateHeading}>
-                <View style={s.dateLabelRow}>
-                  <Ionicons name="calendar-outline" size={13} color={colors.primaryStrong} />
-                  <Text style={s.label}>SELECT A PLANNED DATE</Text>
-                </View>
-                <View style={s.dateHeadingActions}>
-                  <View style={s.swipeHint}>
-                    <Ionicons name="swap-horizontal" size={12} color={colors.textSubtle} />
-                    <Text style={s.swipeText}>Swipe dates</Text>
-                  </View>
-                  <Pressable style={s.todayButton} onPress={goToToday}>
-                    <Ionicons name="locate-outline" size={12} color={colors.surface} />
-                    <Text style={s.todayText}>Today</Text>
+          {datePageWidth > 0 && (
+            <FlatList
+              key={`${iso(dateStripStart)}-${datePageWidth}-${dateStripVersion}`}
+              horizontal
+              data={DAY_OFFSETS}
+              initialScrollIndex={DAY_RANGE}
+              getItemLayout={(_, index) => ({
+                length: DATE_CARD_LENGTH,
+                offset: DATE_CARD_LENGTH * index,
+                index,
+              })}
+              keyExtractor={(offset) => String(offset)}
+              renderItem={({ item: dayOffset }) => {
+                const d = add(dateStripStart, dayOffset);
+                const value = iso(d);
+                const selected = value === chosen;
+                const isToday = value === todayValue;
+                return (
+                  <Pressable
+                    style={[
+                      s.day,
+                      isToday && s.todayDay,
+                      selected && s.selected,
+                      isToday && selected && s.todaySelected,
+                    ]}
+                    onPress={() => setChosen(value)}
+                  >
+                    <Text
+                      style={[s.dayName, isToday && s.todayDayText, selected && s.selectedText]}
+                    >
+                      {d.toLocaleDateString(undefined, { weekday: "narrow" })}
+                    </Text>
+                    <Text
+                      style={[s.dayNumber, isToday && s.todayDayText, selected && s.selectedText]}
+                    >
+                      {d.getDate()}
+                    </Text>
+                    <Text
+                      style={[s.monthName, isToday && s.todayDayText, selected && s.selectedText]}
+                    >
+                      {d.toLocaleDateString(undefined, { month: "short" })}
+                    </Text>
                   </Pressable>
-                </View>
-              </View>
-              {datePageWidth > 0 && (
-                <FlatList
-                  key={`${iso(dateStripStart)}-${datePageWidth}-${dateStripVersion}`}
-                  horizontal
-                  data={DAY_OFFSETS}
-                  initialScrollIndex={DAY_RANGE}
-                  getItemLayout={(_, index) => ({
-                    length: DATE_CARD_LENGTH,
-                    offset: DATE_CARD_LENGTH * index,
-                    index,
-                  })}
-                  keyExtractor={(offset) => String(offset)}
-                  renderItem={({ item: dayOffset }) => {
-                    const d = add(dateStripStart, dayOffset);
-                    const value = iso(d);
-                    const selected = value === chosen;
-                    const isToday = value === todayValue;
-                    return (
-                      <Pressable
-                        style={[
-                          s.day,
-                          isToday && s.todayDay,
-                          selected && s.selected,
-                          isToday && selected && s.todaySelected,
-                        ]}
-                        onPress={() => setChosen(value)}
-                      >
-                        <Text
-                          style={[s.dayName, isToday && s.todayDayText, selected && s.selectedText]}
-                        >
-                          {d.toLocaleDateString(undefined, { weekday: "narrow" })}
-                        </Text>
-                        <Text
-                          style={[
-                            s.dayNumber,
-                            isToday && s.todayDayText,
-                            selected && s.selectedText,
-                          ]}
-                        >
-                          {d.getDate()}
-                        </Text>
-                        <Text
-                          style={[
-                            s.monthName,
-                            isToday && s.todayDayText,
-                            selected && s.selectedText,
-                          ]}
-                        >
-                          {d.toLocaleDateString(undefined, { month: "short" })}
-                        </Text>
-                      </Pressable>
-                    );
-                  }}
-                  showsHorizontalScrollIndicator={false}
-                  decelerationRate="normal"
-                  initialNumToRender={9}
-                  maxToRenderPerBatch={10}
-                  windowSize={5}
-                  removeClippedSubviews
-                  style={s.dateScroller}
-                />
-              )}
-            </View>
+                );
+              }}
+              showsHorizontalScrollIndicator={false}
+              decelerationRate="normal"
+              initialNumToRender={9}
+              maxToRenderPerBatch={10}
+              windowSize={5}
+              removeClippedSubviews
+              style={s.dateScroller}
+            />
           )}
-          <View style={s.rangeRow}>
-            <Text style={s.rangeText}>{rangeLabel}</Text>
-            <Text style={s.rangeHint}>Planned range</Text>
+        </View>
+      )}
+      <View style={s.rangeRow}>
+        <Text style={s.rangeText}>{rangeLabel}</Text>
+        <Text style={s.rangeHint}>Planned range</Text>
+      </View>
+      {!loading && !error && (
+        <View style={s.summaryCards}>
+          <View style={[s.summaryCard, s.toShopCard]}>
+            <View style={s.summaryHeading}>
+              <Ionicons name="cart-outline" size={16} color={colors.danger} />
+              <Text style={[s.summaryCount, s.toShopText]}>
+                {groups.filter((item) => !item.in_kitchen).length}
+              </Text>
+            </View>
+            <Text style={[s.summaryLabel, s.toShopText]}>To shop</Text>
           </View>
-          {!loading && !error && (
-            <View style={s.summaryCards}>
-              <View style={[s.summaryCard, s.toShopCard]}>
-                <View style={s.summaryHeading}>
-                  <Ionicons name="cart-outline" size={16} color={colors.danger} />
-                  <Text style={[s.summaryCount, s.toShopText]}>
-                    {groups.filter((item) => !item.in_kitchen).length}
-                  </Text>
-                </View>
-                <Text style={[s.summaryLabel, s.toShopText]}>To shop</Text>
-              </View>
-              <View style={[s.summaryCard, s.haveCard]}>
-                <View style={s.summaryHeading}>
-                  <Ionicons name="checkmark-circle-outline" size={16} color={colors.success} />
-                  <Text style={[s.summaryCount, s.haveText]}>
-                    {groups.filter((item) => item.in_kitchen).length}
-                  </Text>
-                </View>
-                <Text style={[s.summaryLabel, s.haveText]}>Already have</Text>
-              </View>
+          <View style={[s.summaryCard, s.haveCard]}>
+            <View style={s.summaryHeading}>
+              <Ionicons name="checkmark-circle-outline" size={16} color={colors.success} />
+              <Text style={[s.summaryCount, s.haveText]}>
+                {groups.filter((item) => item.in_kitchen).length}
+              </Text>
+            </View>
+            <Text style={[s.summaryLabel, s.haveText]}>Already have</Text>
+          </View>
+        </View>
+      )}
+      {loading ? (
+        <ActivityIndicator style={s.loading} color={GREEN} />
+      ) : error ? (
+        <View style={s.state}>
+          <Ionicons name="cloud-offline-outline" size={28} color={colors.textSubtle} />
+          <Text style={s.error}>{error}</Text>
+        </View>
+      ) : (
+        <ScrollView
+          style={s.list}
+          contentContainerStyle={s.listContent}
+          nestedScrollEnabled
+          showsVerticalScrollIndicator
+        >
+          {!groups.length && (
+            <View style={s.state}>
+              <Text style={s.emptyTitle}>No planned ingredients</Text>
+              <Text style={s.emptyCopy}>Add a recipe to this date range first.</Text>
             </View>
           )}
-          {loading ? (
-            <ActivityIndicator style={s.loading} color={GREEN} />
-          ) : error ? (
-            <View style={s.state}>
-              <Ionicons name="cloud-offline-outline" size={28} color={colors.textSubtle} />
-              <Text style={s.error}>{error}</Text>
+          {groups.map((item) => {
+            const key = item.name.toLowerCase(),
+              done = checked.has(key);
+            return (
+              <View key={key} style={s.item}>
+                <View style={s.ingredientIcon}>
+                  <Text style={s.emoji}>{ingredientEmojiFor(item.name)}</Text>
+                </View>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={`View meals requiring ${item.name}`}
+                  style={s.body}
+                  onPress={() => setDetailItem(item)}
+                >
+                  <View style={s.nameRow}>
+                    <Text style={s.name}>{item.name}</Text>
+                    <Text style={s.quantity}>{item.quantity}</Text>
+                  </View>
+                </Pressable>
+                {item.in_kitchen ? (
+                  <Text style={s.green}>✓ In kitchen</Text>
+                ) : (
+                  <Pressable
+                    style={[s.check, done ? s.purchasedCheck : s.missingCheck]}
+                    onPress={() =>
+                      setChecked((v) => {
+                        const n = new Set(v);
+                        n.has(key) ? n.delete(key) : n.add(key);
+                        return n;
+                      })
+                    }
+                  >
+                    <Ionicons
+                      name={done ? "checkbox" : "square-outline"}
+                      size={18}
+                      color={done ? colors.success : colors.danger}
+                    />
+                    <Text style={[s.checkText, done ? s.purchasedText : s.missingText]}>
+                      {done ? "Purchased" : "Missing"}
+                    </Text>
+                  </Pressable>
+                )}
+              </View>
+            );
+          })}
+        </ScrollView>
+      )}
+      <Pressable
+        style={[s.complete, checked.size > 0 && s.completeActive]}
+        accessibilityState={{ disabled: completing || checked.size === 0 }}
+        disabled={completing || checked.size === 0}
+        onPress={() => void openCompletionReview()}
+      >
+        {completing ? (
+          <ActivityIndicator size="small" color={colors.surface} />
+        ) : (
+          <>
+            <Ionicons
+              name="checkmark"
+              size={17}
+              color={checked.size > 0 ? colors.surface : colors.primaryStrong}
+            />
+            <Text style={[s.completeText, checked.size > 0 && s.completeTextActive]}>
+              Mark as Complete
+            </Text>
+          </>
+        )}
+      </Pressable>
+      <View style={s.bottom}>
+        <Pressable
+          style={s.nav}
+          onPress={() => {
+            router.push({
+              pathname: "/ingredients",
+              params: { returnTo: "shopping", date: chosen },
+            } as never);
+          }}
+        >
+          <Ionicons name="basket-outline" size={16} color={colors.textMuted} />
+          <Text style={s.navText}>In Kitchen</Text>
+        </Pressable>
+        <Pressable
+          style={s.nav}
+          onPress={() => {
+            router.push({
+              pathname: "/marketplace/shop-plan",
+              params: {
+                date: chosen,
+                range,
+                ...(selectedGroups().length
+                  ? { ingredients: JSON.stringify(selectedGroups().map((item) => item.name)) }
+                  : {}),
+              },
+            } as never);
+          }}
+        >
+          <Ionicons name="bag-handle-outline" size={16} color={colors.textMuted} />
+          <Text style={s.navText}>Shop missing ingredients</Text>
+        </Pressable>
+      </View>
+      {expiryHelpOpen && (
+        <View style={s.helpLayer}>
+          <Pressable style={s.helpBackdrop} onPress={() => setExpiryHelpOpen(false)} />
+          <View style={s.helpCard}>
+            <View style={s.helpHeader}>
+              <View style={s.helpTitleRow}>
+                <Ionicons name="information-circle" size={22} color={colors.adminStrong} />
+                <Text style={s.helpTitle}>How expiry dates are estimated</Text>
+              </View>
+              <Pressable hitSlop={8} onPress={() => setExpiryHelpOpen(false)}>
+                <Ionicons name="close-circle" size={26} color={colors.textMuted} />
+              </Pressable>
             </View>
-          ) : (
+            <Text style={s.helpCopy}>
+              When you mark an item as complete, EcoChef starts from today and adds the usual number
+              of days that type of food stays fresh.
+            </Text>
+            <Text style={s.helpNote}>
+              These are helpful estimates, not safety guarantees. They assume normal storage. You
+              can change any date later on the In Kitchen screen.
+            </Text>
+            <Pressable style={s.helpDone} onPress={() => setExpiryHelpOpen(false)}>
+              <Text style={s.helpDoneText}>Got it</Text>
+            </Pressable>
+          </View>
+        </View>
+      )}
+      {detailItem && (
+        <View style={s.helpLayer}>
+          <Pressable style={s.helpBackdrop} onPress={() => setDetailItem(undefined)} />
+          <View style={s.helpCard}>
+            <View style={s.helpHeader}>
+              <View style={s.detailTitleRow}>
+                <View style={s.ingredientIcon}>
+                  <Text style={s.emoji}>{ingredientEmojiFor(detailItem.name)}</Text>
+                </View>
+                <View>
+                  <Text style={s.helpTitle}>{detailItem.name}</Text>
+                  <Text style={s.detailTotal}>Total needed: {detailItem.quantity}</Text>
+                </View>
+              </View>
+              <Pressable hitSlop={8} onPress={() => setDetailItem(undefined)}>
+                <Ionicons name="close-circle" size={26} color={colors.textMuted} />
+              </Pressable>
+            </View>
+            <Text style={s.estimateLabel}>REQUIRED BY</Text>
+            {Object.entries(detailItem.recipeCounts).map(([recipe, count]) => (
+              <View key={recipe} style={s.mealDetailRow}>
+                <Ionicons name="restaurant-outline" size={17} color={colors.primaryStrong} />
+                <Text style={s.mealDetailName}>{recipe}</Text>
+                {count > 1 && <Text style={s.mealDetailCount}>×{count}</Text>}
+              </View>
+            ))}
+            <Pressable style={s.helpDone} onPress={() => setDetailItem(undefined)}>
+              <Text style={s.helpDoneText}>Done</Text>
+            </Pressable>
+          </View>
+        </View>
+      )}
+      {completionReviewOpen && (
+        <View style={s.helpLayer}>
+          <View style={s.helpBackdrop} />
+          <View style={[s.helpCard, s.reviewCard]}>
+            <View style={s.helpHeader}>
+              <View style={s.helpTitleRow}>
+                <Ionicons name="checkmark-circle-outline" size={22} color={colors.primaryStrong} />
+                <Text style={s.helpTitle}>Review purchased items</Text>
+              </View>
+              <Pressable
+                disabled={completing}
+                hitSlop={8}
+                onPress={() => setCompletionReviewOpen(false)}
+              >
+                <Ionicons name="close-circle" size={26} color={colors.textMuted} />
+              </Pressable>
+            </View>
+            <Text style={s.estimateLabel}>PURCHASE DETAILS</Text>
             <ScrollView
-              style={s.list}
-              contentContainerStyle={s.listContent}
+              style={s.reviewList}
               nestedScrollEnabled
               showsVerticalScrollIndicator
+              keyboardShouldPersistTaps="handled"
             >
-              {!groups.length && (
-                <View style={s.state}>
-                  <Text style={s.emptyTitle}>No planned ingredients</Text>
-                  <Text style={s.emptyCopy}>Add a recipe to this date range first.</Text>
-                </View>
-              )}
-              {groups.map((item) => {
-                const key = item.name.toLowerCase(),
-                  done = checked.has(key);
+              {selectedGroups().map((item) => {
+                const key = item.name.toLowerCase();
+                const days = Number(expiryDays[key]);
+                const date = expiryDateForDays(expiryDays[key] ?? "");
+                const quantity = quantityParts(item.quantity);
                 return (
-                  <View key={key} style={s.item}>
-                    <View style={s.ingredientIcon}>
-                      <Text style={s.emoji}>{ingredientEmojiFor(item.name)}</Text>
-                    </View>
-                    <View style={s.body}>
-                      <Text style={s.name}>{item.name}</Text>
-                      <Text style={s.detail}>{item.quantity}</Text>
-                      <Text style={s.used}>
-                        Used by —{" "}
-                        {Object.entries(item.recipeCounts)
-                          .map(([recipe, count]) => `${recipe}${count > 1 ? ` ×${count}` : ""}`)
-                          .join(", ")}
-                      </Text>
-                    </View>
-                    {item.in_kitchen ? (
-                      <Text style={s.green}>✓ In kitchen</Text>
-                    ) : (
-                      <Pressable
-                        style={[s.check, done ? s.purchasedCheck : s.missingCheck]}
-                        onPress={() =>
-                          setChecked((v) => {
-                            const n = new Set(v);
-                            n.has(key) ? n.delete(key) : n.add(key);
-                            return n;
-                          })
-                        }
-                      >
-                        <Ionicons
-                          name={done ? "checkbox" : "square-outline"}
-                          size={18}
-                          color={done ? colors.success : colors.danger}
-                        />
-                        <Text style={[s.checkText, done ? s.purchasedText : s.missingText]}>
-                          {done ? "Purchased" : "Missing"}
+                  <View key={key} style={s.reviewItem}>
+                    <View style={s.reviewItemTop}>
+                      <View style={s.reviewNameRow}>
+                        <View style={s.smallIngredientIcon}>
+                          <Text>{ingredientEmojiFor(item.name)}</Text>
+                        </View>
+                        <View style={s.reviewNameBody}>
+                          <Text style={s.reviewName}>{item.name}</Text>
+                          <View style={s.reviewQuantityField}>
+                            <TextInput
+                              accessibilityLabel={`${item.name} purchase quantity`}
+                              value={purchaseAmounts[key] ?? ""}
+                              maxLength={8}
+                              keyboardType="decimal-pad"
+                              selectTextOnFocus
+                              onChangeText={(value) => {
+                                if (/^\d*\.?\d*$/.test(value))
+                                  setPurchaseAmounts((current) => ({
+                                    ...current,
+                                    [key]: value,
+                                  }));
+                              }}
+                              style={s.reviewQuantityInput}
+                            />
+                            {quantity?.unit ? (
+                              <Text style={s.reviewQuantityUnit}>{quantity.unit}</Text>
+                            ) : null}
+                          </View>
+                        </View>
+                      </View>
+                      <View style={s.expiryFieldColumn}>
+                        <Text style={s.expiryFieldLabel}>EXPIRATION DATE</Text>
+                        <Pressable
+                          accessibilityLabel={`Select ${item.name} expiration date`}
+                          style={s.dateField}
+                          onPress={() => setExpiryCalendarItem(key)}
+                        >
+                          <Ionicons name="calendar-outline" size={14} color={colors.adminStrong} />
+                          <Text style={s.dateFieldText}>
+                            {date.toLocaleDateString(undefined, {
+                              day: "numeric",
+                              month: "short",
+                              year: "numeric",
+                            })}
+                          </Text>
+                        </Pressable>
+                        <Text style={s.daysLeftText}>
+                          {Number.isInteger(days) && days >= 0
+                            ? `${days} day${days === 1 ? "" : "s"} left`
+                            : ""}
                         </Text>
-                      </Pressable>
-                    )}
+                      </View>
+                    </View>
                   </View>
                 );
               })}
             </ScrollView>
-          )}
-          <Pressable
-            style={[s.complete, checked.size > 0 && s.completeActive]}
-            accessibilityState={{ disabled: completing || checked.size === 0 }}
-            disabled={completing || checked.size === 0}
-            onPress={() => void openCompletionReview()}
-          >
-            {completing ? (
-              <ActivityIndicator size="small" color={colors.surface} />
-            ) : (
-              <>
-                <Ionicons
-                  name="checkmark"
-                  size={17}
-                  color={checked.size > 0 ? colors.surface : colors.primaryStrong}
-                />
-                <Text style={[s.completeText, checked.size > 0 && s.completeTextActive]}>
-                  Mark as Complete
-                </Text>
-              </>
-            )}
-          </Pressable>
-          <View style={s.bottom}>
-            <Pressable
-              style={s.nav}
-              onPress={() => {
-                onClose();
-                router.push({
-                  pathname: "/ingredients",
-                  params: { returnTo: "shopping", date: chosen },
-                } as never);
-              }}
-            >
-              <Ionicons name="basket-outline" size={16} color={colors.textMuted} />
-              <Text style={s.navText}>In Kitchen</Text>
-            </Pressable>
-            <Pressable
-              style={s.nav}
-              onPress={() => {
-                onClose();
-                router.push({
-                  pathname: "/marketplace/shop-plan",
-                  params: {
-                    date: chosen,
-                    range,
-                    ...(selectedGroups().length
-                      ? { ingredients: JSON.stringify(selectedGroups().map((item) => item.name)) }
-                      : {}),
-                  },
-                } as never);
-              }}
-            >
-              <Ionicons name="bag-handle-outline" size={16} color={colors.textMuted} />
-              <Text style={s.navText}>Shop missing ingredients</Text>
-            </Pressable>
+            <View style={s.reviewActions}>
+              <Pressable
+                disabled={completing}
+                style={s.reviewCancel}
+                onPress={() => setCompletionReviewOpen(false)}
+              >
+                <Text style={s.reviewCancelText}>Go back</Text>
+              </Pressable>
+              <Pressable
+                disabled={completing}
+                style={s.reviewConfirm}
+                onPress={() => void completeSelected()}
+              >
+                {completing ? (
+                  <ActivityIndicator size="small" color={colors.surface} />
+                ) : (
+                  <>
+                    <Ionicons name="checkmark" size={17} color={colors.surface} />
+                    <Text style={s.reviewConfirmText}>Add items</Text>
+                  </>
+                )}
+              </Pressable>
+            </View>
           </View>
-          {expiryHelpOpen && (
-            <View style={s.helpLayer}>
-              <Pressable style={s.helpBackdrop} onPress={() => setExpiryHelpOpen(false)} />
-              <View style={s.helpCard}>
-                <View style={s.helpHeader}>
-                  <View style={s.helpTitleRow}>
-                    <Ionicons name="information-circle" size={22} color={colors.adminStrong} />
-                    <Text style={s.helpTitle}>How expiry dates are estimated</Text>
-                  </View>
-                  <Pressable hitSlop={8} onPress={() => setExpiryHelpOpen(false)}>
-                    <Ionicons name="close-circle" size={26} color={colors.textMuted} />
-                  </Pressable>
-                </View>
-                <Text style={s.helpCopy}>
-                  When you mark an item as complete, EcoChef starts from today and adds the usual
-                  number of days that type of food stays fresh.
-                </Text>
-                <Text style={s.helpNote}>
-                  These are helpful estimates, not safety guarantees. They assume normal storage.
-                  You can change any date later on the In Kitchen screen.
-                </Text>
-                <Pressable style={s.helpDone} onPress={() => setExpiryHelpOpen(false)}>
-                  <Text style={s.helpDoneText}>Got it</Text>
-                </Pressable>
-              </View>
-            </View>
-          )}
-          {completionReviewOpen && (
-            <View style={s.helpLayer}>
-              <View style={s.helpBackdrop} />
-              <View style={[s.helpCard, s.reviewCard]}>
-                <View style={s.helpHeader}>
-                  <View style={s.helpTitleRow}>
-                    <Ionicons
-                      name="checkmark-circle-outline"
-                      size={22}
-                      color={colors.primaryStrong}
-                    />
-                    <Text style={s.helpTitle}>Review purchased items</Text>
-                  </View>
-                  <Pressable
-                    disabled={completing}
-                    hitSlop={8}
-                    onPress={() => setCompletionReviewOpen(false)}
-                  >
-                    <Ionicons name="close-circle" size={26} color={colors.textMuted} />
-                  </Pressable>
-                </View>
-                <Text style={s.estimateLabel}>PURCHASE DETAILS</Text>
-                <ScrollView
-                  style={s.reviewList}
-                  nestedScrollEnabled
-                  showsVerticalScrollIndicator
-                  keyboardShouldPersistTaps="handled"
-                >
-                  {selectedGroups().map((item) => {
-                    const key = item.name.toLowerCase();
-                    const days = Number(expiryDays[key]);
-                    const date = expiryDateForDays(expiryDays[key] ?? "");
-                    const quantity = quantityParts(item.quantity);
-                    return (
-                      <View key={key} style={s.reviewItem}>
-                        <View style={s.reviewItemTop}>
-                          <View style={s.reviewNameRow}>
-                            <View style={s.smallIngredientIcon}>
-                              <Text>{ingredientEmojiFor(item.name)}</Text>
-                            </View>
-                            <View style={s.reviewNameBody}>
-                              <Text style={s.reviewName}>{item.name}</Text>
-                              <View style={s.reviewQuantityField}>
-                                <TextInput
-                                  accessibilityLabel={`${item.name} purchase quantity`}
-                                  value={purchaseAmounts[key] ?? ""}
-                                  maxLength={8}
-                                  keyboardType="decimal-pad"
-                                  selectTextOnFocus
-                                  onChangeText={(value) => {
-                                    if (/^\d*\.?\d*$/.test(value))
-                                      setPurchaseAmounts((current) => ({
-                                        ...current,
-                                        [key]: value,
-                                      }));
-                                  }}
-                                  style={s.reviewQuantityInput}
-                                />
-                                {quantity?.unit ? (
-                                  <Text style={s.reviewQuantityUnit}>{quantity.unit}</Text>
-                                ) : null}
-                              </View>
-                            </View>
-                          </View>
-                          <View style={s.expiryFieldColumn}>
-                            <Text style={s.expiryFieldLabel}>EXPIRATION DATE</Text>
-                            <Pressable
-                              accessibilityLabel={`Select ${item.name} expiration date`}
-                              style={s.dateField}
-                              onPress={() => setExpiryCalendarItem(key)}
-                            >
-                              <Ionicons
-                                name="calendar-outline"
-                                size={14}
-                                color={colors.adminStrong}
-                              />
-                              <Text style={s.dateFieldText}>
-                                {date.toLocaleDateString(undefined, {
-                                  day: "numeric",
-                                  month: "short",
-                                  year: "numeric",
-                                })}
-                              </Text>
-                            </Pressable>
-                            <Text style={s.daysLeftText}>
-                              {Number.isInteger(days) && days >= 0
-                                ? `${days} day${days === 1 ? "" : "s"} left`
-                                : ""}
-                            </Text>
-                          </View>
-                        </View>
-                      </View>
-                    );
-                  })}
-                </ScrollView>
-                <View style={s.reviewActions}>
-                  <Pressable
-                    disabled={completing}
-                    style={s.reviewCancel}
-                    onPress={() => setCompletionReviewOpen(false)}
-                  >
-                    <Text style={s.reviewCancelText}>Go back</Text>
-                  </Pressable>
-                  <Pressable
-                    disabled={completing}
-                    style={s.reviewConfirm}
-                    onPress={() => void completeSelected()}
-                  >
-                    {completing ? (
-                      <ActivityIndicator size="small" color={colors.surface} />
-                    ) : (
-                      <>
-                        <Ionicons name="checkmark" size={17} color={colors.surface} />
-                        <Text style={s.reviewConfirmText}>Add items</Text>
-                      </>
-                    )}
-                  </Pressable>
-                </View>
-              </View>
-            </View>
-          )}
-          <DatePickerSheet
-            visible={Boolean(expiryCalendarItem)}
-            value={dateToIso(
-              expiryDateForDays(expiryCalendarItem ? (expiryDays[expiryCalendarItem] ?? "0") : "0"),
-            )}
-            title="Select expiration date"
-            description="Choose when this purchased item is expected to expire."
-            onClose={() => setExpiryCalendarItem(undefined)}
-            onSelect={(value) => {
-              if (!expiryCalendarItem) return;
-              const selected = parse(value);
-              selected.setHours(0, 0, 0, 0);
-              const today = new Date();
-              today.setHours(0, 0, 0, 0);
-              const days = Math.max(
-                0,
-                Math.round((selected.getTime() - today.getTime()) / 86_400_000),
-              );
-              setExpiryDays((current) => ({ ...current, [expiryCalendarItem]: String(days) }));
-              setExpiryCalendarItem(undefined);
-            }}
-          />
-        </Animated.View>
-      </View>
-    </Modal>
+        </View>
+      )}
+      <DatePickerSheet
+        visible={Boolean(expiryCalendarItem)}
+        value={dateToIso(
+          expiryDateForDays(expiryCalendarItem ? (expiryDays[expiryCalendarItem] ?? "0") : "0"),
+        )}
+        title="Select expiration date"
+        description="Choose when this purchased item is expected to expire."
+        onClose={() => setExpiryCalendarItem(undefined)}
+        onSelect={(value) => {
+          if (!expiryCalendarItem) return;
+          const selected = parse(value);
+          selected.setHours(0, 0, 0, 0);
+          const today = new Date();
+          today.setHours(0, 0, 0, 0);
+          const days = Math.max(0, Math.round((selected.getTime() - today.getTime()) / 86_400_000));
+          setExpiryDays((current) => ({ ...current, [expiryCalendarItem]: String(days) }));
+          setExpiryCalendarItem(undefined);
+        }}
+      />
+    </View>
   );
 }
 const s = StyleSheet.create({
-  overlay: { flex: 1, justifyContent: "flex-end" },
-  backdrop: {
-    position: "absolute",
-    top: 0,
-    right: 0,
-    bottom: 0,
-    left: 0,
-    backgroundColor: palette.crgba_23_60_57_45,
-  },
-  sheet: {
-    height: "90%",
+  page: {
+    flex: 1,
     padding: 16,
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
     backgroundColor: colors.consumerCanvas,
   },
-  head: { flexDirection: "row", justifyContent: "space-between" },
-  headActions: { flexDirection: "row", alignItems: "center", gap: 8 },
+  head: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    marginBottom: 18,
+  },
+  headCopy: { flex: 1 },
+  backButton: {
+    width: 32,
+    height: 32,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 20,
+    backgroundColor: palette.ceef1f0,
+  },
+  headerAction: {
+    width: 32,
+    height: 32,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 16,
+    backgroundColor: colors.surface,
+  },
   green: {
     color: GREEN,
     fontSize: typography.mobile.rawSize.s9,
     fontWeight: typography.weight.black,
   },
   title: {
-    color: colors.text,
-    fontSize: typography.mobile.rawSize.s20,
-    fontWeight: typography.weight.black,
+    color: palette.c13273a,
+    fontSize: typography.mobile.rawSize.s21,
+    fontWeight: typography.weight.bold,
+  },
+  subtitle: {
+    marginTop: 1,
+    color: palette.c91a0ad,
+    fontSize: typography.mobile.rawSize.s11,
   },
   tabs: {
     flexDirection: "row",
-    marginTop: 12,
     padding: 3,
     borderRadius: 10,
     backgroundColor: colors.surfaceMuted,
@@ -799,12 +814,6 @@ const s = StyleSheet.create({
     fontSize: typography.mobile.rawSize.s9,
     fontWeight: typography.weight.black,
     letterSpacing: 0.45,
-  },
-  swipeHint: { flexDirection: "row", alignItems: "center", gap: 3 },
-  swipeText: {
-    color: colors.textSubtle,
-    fontSize: typography.mobile.rawSize.s8,
-    fontWeight: typography.weight.bold,
   },
   todayButton: {
     flexDirection: "row",
@@ -954,15 +963,28 @@ const s = StyleSheet.create({
     textAlign: "center",
   },
   body: { flex: 1, paddingHorizontal: 9 },
+  nameRow: { flexDirection: "row", alignItems: "baseline", flexWrap: "wrap", gap: 5 },
   name: { color: colors.text, fontWeight: typography.weight.extrabold },
-  detail: { fontSize: typography.mobile.rawSize.s10, color: colors.textMuted },
-  used: {
-    marginTop: 3,
-    padding: 3,
-    fontSize: typography.mobile.rawSize.s8,
-    color: colors.textSubtle,
+  quantity: {
+    color: colors.primaryStrong,
+    fontSize: typography.mobile.rawSize.s10,
+    fontWeight: typography.weight.black,
+  },
+  detailTitleRow: { flex: 1, flexDirection: "row", alignItems: "center", gap: 10 },
+  detailTotal: { marginTop: 2, color: colors.textMuted, fontSize: typography.mobile.rawSize.s10 },
+  mealDetailRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 9,
+    marginTop: 8,
+    padding: 11,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 11,
     backgroundColor: colors.surfaceMuted,
   },
+  mealDetailName: { flex: 1, color: colors.text, fontWeight: typography.weight.bold },
+  mealDetailCount: { color: colors.primaryStrong, fontWeight: typography.weight.black },
   check: {
     flexDirection: "row",
     alignItems: "center",

@@ -200,7 +200,10 @@ export function MarketplaceProductDetailScreen() {
             accessibilityRole="button"
             accessibilityLabel="Back"
             onPress={closeDetail}
-            style={styles.circle}
+            style={({ pressed }) => [
+              styles.circle,
+              pressed && { opacity: 0.72, transform: [{ scale: 0.92 }] },
+            ]}
           >
             <Ionicons name="chevron-down" size={22} color={colors.text} />
           </Pressable>

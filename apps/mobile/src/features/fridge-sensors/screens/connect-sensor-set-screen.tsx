@@ -256,7 +256,7 @@ export function ConnectSensorSetScreen() {
             accessibilityRole="button"
             accessibilityLabel="Go back to Gas Sensors"
             disabled={busy}
-            style={({ pressed }) => [s.circleButton, pressed && s.pressed]}
+            style={({ pressed }) => [s.circleButton, pressed && s.backPressed]}
             onPress={() => void leaveSetup()}
           >
             <Ionicons name="chevron-back" size={22} color={colors.text} />
@@ -1187,5 +1187,6 @@ const s = StyleSheet.create({
     lineHeight: 17,
     fontWeight: typography.weight.semibold,
   },
-  pressed: { opacity: 0.72 },
+  pressed: { opacity: 0.72, transform: [{ scale: 0.92 }] },
+  backPressed: { opacity: 0.72, transform: [{ scale: 1.08 }] },
 });

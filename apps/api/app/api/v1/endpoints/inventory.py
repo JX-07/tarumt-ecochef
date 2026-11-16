@@ -1,9 +1,5 @@
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from uuid import UUID
-
-from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import text
-from sqlalchemy.orm import Session
 
 from app.db.session import get_db_session
 from app.modules.auth.service import require_roles
@@ -15,6 +11,9 @@ from app.schemas.inventory import (
     InventoryItemInput,
     InventoryList,
 )
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy import text
+from sqlalchemy.orm import Session
 
 router = APIRouter()
 CurrentConsumer = Depends(require_roles(AccountRole.consumer))
@@ -108,9 +107,38 @@ def get_my_inventory(
         {"user_id": current_user.id},
     ).all()
     items = [_item_from_row(row) for row in rows]
-    today = datetime.now(timezone.utc).date()
+    today = datetime.now(UTC).date()
     expiring_soon = sum(1 for item in items if 0 <= (item.expiry_date.date() - today).days <= 3)
     return InventoryList(items=items, total=len(items), expiring_soon=expiring_soon)
+
+
+@router.get("/ingredients/suggestions", response_model=list[str])
+def suggest_ingredient_names(
+    query: str = Query(min_length=2, max_length=100),
+    _current_user: AuthenticatedUser = CurrentConsumer,
+    session: Session = Depends(get_db_session),
+) -> list[str]:
+    normalized = " ".join(query.split())
+    if len(normalized) < 2:
+        return []
+    rows = session.execute(
+        text("""
+            SELECT ingredient_name
+            FROM (
+                SELECT DISTINCT ON (lower(ingredient_name)) ingredient_name
+                FROM ingredients
+                WHERE ingredient_name ILIKE :contains
+                ORDER BY lower(ingredient_name), ingredient_name
+            ) names
+            ORDER BY
+                CASE WHEN lower(ingredient_name) LIKE lower(:prefix) THEN 0 ELSE 1 END,
+                length(ingredient_name),
+                lower(ingredient_name)
+            LIMIT 8
+        """),
+        {"contains": f"%{normalized}%", "prefix": f"{normalized}%"},
+    ).all()
+    return [row.ingredient_name for row in rows]
 
 
 @router.post("/me/items", response_model=InventoryItem, status_code=status.HTTP_201_CREATED)

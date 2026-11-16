@@ -1,6 +1,6 @@
 import { apiBaseUrl } from "../../../lib/api-url";
 import { Text } from "../../../shared/components/themed-text";
-import { colors, spacing, typography } from "@ecochef/design-tokens";
+import { colors, palette, spacing, typography } from "@ecochef/design-tokens";
 import { Ionicons } from "@expo/vector-icons";
 import * as Notifications from "expo-notifications";
 import { router, useFocusEffect } from "expo-router";
@@ -148,10 +148,10 @@ export function NotificationSettingsScreen() {
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Go back"
-          style={({ pressed }) => [styles.back, pressed && styles.pressed]}
+          style={({ pressed }) => [styles.back, pressed && styles.backPressed]}
           onPress={() => router.back()}
         >
-          <Ionicons name="chevron-back" size={22} color={colors.text} />
+          <Ionicons name="chevron-back" size={22} color={palette.c64716d} />
         </Pressable>
         <View style={styles.headerCopy}>
           <Text style={styles.title}>Notification settings</Text>
@@ -259,10 +259,8 @@ const styles = StyleSheet.create({
     height: 32,
     alignItems: "center",
     justifyContent: "center",
-    borderWidth: 1,
-    borderColor: colors.border,
     borderRadius: 16,
-    backgroundColor: colors.surfaceMuted,
+    backgroundColor: palette.ceef1f0,
   },
   headerCopy: { flex: 1 },
   title: {
@@ -388,5 +386,6 @@ const styles = StyleSheet.create({
   },
   loader: { marginTop: spacing[12] },
   flex: { flex: 1 },
-  pressed: { opacity: 0.7 },
+  pressed: { opacity: 0.72, transform: [{ scale: 0.92 }] },
+  backPressed: { opacity: 0.72, transform: [{ scale: 1.08 }] },
 });

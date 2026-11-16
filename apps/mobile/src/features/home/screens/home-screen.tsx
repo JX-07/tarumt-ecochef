@@ -1,5 +1,6 @@
 import { apiBaseUrl } from "../../../lib/api-url";
 import { Text } from "../../../shared/components/themed-text";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { colors, palette, typography } from "@ecochef/design-tokens";
 import { router, useFocusEffect } from "expo-router";
@@ -25,12 +26,7 @@ import type { MealPlanCalendar } from "../../meal-planning/types";
 import { recipeImageUrl } from "../../recipes/recipe-image";
 import type { NotificationList } from "../../notifications/types";
 import { type CookingGroupList } from "../../social/cooking-group";
-import {
-  createGasCalibration,
-  freshnessAppearance,
-  gasTrendInsight,
-  relativeTime,
-} from "../../fridge-sensors/sensor-insights";
+import { createGasCalibration, gasTrendInsight } from "../../fridge-sensors/sensor-insights";
 import type { GasTrendInsight } from "../../fridge-sensors/sensor-insights";
 import {
   clearPendingGasCalibration,
@@ -39,6 +35,7 @@ import {
   saveGasCalibration,
 } from "../../fridge-sensors/calibration-storage";
 import type { FridgeSensorDetail, FridgeSensorList } from "../../fridge-sensors/types";
+import { AppMessageModal } from "../../../shared/components/app-message-modal";
 
 const GREEN = colors.primary;
 const INK = colors.text;
@@ -54,6 +51,50 @@ type InventoryItem = {
 type InventoryList = { items: InventoryItem[]; total: number; expiring_soon: number };
 type SocialUser = { id: string; name: string };
 type SocialState = { requests: SocialUser[]; pending: SocialUser[]; friends: SocialUser[] };
+type HomeOrder = {
+  id: string;
+  shop: string;
+  order_date: string;
+  status: string;
+  payment_status: string;
+  fulfillment_method: "delivery" | "pickup";
+  estimated_delivery_minutes: number;
+  cancellation_reason?: string;
+};
+type PurchaseHistory = { orders: HomeOrder[] };
+
+const activeOrderStatuses = new Set([
+  "pending_payment",
+  "pending",
+  "placed",
+  "preparing",
+  "ready",
+  "out_for_delivery",
+  "arriving",
+  "delayed",
+  "cancellation_pending",
+]);
+const activeOrderStorageKey = (uid?: string) =>
+  `ecochef.active-marketplace-order.${uid ?? "guest"}`;
+const orderStatusDetails = (status: string, pickup: boolean) => {
+  if (status === "cancellation_pending")
+    return { title: "Refund Processing", stage: 0, icon: "return-down-back" as const };
+  if (status === "preparing")
+    return { title: "Your order is being prepared", stage: 1, icon: "restaurant" as const };
+  if (status === "ready")
+    return {
+      title: pickup ? "Ready for pickup" : "Ready for handover",
+      stage: 2,
+      icon: "bag-check" as const,
+    };
+  if (["out_for_delivery", "arriving"].includes(status))
+    return { title: "Your order is on the way", stage: 3, icon: "bicycle" as const };
+  if (status === "delayed")
+    return { title: "Your delivery is delayed", stage: 2, icon: "time" as const };
+  if (["cancelled", "refunded"].includes(status))
+    return { title: "Order Cancelled", stage: 0, icon: "close-circle" as const };
+  return { title: "Order Received", stage: 0, icon: "checkmark-circle" as const };
+};
 
 const runtimeProcess = (globalThis as { process?: { env?: Record<string, string | undefined> } })
   .process;
@@ -94,6 +135,49 @@ export function HomeScreen() {
   const [sensorGasInsights, setSensorGasInsights] = useState<Record<string, GasTrendInsight>>({});
   const [calibratedSensors, setCalibratedSensors] = useState<Record<string, boolean>>({});
   const [calibrationComplete, setCalibrationComplete] = useState<string>();
+  const [avatarUri, setAvatarUri] = useState<string | null>(null);
+  const [activeOrders, setActiveOrders] = useState<HomeOrder[]>([]);
+  const [refundNoticeOrder, setRefundNoticeOrder] = useState<HomeOrder>();
+  const refreshActiveOrder = useCallback(async () => {
+    const storageKey = activeOrderStorageKey(user?.uid);
+    try {
+      const history = await api.getPurchaseHistory<PurchaseHistory>();
+      const visible = (
+        await Promise.all(
+          history.orders.map(async (order) => {
+            const refunded =
+              order.payment_status.toLowerCase() === "refunded" &&
+              ["cancelled", "refunded"].includes(order.status.toLowerCase());
+            if (refunded) {
+              const acknowledged = await AsyncStorage.getItem(
+                `ecochef.refund-ack.${user?.uid ?? "guest"}.${order.id}`,
+              );
+              return acknowledged ? undefined : order;
+            }
+            return order.payment_status.toLowerCase() === "paid" &&
+              activeOrderStatuses.has(order.status.toLowerCase())
+              ? order
+              : undefined;
+          }),
+        )
+      ).filter((order): order is HomeOrder => Boolean(order));
+      setActiveOrders(visible);
+      if (visible[0]) {
+        await AsyncStorage.setItem(storageKey, JSON.stringify(visible[0]));
+      } else {
+        await AsyncStorage.removeItem(storageKey);
+      }
+    } catch {
+      const stored = await AsyncStorage.getItem(storageKey);
+      try {
+        const cached = stored ? (JSON.parse(stored) as HomeOrder) : undefined;
+        setActiveOrders(cached ? [cached] : []);
+      } catch {
+        setActiveOrders([]);
+        await AsyncStorage.removeItem(storageKey);
+      }
+    }
+  }, [api, user?.uid]);
   const refreshSensorCalibration = useCallback(
     async (sensors: FridgeSensorList) => {
       const insightEntries: [string, GasTrendInsight][] = [];
@@ -159,6 +243,9 @@ export function HomeScreen() {
       scrollRef.current?.scrollTo({ y: 0, animated: false });
       void load();
       let active = true;
+      void AsyncStorage.getItem(`ecochef.profile.avatar.${user?.uid ?? "guest"}`).then((uri) => {
+        if (active) setAvatarUri(uri);
+      });
       void api
         .getMySocial<SocialState>()
         .then((result) => {
@@ -171,6 +258,7 @@ export function HomeScreen() {
           if (active) setUnreadNotifications(result.unread_count);
         })
         .catch(() => undefined);
+      void refreshActiveOrder();
       void api
         .getFridgeSensors<FridgeSensorList>()
         .then((result) => {
@@ -180,6 +268,14 @@ export function HomeScreen() {
           }
         })
         .catch(() => undefined);
+      const sensorTimer = setInterval(() => {
+        void api
+          .getFridgeSensors<FridgeSensorList>()
+          .then((result) => {
+            if (active) setFridgeSensors(result);
+          })
+          .catch(() => undefined);
+      }, 2_000);
       void api
         .getMyCookingGroups<CookingGroupList>()
         .then((result) =>
@@ -202,11 +298,14 @@ export function HomeScreen() {
           .then((next) => setUnreadNotifications(next.unread_count))
           .catch(() => undefined);
       }, 60_000);
+      const orderTimer = setInterval(() => void refreshActiveOrder(), 3_000);
       return () => {
         active = false;
         clearInterval(notificationTimer);
+        clearInterval(sensorTimer);
+        clearInterval(orderTimer);
       };
-    }, [api, load, refreshSensorCalibration]),
+    }, [api, load, refreshActiveOrder, refreshSensorCalibration, user?.uid]),
   );
   const currentInventory = inventory.items
     .filter((item) => daysUntil(item.expiry_date) >= 0)
@@ -233,6 +332,24 @@ export function HomeScreen() {
   const openProfile = () => router.push("/account" as never);
   const openGroupManager = () =>
     router.push({ pathname: "/account", params: { section: "friends", mode: "group" } } as never);
+  const openRefundNotice = (order: HomeOrder) => {
+    // Keep the tracker visible while the user is reading the refund details.
+    setRefundNoticeOrder(order);
+  };
+
+  const closeRefundNotice = () => {
+    const order = refundNoticeOrder;
+    setRefundNoticeOrder(undefined);
+
+    if (!order || order.payment_status.toLowerCase() !== "refunded") return;
+
+    // Dismiss the refunded tracker only after the user closes the details.
+    setActiveOrders((orders) => orders.filter((item) => item.id !== order.id));
+    void AsyncStorage.setItem(
+      `ecochef.refund-ack.${user?.uid ?? "guest"}.${order.id}`,
+      "1",
+    ).catch(() => undefined);
+  };
 
   return (
     <>
@@ -267,7 +384,11 @@ export function HomeScreen() {
                 accessibilityRole="button"
                 accessibilityLabel="Open profile"
               >
-                <Ionicons name="person" size={23} color={palette.c9aa3ae} />
+                {avatarUri ? (
+                  <Image source={{ uri: avatarUri }} style={styles.avatarImage} />
+                ) : (
+                  <Ionicons name="person" size={23} color={palette.c9aa3ae} />
+                )}
               </Pressable>
             }
           />
@@ -303,6 +424,14 @@ export function HomeScreen() {
                 <Text style={styles.healthLabel}>ITEMS</Text>
               </View>
             </View>
+
+            {activeOrders.map((order) => (
+              <HomeOrderTracker
+                key={order.id}
+                order={order}
+                onRefundPress={(selectedOrder) => void openRefundNotice(selectedOrder)}
+              />
+            ))}
 
             {expiringSoon.length > 0 && (
               <Pressable
@@ -391,66 +520,61 @@ export function HomeScreen() {
               >
                 {fridgeSensors.items.map((sensor) => {
                   const reading = sensor.latest_reading;
-                  const freshness = freshnessAppearance[reading?.freshness_status ?? "unknown"];
                   const gas = sensorGasInsights[sensor.id];
+                  const online = sensor.connection_status === "online";
+                  const connectionColor = online ? colors.primaryStrong : colors.warningStrong;
+                  const connectionTint = online ? colors.primarySoft : colors.warningSoft;
                   return (
                     <Pressable
                       key={sensor.id}
                       accessibilityRole="button"
                       accessibilityLabel={`Open ${sensor.fridge_name} Fridge Sensor`}
-                      style={({ pressed }) => [styles.sensorCard, pressed && styles.pressed]}
+                      style={({ pressed }) => [
+                        styles.sensorCard,
+                        !online && styles.sensorCardOffline,
+                        pressed && styles.pressed,
+                      ]}
                       onPress={() => router.push(`/fridge-sensors/${sensor.id}` as never)}
                     >
                       <View style={styles.sensorCardTop}>
-                        <View style={styles.sensorFridgeIcon}>
+                        <View
+                          style={[styles.sensorFridgeIcon, { backgroundColor: connectionTint }]}
+                        >
                           <MaterialCommunityIcons
                             name="fridge-outline"
                             size={22}
-                            color={colors.primaryStrong}
+                            color={connectionColor}
                           />
                         </View>
                         <View style={styles.flex}>
                           <Text style={styles.sensorCardName}>{sensor.fridge_name}</Text>
                           <Text style={styles.sensorCardDevice}>{sensor.sensor_name}</Text>
                         </View>
-                        <View style={[styles.sensorStatus, { backgroundColor: freshness.tint }]}>
+                        <View style={[styles.sensorStatus, { backgroundColor: connectionTint }]}>
                           <View
-                            style={[styles.sensorStatusDot, { backgroundColor: freshness.color }]}
+                            style={[styles.sensorStatusDot, { backgroundColor: connectionColor }]}
                           />
-                          <Text style={[styles.sensorStatusText, { color: freshness.color }]}>
-                            {freshness.label}
+                          <Text style={[styles.sensorStatusText, { color: connectionColor }]}>
+                            {online ? "Online" : "Offline"}
                           </Text>
                         </View>
                       </View>
                       <View style={styles.sensorMetricRow}>
-                        <View>
+                        <View style={styles.sensorMetricBox}>
                           <Text style={styles.sensorMetricValue}>
                             {reading ? `${reading.temperature_c.toFixed(1)}°` : "—"}
                           </Text>
                           <Text style={styles.sensorMetricLabel}>Temperature</Text>
                         </View>
                         <View style={styles.sensorMetricDivider} />
-                        <View>
+                        <View style={styles.sensorMetricBox}>
                           <Text style={styles.sensorMetricValue}>
                             {reading ? `${Math.round(reading.humidity_percent)}%` : "—"}
                           </Text>
                           <Text style={styles.sensorMetricLabel}>Humidity</Text>
                         </View>
-                        <View style={styles.sensorMetricDivider} />
-                        <View>
-                          <Text style={styles.sensorMetricValue}>
-                            {sensor.connection_status === "online"
-                              ? "Live"
-                              : sensor.connection_status === "waiting"
-                                ? "New"
-                                : "Offline"}
-                          </Text>
-                          <Text style={styles.sensorMetricLabel}>
-                            {relativeTime(sensor.last_seen_at)}
-                          </Text>
-                        </View>
                       </View>
-                      {calibratedSensors[sensor.id] && reading ? (
+                      {online && calibratedSensors[sensor.id] && reading ? (
                         <View style={styles.sensorMiniStatuses}>
                           <View
                             style={[
@@ -735,7 +859,107 @@ export function HomeScreen() {
           </View>
         </View>
       </Modal>
+      <AppMessageModal
+        visible={Boolean(refundNoticeOrder)}
+        title={
+          refundNoticeOrder?.payment_status.toLowerCase() === "refunded"
+            ? "Refund Successful"
+            : "Refund Processing"
+        }
+        message={`${
+          refundNoticeOrder?.payment_status.toLowerCase() === "refunded"
+            ? "Your order has been refunded by the business owner. The amount will be returned to your original payment method. Please allow up to 14 days for it to appear."
+            : "The business owner has cancelled your order and requested a refund. The money will be returned to your original payment method within 14 days."
+        }${refundNoticeOrder?.cancellation_reason ? `\n\nReason: ${refundNoticeOrder.cancellation_reason}` : ""}`}
+        tone="error"
+        onClose={closeRefundNotice}
+      />
     </>
+  );
+}
+
+function HomeOrderTracker({
+  order,
+  onRefundPress,
+}: {
+  order: HomeOrder;
+  onRefundPress: (order: HomeOrder) => void;
+}) {
+  const display = orderStatusDetails(
+    order.status.toLowerCase(),
+    order.fulfillment_method === "pickup",
+  );
+  const refundUpdate =
+    order.status.toLowerCase() === "cancellation_pending" ||
+    order.payment_status.toLowerCase() === "refunded";
+  const refundComplete = order.payment_status.toLowerCase() === "refunded";
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={`Track order from ${order.shop}`}
+      style={({ pressed }) => [
+        styles.orderTracker,
+        refundUpdate && styles.refundedOrderTracker,
+        styles.shadow,
+        pressed && styles.pressed,
+      ]}
+      onPress={() => {
+        if (refundUpdate) return onRefundPress(order);
+        router.push({
+          pathname: "/marketplace/order",
+          params: {
+            orderId: order.id,
+            fulfillment: order.fulfillment_method,
+            estimate: String(order.estimated_delivery_minutes),
+          },
+        } as never);
+      }}
+    >
+      <View style={[styles.orderTrackerIcon, refundUpdate && styles.refundedOrderTrackerIcon]}>
+        <Ionicons
+          name={display.icon}
+          size={22}
+          color={refundUpdate ? colors.danger : colors.primaryStrong}
+        />
+      </View>
+      <View style={styles.flex}>
+        <View style={styles.orderTrackerHeading}>
+          <Text style={[styles.orderTrackerEyebrow, refundUpdate && { color: colors.danger }]}>
+            {refundUpdate ? "REFUND UPDATE" : "LIVE ORDER"}
+          </Text>
+          <Text style={styles.orderTrackerId}>#{order.id.slice(0, 8).toUpperCase()}</Text>
+        </View>
+        <Text style={[styles.orderTrackerTitle, refundUpdate && { color: colors.danger }]}>
+          {display.title}
+        </Text>
+        <Text style={styles.orderTrackerShop} numberOfLines={1}>
+          {order.shop} ·{" "}
+          {refundUpdate
+            ? refundComplete
+              ? "Tap to view refund details"
+              : "Tap to view refund progress"
+            : "Tap for live details"}
+        </Text>
+        {!refundUpdate ? (
+          <View style={styles.orderProgress}>
+            {[0, 1, 2, 3].map((stage) => (
+              <View
+                key={stage}
+                style={[
+                  styles.orderProgressSegment,
+                  stage <= display.stage && styles.orderProgressSegmentActive,
+                ]}
+              />
+            ))}
+          </View>
+        ) : null}
+      </View>
+      <Ionicons
+        name="chevron-forward"
+        size={18}
+        color={refundUpdate ? colors.danger : colors.primaryStrong}
+      />
+    </Pressable>
   );
 }
 
@@ -811,6 +1035,7 @@ const styles = StyleSheet.create({
     borderRadius: 21,
     backgroundColor: palette.ceceeef,
   },
+  avatarImage: { width: "100%", height: "100%", borderRadius: 18 },
   notificationCard: {
     minHeight: 62,
     flexDirection: "row",
@@ -929,6 +1154,63 @@ const styles = StyleSheet.create({
     fontSize: typography.mobile.rawSize.s8,
     fontWeight: typography.weight.bold,
   },
+  orderTracker: {
+    minHeight: 112,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    marginTop: 14,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: colors.primaryBorder,
+    borderRadius: 19,
+    backgroundColor: colors.surface,
+  },
+  refundedOrderTracker: {
+    borderColor: colors.danger,
+    backgroundColor: colors.dangerSoft,
+  },
+  orderTrackerIcon: {
+    width: 46,
+    height: 46,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 15,
+    backgroundColor: colors.primarySoft,
+  },
+  refundedOrderTrackerIcon: { backgroundColor: colors.dangerSoft },
+  orderTrackerHeading: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 8,
+  },
+  orderTrackerEyebrow: {
+    color: colors.primaryStrong,
+    fontSize: typography.mobile.rawSize.s9,
+    fontWeight: typography.weight.extrabold,
+    letterSpacing: 0.7,
+  },
+  orderTrackerId: { color: colors.textSubtle, fontSize: typography.mobile.rawSize.s9 },
+  orderTrackerTitle: {
+    marginTop: 3,
+    color: colors.text,
+    fontSize: typography.mobile.rawSize.s14,
+    fontWeight: typography.weight.extrabold,
+  },
+  orderTrackerShop: {
+    marginTop: 2,
+    color: colors.textMuted,
+    fontSize: typography.mobile.rawSize.s10,
+  },
+  orderProgress: { flexDirection: "row", gap: 4, marginTop: 10 },
+  orderProgressSegment: {
+    flex: 1,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: colors.border,
+  },
+  orderProgressSegmentActive: { backgroundColor: colors.primary },
   expiryCard: {
     minHeight: 64,
     flexDirection: "row",
@@ -1020,6 +1302,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
     elevation: 2,
   },
+  sensorCardOffline: { borderColor: colors.warningBorder },
   sensorCardTop: { flexDirection: "row", alignItems: "center", gap: 10 },
   sensorFridgeIcon: {
     width: 42,
@@ -1057,6 +1340,12 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: colors.border,
   },
+  sensorMetricBox: {
+    flex: 1,
+    minHeight: 44,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   sensorMetricValue: {
     color: INK,
     fontSize: typography.mobile.rawSize.s14,
@@ -1067,6 +1356,7 @@ const styles = StyleSheet.create({
     marginTop: 2,
     color: colors.textSubtle,
     fontSize: typography.mobile.rawSize.s9,
+    textAlign: "center",
   },
   sensorMetricDivider: { width: 1, height: 28, backgroundColor: colors.border },
   sensorMiniStatuses: { gap: 7, marginTop: 12 },

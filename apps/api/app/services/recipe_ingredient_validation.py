@@ -25,6 +25,9 @@ def ingredient_quantity_issues(ingredients: list, servings: int) -> list[str]:
             issues.append(f"{name}: enter a positive amount and a unit, such as 2 pcs or 100 g.")
             continue
         unit = parsed[2].strip().lower()
+        if not unit:
+            issues.append(f"{name}: add a unit, such as g, ml, pcs, cup, tbsp, or tsp.")
+            continue
         aliases = {
             "gram": "g",
             "grams": "g",
@@ -39,7 +42,6 @@ def ingredient_quantity_issues(ingredients: list, servings: int) -> list[str]:
             "piece": "pcs",
             "pieces": "pcs",
             "pc": "pcs",
-            "": "pcs",
             "cups": "cup",
             "tablespoon": "tbsp",
             "tablespoons": "tbsp",

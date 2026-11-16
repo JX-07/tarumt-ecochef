@@ -98,7 +98,7 @@ class MobileApi {
     });
   }
   async getPurchaseHistory<Response>(): Promise<Response> {
-    return this.request<Response>("/orders/history");
+    return this.request<Response>(`/orders/history?fresh=${Date.now()}`, { cache: "no-store" });
   }
   async getMyPromos<Response>(): Promise<Response> {
     return this.request<Response>("/promos/me");
@@ -394,6 +394,11 @@ class MobileApi {
   }
   async getMyInventory<Response>(): Promise<Response> {
     return this.request<Response>(`/inventory/me?fresh=${Date.now()}`, { cache: "no-store" });
+  }
+  async getIngredientSuggestions<Response>(query: string): Promise<Response> {
+    return this.request<Response>(`/inventory/ingredients/suggestions?${queryString({ query })}`, {
+      cache: "no-store",
+    });
   }
   async addInventoryItem<Response>(body: unknown): Promise<Response> {
     return this.request<Response>("/inventory/me/items", {

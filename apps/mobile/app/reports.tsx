@@ -92,7 +92,10 @@ export default function ReportsScreen() {
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Back to purchase history"
-            style={styles.back}
+            style={({ pressed }) => [
+              styles.back,
+              pressed && { opacity: 0.72, transform: [{ scale: 1.08 }] },
+            ]}
             onPress={() =>
               router.canGoBack()
                 ? router.back()

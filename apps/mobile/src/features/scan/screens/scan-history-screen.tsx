@@ -152,7 +152,13 @@ export function ScanHistoryScreen() {
     <View style={[styles.root, { paddingTop: insets.top }]}>
       <View style={styles.header}>
         <View style={styles.headerRow}>
-          <Pressable onPress={() => goBackOrReplace("/(tabs)/scan")} style={styles.backButton}>
+          <Pressable
+            onPress={() => goBackOrReplace("/(tabs)/scan")}
+            style={({ pressed }) => [
+              styles.backButton,
+              pressed && { opacity: 0.72, transform: [{ scale: 1.08 }] },
+            ]}
+          >
             <Ionicons name="chevron-back" size={21} color={colors.text} />
           </Pressable>
           <View style={styles.headerHeading}>

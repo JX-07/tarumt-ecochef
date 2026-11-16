@@ -115,7 +115,7 @@ export function FridgeSensorsScreen() {
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Go back"
-          style={({ pressed }) => [styles.circleButton, pressed && styles.pressed]}
+          style={({ pressed }) => [styles.circleButton, pressed && styles.backPressed]}
           onPress={() => router.back()}
         >
           <Ionicons name="chevron-back" size={22} color={colors.text} />
@@ -572,7 +572,8 @@ const styles = StyleSheet.create({
     fontWeight: typography.weight.extrabold,
   },
   primaryPressed: { backgroundColor: colors.primaryStrong },
-  pressed: { opacity: 0.72 },
+  pressed: { opacity: 0.72, transform: [{ scale: 0.92 }] },
+  backPressed: { opacity: 0.72, transform: [{ scale: 1.08 }] },
   disabled: { opacity: 0.55 },
   loader: { marginTop: spacing[16] },
   error: {

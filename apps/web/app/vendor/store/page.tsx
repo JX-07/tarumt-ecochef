@@ -28,6 +28,7 @@ import {
   Trash2,
   UserPlus,
   Users,
+  Volume2,
   X,
   ZoomIn,
   ZoomOut,
@@ -37,6 +38,12 @@ import { firebaseAuth } from "../../../src/lib/firebase";
 import { sendVerificationForCurrentUser } from "../../../src/lib/auth";
 import { useVendor, type Shop } from "../components/vendor-context";
 import { StripeConnectCard } from "../components/stripe-connect-card";
+import {
+  loadChatSoundSettings,
+  playChatNotificationSound,
+  saveChatSoundSettings,
+  type ChatSoundSettings,
+} from "../../../src/lib/chat-notification-sound";
 import { ThemedDatePickerControl, ThemedSelectControl } from "../components/themed-controls";
 
 const DRAFT_KEY = "ecochef.vendor.store-onboarding";
@@ -55,7 +62,8 @@ const prefixes = ["+60", "+65", "+62", "+66"];
 const days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
 
 type Phone = { prefix: string; number: string };
-type Hours = Record<string, { open: string; close: string; closed: boolean }>;
+type DayHours = { open: string; close: string; closed: boolean; open24Hours?: boolean };
+type Hours = Record<string, DayHours>;
 type ApiValidationIssue = { field: string; message: string };
 type Draft = {
   slot_order_limit: number;
@@ -133,12 +141,27 @@ const formatTime = (value: string) => {
   const period = hours >= 12 ? "PM" : "AM";
   return `${hours % 12 || 12}:${String(minutes).padStart(2, "0")} ${period}`;
 };
-const hoursDuration = (value: { open: string; close: string; closed: boolean }) => {
+const hoursDuration = (value: DayHours) => {
   if (value.closed) return 0;
+  if (value.open24Hours) return 24;
   const [openHour, openMinute] = value.open.split(":").map(Number),
     [closeHour, closeMinute] = value.close.split(":").map(Number);
-  return Math.max(0, closeHour * 60 + closeMinute - openHour * 60 - openMinute) / 60;
+  const difference = closeHour * 60 + closeMinute - openHour * 60 - openMinute;
+  return (difference < 0 ? difference + 24 * 60 : difference) / 60;
 };
+const hoursSummary = (value: DayHours) => {
+  if (value.closed) return "Closed";
+  if (value.open24Hours) return "Open 24 hours";
+  const overnight = value.close < value.open;
+  return `${formatTime(value.open)} – ${formatTime(value.close)}${overnight ? " next day" : ""}`;
+};
+const hoursMode = (value: DayHours) =>
+  value.closed ? "closed" : value.open24Hours ? "24-hours" : "hours";
+const withHoursMode = (value: DayHours, mode: string): DayHours => ({
+  ...value,
+  closed: mode === "closed",
+  open24Hours: mode === "24-hours",
+});
 const formatDuration = (hours: number) =>
   `${Number.isInteger(hours) ? hours : hours.toFixed(1)} hr${hours === 1 ? "" : "s"}`;
 const normaliseDraft = (value: Partial<Draft> & { helpline_phones?: string[] }): Draft => ({
@@ -409,8 +432,10 @@ export default function StoreProfile() {
     const fields = validateDetails();
     for (const day of days) {
       const hours = draft.operating_hours_schedule[day];
-      if (!hours.closed && (!hours.open || !hours.close || hours.open >= hours.close))
-        fields[`hours.${day}`] = `${day}: closing time must be later than opening time.`;
+      if (!hours.closed && !hours.open24Hours && (!hours.open || !hours.close))
+        fields[`hours.${day}`] = `${day}: enter both an opening and closing time.`;
+      else if (!hours.closed && !hours.open24Hours && hours.open === hours.close)
+        fields[`hours.${day}`] = `${day}: choose Open 24 hours when both times are the same.`;
     }
     const totalHours = days.reduce(
       (total, day) => total + hoursDuration(draft.operating_hours_schedule[day]),
@@ -791,8 +816,8 @@ export default function StoreProfile() {
             </h2>
             <div className="settings-body">
               <p className="hours-guidance">
-                Set when customers can collect their orders. Mark a day closed if your store does
-                not operate that day.
+                Choose regular hours, Open 24 hours, or Closed all day. For overnight trading, enter
+                an earlier closing time—for example, 6:00 PM to 2:00 AM means 2:00 AM the next day.
               </p>
               <label>
                 Maximum orders per 30-minute slot
@@ -830,33 +855,32 @@ export default function StoreProfile() {
                   >
                     <div>
                       <strong>{day}</strong>
-                      <small>
-                        {value.closed
-                          ? "Closed"
-                          : `${formatTime(value.open)} – ${formatTime(value.close)}`}
-                      </small>
+                      <small>{hoursSummary(value)}</small>
                     </div>
-                    <label className="closed-check">
-                      <input
-                        type="checkbox"
-                        checked={value.closed}
+                    <label>
+                      Day status
+                      <select
+                        value={hoursMode(value)}
                         onChange={(event) =>
                           setDraft({
                             ...draft,
                             operating_hours_schedule: {
                               ...draft.operating_hours_schedule,
-                              [day]: { ...value, closed: event.target.checked },
+                              [day]: withHoursMode(value, event.target.value),
                             },
                           })
                         }
-                      />{" "}
-                      Closed
+                      >
+                        <option value="hours">Set opening hours</option>
+                        <option value="24-hours">Open 24 hours</option>
+                        <option value="closed">Closed all day</option>
+                      </select>
                     </label>
                     <div>
                       <div className="time-range">
                         <input
                           type="time"
-                          disabled={value.closed}
+                          disabled={value.closed || value.open24Hours}
                           value={value.open}
                           onChange={(event) =>
                             setDraft({
@@ -871,7 +895,7 @@ export default function StoreProfile() {
                         <span>to</span>
                         <input
                           type="time"
-                          disabled={value.closed}
+                          disabled={value.closed || value.open24Hours}
                           value={value.close}
                           onChange={(event) =>
                             setDraft({
@@ -1099,6 +1123,7 @@ export default function StoreProfile() {
               <LogoUpload draft={draft} upload={upload} showHeading={false} />
               <BackdropUpload draft={draft} upload={uploadBackdrop} />
             </section>
+            <ChatSoundSettingsCard />
           </aside>
         </div>
       ) : (
@@ -1109,6 +1134,10 @@ export default function StoreProfile() {
                 <Clock size={18} /> Operating Hours
               </h2>
               <div className="settings-body">
+                <p className="hours-guidance">
+                  Use Open 24 hours or Closed all day when needed. An earlier closing time means the
+                  next day—for example, 6:00 PM to 2:00 AM.
+                </p>
                 {days.map((day) => {
                   const value = draft.operating_hours_schedule[day];
                   return (
@@ -1116,34 +1145,33 @@ export default function StoreProfile() {
                       <div>
                         <strong>
                           {day}
-                          <em>{value.closed ? "0 hrs" : formatDuration(hoursDuration(value))}</em>
+                          <em>{formatDuration(hoursDuration(value))}</em>
                         </strong>
-                        <small>
-                          {value.closed
-                            ? "Closed"
-                            : `${formatTime(value.open)} – ${formatTime(value.close)}`}
-                        </small>
+                        <small>{hoursSummary(value)}</small>
                       </div>
-                      <label className="closed-check">
-                        <input
-                          type="checkbox"
-                          checked={value.closed}
+                      <label>
+                        Day status
+                        <select
+                          value={hoursMode(value)}
                           onChange={(event) =>
                             setDraft({
                               ...draft,
                               operating_hours_schedule: {
                                 ...draft.operating_hours_schedule,
-                                [day]: { ...value, closed: event.target.checked },
+                                [day]: withHoursMode(value, event.target.value),
                               },
                             })
                           }
-                        />{" "}
-                        Closed
+                        >
+                          <option value="hours">Set opening hours</option>
+                          <option value="24-hours">Open 24 hours</option>
+                          <option value="closed">Closed all day</option>
+                        </select>
                       </label>
                       <div className="time-range">
                         <input
                           type="time"
-                          disabled={value.closed}
+                          disabled={value.closed || value.open24Hours}
                           value={value.open}
                           onChange={(event) =>
                             setDraft({
@@ -1158,7 +1186,7 @@ export default function StoreProfile() {
                         <span>to</span>
                         <input
                           type="time"
-                          disabled={value.closed}
+                          disabled={value.closed || value.open24Hours}
                           value={value.close}
                           onChange={(event) =>
                             setDraft({
@@ -1241,6 +1269,98 @@ export default function StoreProfile() {
         />
       )}
     </main>
+  );
+}
+
+function ChatSoundSettingsCard() {
+  const [settings, setSettings] = useState<ChatSoundSettings>({ enabled: true, volume: 70 });
+  const [error, setError] = useState("");
+  useEffect(() => setSettings(loadChatSoundSettings()), []);
+  const update = (next: ChatSoundSettings) => {
+    setSettings(next);
+    saveChatSoundSettings(next);
+  };
+  const chooseSound = (file?: File) => {
+    if (!file) return;
+    if (!file.type.startsWith("audio/")) {
+      setError("Choose an audio file.");
+      return;
+    }
+    if (file.size > 1024 * 1024) {
+      setError("Custom notification sounds must be 1 MB or smaller.");
+      return;
+    }
+    const reader = new FileReader();
+    reader.onerror = () => setError("The selected sound could not be read.");
+    reader.onload = () => {
+      setError("");
+      update({
+        ...settings,
+        customSound: String(reader.result),
+        customSoundName: file.name,
+      });
+    };
+    reader.readAsDataURL(file);
+  };
+  return (
+    <section className="settings-card chat-sound-card">
+      <h2>
+        <Volume2 size={18} /> Customer Message Sound
+      </h2>
+      <div className="settings-body">
+        <label className="sound-enabled-row">
+          <input
+            type="checkbox"
+            checked={settings.enabled}
+            onChange={(event) => update({ ...settings, enabled: event.target.checked })}
+          />
+          Play a sound for new customer messages
+        </label>
+        <label>
+          Volume: {settings.volume}%
+          <input
+            type="range"
+            min={0}
+            max={100}
+            value={settings.volume}
+            disabled={!settings.enabled}
+            onChange={(event) => update({ ...settings, volume: Number(event.target.value) })}
+          />
+        </label>
+        <label>
+          Custom notification sound
+          <input
+            type="file"
+            accept="audio/*"
+            disabled={!settings.enabled}
+            onChange={(event) => chooseSound(event.target.files?.[0])}
+          />
+          <small>{settings.customSoundName || "Using the EcoChef default sound"}</small>
+        </label>
+        {error ? <small className="inline-field-error">{error}</small> : null}
+        <div className="sound-actions">
+          {settings.customSound ? (
+            <button
+              type="button"
+              className="secondary"
+              onClick={() =>
+                update({ ...settings, customSound: undefined, customSoundName: undefined })
+              }
+            >
+              Use default
+            </button>
+          ) : null}
+          <button
+            type="button"
+            className="secondary"
+            disabled={!settings.enabled || settings.volume === 0}
+            onClick={() => void playChatNotificationSound(settings).catch(() => undefined)}
+          >
+            Test sound
+          </button>
+        </div>
+      </div>
+    </section>
   );
 }
 

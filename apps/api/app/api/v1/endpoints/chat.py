@@ -3,16 +3,14 @@ import binascii
 from typing import Literal
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Response, status
-from pydantic import BaseModel, Field, model_validator
-from sqlalchemy import text
-from sqlalchemy.orm import Session
-
 from app.db.session import get_db_session
 from app.modules.auth.service import require_roles
 from app.modules.notifications.service import create_notification, send_push_notification
 from app.schemas.auth import AccountRole, AuthenticatedUser
-
+from fastapi import APIRouter, Depends, HTTPException, Response, status
+from pydantic import BaseModel, Field, model_validator
+from sqlalchemy import text
+from sqlalchemy.orm import Session
 
 router = APIRouter()
 CurrentChatUser = Depends(require_roles(AccountRole.consumer, AccountRole.business_owner))
@@ -127,6 +125,34 @@ def _message_payload(row: object, order_id: UUID, store_id: UUID) -> dict:
         else None,
         "created_at": row.created_at,
     }
+
+
+@router.get("/vendor/recent")
+def recent_vendor_messages(
+    current_user: AuthenticatedUser = CurrentChatUser,
+    session: Session = Depends(get_db_session),
+) -> dict:
+    if current_user.role != AccountRole.business_owner:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Business account chat list only.")
+    rows = session.execute(
+        text("""
+        SELECT message.id, message.order_id, message.store_id, message.sender_name,
+               message.message_type, message.body, message.attachment_name, message.created_at,
+               store.store_name
+        FROM order_chat_messages message
+        JOIN stores store ON store.id=message.store_id
+        WHERE message.sender_role='consumer'
+          AND (store.business_owner_id=:account_id OR EXISTS (
+            SELECT 1 FROM store_staff_memberships membership
+            WHERE membership.store_id=store.id
+              AND membership.business_account_id=:account_id
+          ))
+        ORDER BY message.created_at DESC, message.id DESC
+        LIMIT 30
+    """),
+        {"account_id": current_user.id},
+    ).mappings()
+    return {"items": [dict(row) for row in rows]}
 
 
 @router.get("/orders/{order_id}")

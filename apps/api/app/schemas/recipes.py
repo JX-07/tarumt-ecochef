@@ -1,13 +1,12 @@
+import unicodedata
 from datetime import date, datetime, time
 from enum import Enum
-import unicodedata
 from uuid import UUID
 
 from pydantic import BaseModel, Field, field_validator, model_validator
+
 from app.services.recipe_ingredient_validation import ingredient_quantity_issues
 
-
-MEAL_TAGS = {"breakfast", "brunch", "lunch", "dinner", "snack", "dessert", "drink", "teatime"}
 DIETARY_FORBIDDEN = {
     "vegan": {
         "beef",
@@ -257,8 +256,6 @@ class RecipeCreate(BaseModel):
         quantity_issues = ingredient_quantity_issues(self.ingredients, self.servings)
         if quantity_issues:
             raise ValueError("Check ingredient quantities: " + " ".join(quantity_issues))
-        if len(MEAL_TAGS.intersection(self.dietary_tags)) > 1:
-            raise ValueError("Choose only one meal type.")
         ingredient_names = [ingredient.name.lower() for ingredient in self.ingredients]
         for diet, forbidden in DIETARY_FORBIDDEN.items():
             if diet not in self.dietary_tags:

@@ -952,6 +952,12 @@ def update_order_status(
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Order is not available for fulfilment.")
     target = request.get("status")
     if target == "cancelled":
+        cancellation_reason = " ".join(str(request.get("cancellation_reason") or "").split())
+        if row.order_status != "cancellation_pending" and len(cancellation_reason.split()) < 10:
+            raise HTTPException(
+                status.HTTP_422_UNPROCESSABLE_ENTITY,
+                "Write a refund message of at least 10 words for the customer.",
+            )
         if row.order_status not in {"placed", "pending", "cancellation_pending"}:
             raise HTTPException(
                 status.HTTP_409_CONFLICT, "Orders can only be cancelled before preparation starts."
@@ -972,14 +978,63 @@ def update_order_status(
                 status.HTTP_409_CONFLICT, "This order does not have a refundable Stripe payment."
             )
         if row.order_status != "cancellation_pending":
+            refund_timing_note = (
+                "Your refund has been requested. The money will be returned to your original "
+                "payment method within 14 days."
+            )
             session.execute(
                 text("""
                 UPDATE orders SET order_status='cancellation_pending',
-                    cancellation_reason='Cancelled by the shop before preparation.' WHERE id=:order_id
+                    cancellation_reason=:reason WHERE id=:order_id
             """),
-                {"order_id": order_id},
+                {"order_id": order_id, "reason": cancellation_reason},
+            )
+            alert_id = session.execute(
+                text("""
+                INSERT INTO order_chat_messages
+                  (order_id, store_id, sender_role, sender_id, sender_name, message_type, body)
+                VALUES
+                  (:order_id, :store_id, 'business_owner', :sender_id, :sender_name,
+                   'delivery_alert', :body)
+                RETURNING id
+            """),
+                {
+                    "order_id": order_id,
+                    "store_id": store_id,
+                    "sender_id": current_user.id,
+                    "sender_name": current_user.name,
+                    "body": f"The shop has cancelled your order. Reason: {cancellation_reason}\n\n{refund_timing_note}",
+                },
+            ).scalar_one()
+            notification_message = (
+                f"The shop cancelled order #{str(order_id)[:8].upper()}. "
+                f"Reason: {cancellation_reason} {refund_timing_note}"
+            )
+            create_notification(
+                session,
+                user_id=row.user_id,
+                category="order",
+                title="Order cancelled — refund processing",
+                message=notification_message,
+                source_key=f"order-refund-processing:{order_id}",
+                action_path=f"/marketplace/order?orderId={order_id}",
+                metadata={
+                    "order_id": str(order_id),
+                    "store_id": str(store_id),
+                    "alert_id": str(alert_id),
+                },
             )
             session.commit()
+            try:
+                send_push_notification(
+                    session,
+                    user_id=row.user_id,
+                    title="Order cancelled — refund processing",
+                    message=notification_message,
+                    action_path=f"/marketplace/order?orderId={order_id}",
+                )
+            except Exception:
+                logger.exception("Could not send refund-processing push for order %s", order_id)
         try:
             refund = stripe_payments.refund_order_payment(
                 payment_intent_id=payment.stripe_payment_intent_id, order_id=order_id

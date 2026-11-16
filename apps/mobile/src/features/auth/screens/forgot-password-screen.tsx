@@ -57,7 +57,10 @@ export function ForgotPasswordScreen() {
     >
       <View style={styles.content}>
         <Pressable
-          style={styles.back}
+          style={({ pressed }) => [
+            styles.back,
+            pressed && { opacity: 0.72, transform: [{ scale: 1.08 }] },
+          ]}
           onPress={() => goBackOrReplace(changePassword ? "/account" : "/(auth)/sign-in")}
           hitSlop={12}
         >

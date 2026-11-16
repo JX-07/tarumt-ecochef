@@ -22,12 +22,17 @@ MONEY = Decimal("0.01")
 
 
 def _push_order_cancellation(session: Session, user_id: UUID, order_id: UUID | str) -> None:
+    reason = session.execute(
+        text("SELECT cancellation_reason FROM orders WHERE id=:order_id"),
+        {"order_id": order_id},
+    ).scalar_one_or_none()
+    reason_copy = f" Reason: {reason}" if reason else ""
     try:
         send_push_notification(
             session,
             user_id=user_id,
             title="Order cancelled and refunded",
-            message=f"Your order #{str(order_id)[:8].upper()} was cancelled by the shop. A full refund was issued to your original payment method.",
+            message=f"Your order #{str(order_id)[:8].upper()} was cancelled by the shop and refunded.{reason_copy}",
             action_path=f"/marketplace/order?orderId={order_id}",
         )
     except Exception:
@@ -374,7 +379,12 @@ def _handle_order_cancellation_refund(refund: Any, session: Session) -> bool:
     payment = session.execute(
         text("""
         SELECT p.id, p.inventory_deducted_at, p.inventory_released_at, o.order_status,
-               o.cancellation_reason, cart.user_id
+               o.cancellation_reason, cart.user_id,
+               (SELECT item.store_id FROM order_items item WHERE item.order_id=o.id LIMIT 1) AS store_id,
+               (SELECT store.business_owner_id FROM order_items item JOIN stores store ON store.id=item.store_id
+                WHERE item.order_id=o.id LIMIT 1) AS business_owner_id,
+               (SELECT store.store_name FROM order_items item JOIN stores store ON store.id=item.store_id
+                WHERE item.order_id=o.id LIMIT 1) AS store_name
         FROM payments p JOIN orders o ON o.id = p.order_id JOIN carts cart ON cart.id=o.cart_id
         WHERE o.id = :order_id AND p.stripe_payment_intent_id = :payment_intent_id
         FOR UPDATE OF p, o
@@ -423,6 +433,23 @@ def _handle_order_cancellation_refund(refund: Any, session: Session) -> bool:
     cancelled_by_customer = str(payment.cancellation_reason or "").startswith(
         "Cancelled by the customer"
     )
+    cancellation_reason = payment.cancellation_reason or "The shop cancelled this order."
+    if not cancelled_by_customer:
+        session.execute(
+            text("""
+            INSERT INTO order_chat_messages
+              (order_id, store_id, sender_role, sender_id, sender_name, message_type, body)
+            VALUES
+              (:order_id, :store_id, 'business_owner', :sender_id, :sender_name, 'delivery_alert', :body)
+        """),
+            {
+                "order_id": order_id,
+                "store_id": payment.store_id,
+                "sender_id": payment.business_owner_id,
+                "sender_name": payment.store_name,
+                "body": f"Order refunded. Reason: {cancellation_reason}",
+            },
+        )
     create_notification(
         session,
         user_id=payment.user_id,
@@ -431,7 +458,7 @@ def _handle_order_cancellation_refund(refund: Any, session: Session) -> bool:
         message=(
             f"Your delayed order #{str(order_id)[:8].upper()} was cancelled. A full refund was issued to your original payment method."
             if cancelled_by_customer
-            else f"Your order #{str(order_id)[:8].upper()} was cancelled by the shop. A full refund was issued to your original payment method."
+            else f"Your order #{str(order_id)[:8].upper()} was cancelled by the shop and refunded. Reason: {cancellation_reason}"
         ),
         source_key=f"order-cancelled:{order_id}",
         action_path=f"/marketplace/order?orderId={order_id}",

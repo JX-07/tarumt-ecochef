@@ -10,6 +10,7 @@ import type {
   MarketplaceSlotAvailability,
 } from "@ecochef/contracts";
 import * as Linking from "expo-linking";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -49,6 +50,12 @@ const runtimeProcess = (globalThis as { process?: { env?: Record<string, string 
 const stripePublishableKey = runtimeProcess?.env?.EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY;
 const stripeFormUrl = `${apiBaseUrl.replace(/\/$/, "")}/stripe/checkout-form`;
 type FulfillmentMethod = "delivery" | "pickup";
+const ORDER_TIME_TOO_SOON =
+  "Schedule at least 30 minutes in the future for preparation and travel.";
+const isCurrentShopClosure = (reason?: string | null) =>
+  reason?.toLowerCase().includes("closed today") ?? false;
+const activeOrderStorageKey = (uid?: string) =>
+  `ecochef.active-marketplace-order.${uid ?? "guest"}`;
 const destinationKey = (addressId?: string, fulfillmentMethod: FulfillmentMethod = "delivery") => {
   if (fulfillmentMethod === "pickup") return "pickup";
   const temporary = getMarketplaceTemporaryLocation();
@@ -78,10 +85,15 @@ export function CartScreen() {
   );
   const [timeOpen, setTimeOpen] = useState(false);
   const [arrivalAt, setArrivalAt] = useState(getMarketplaceArrival());
+  const [orderTimeNow, setOrderTimeNow] = useState(Date.now());
   const [cart, setCart] = useState<MarketplaceCart>();
   const [profile, setProfile] = useState<ConsumerProfile>();
   const [addressId, setAddressId] = useState(params.addressId);
   const [promo, setPromo] = useState("");
+  const [promoFeedback, setPromoFeedback] = useState<{
+    tone: "success" | "error";
+    message: string;
+  }>();
   const [busy, setBusy] = useState<string>();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -175,56 +187,58 @@ export function CartScreen() {
       return () => clearInterval(timer);
     }, [load]),
   );
-
-  const waitForCheckout = useCallback(
-    async (orderId: string) => {
-      let latest: MarketplaceCheckoutStatus | undefined;
-      for (let attempt = 0; attempt < 10; attempt += 1) {
-        latest = await api.getMarketplaceCheckoutStatus<MarketplaceCheckoutStatus>(orderId);
-        if (["paid", "failed", "refunded", "disputed"].includes(latest.payment_status))
-          return latest;
-        await new Promise((resolve) => setTimeout(resolve, 750));
-      }
-      return latest;
-    },
-    [api],
-  );
+  useEffect(() => {
+    if (!arrivalAt) return;
+    setOrderTimeNow(Date.now());
+    const timer = setInterval(() => setOrderTimeNow(Date.now()), 15_000);
+    return () => clearInterval(timer);
+  }, [arrivalAt]);
 
   const showCheckoutResult = useCallback(
-    async (orderId: string) => {
-      const result = await waitForCheckout(orderId);
-      acceptCart(
-        await api.getMarketplaceCart<MarketplaceCart>(
+    (orderId: string) => {
+      invalidateMarketplaceCartOptimisticUpdates();
+      setPaymentSession(undefined);
+      void AsyncStorage.setItem(
+        activeOrderStorageKey(user?.uid),
+        JSON.stringify({
+          id: orderId,
+          shop:
+            [...new Set((cart?.items ?? []).map((item) => item.store_name))].join(", ") ||
+            "EcoChef Marketplace",
+          order_date: new Date().toISOString(),
+          status: "placed",
+          payment_status: "paid",
+          fulfillment_method: fulfillmentMethod,
+          estimated_delivery_minutes: cart?.estimated_delivery_minutes ?? 30,
+        }),
+      );
+      void api
+        .getMarketplaceCart<MarketplaceCart>(
           addressId,
           getMarketplaceTemporaryLocation(),
           params.storeId,
-        ),
-      );
-      if (result?.payment_status === "paid") {
-        router.replace({
-          pathname: "/marketplace/order" as never,
-          params: {
-            orderId,
-            fulfillment: fulfillmentMethod,
-            estimate: String(cart?.estimated_delivery_minutes ?? 30),
-          },
-        } as never);
-      } else if (result?.payment_status === "failed") {
-        setMessage({
-          title: "Payment not completed",
-          message: "Payment was not completed. Check your basket before trying again.",
-          tone: "error",
-        });
-      } else {
-        setMessage({
-          title: "Payment confirmation pending",
-          message:
-            "Stripe is still confirming the test payment. You can check the order again shortly.",
-          tone: "info",
-        });
-      }
+        )
+        .then(acceptCart)
+        .catch(() => undefined);
+      router.replace({
+        pathname: "/marketplace/order" as never,
+        params: {
+          orderId,
+          fulfillment: fulfillmentMethod,
+          estimate: String(cart?.estimated_delivery_minutes ?? 30),
+        },
+      } as never);
     },
-    [acceptCart, api, cart?.estimated_delivery_minutes, fulfillmentMethod, waitForCheckout],
+    [
+      acceptCart,
+      addressId,
+      api,
+      cart?.estimated_delivery_minutes,
+      cart?.items,
+      fulfillmentMethod,
+      params.storeId,
+      user?.uid,
+    ],
   );
 
   const simulatePayment = useCallback(async () => {
@@ -236,14 +250,29 @@ export function CartScreen() {
       const result = await api.simulateMarketplacePayment<MarketplaceCheckoutStatus>(
         paymentSession.orderId,
       );
-      acceptCart(
-        await api.getMarketplaceCart<MarketplaceCart>(
+      void api
+        .getMarketplaceCart<MarketplaceCart>(
           addressId,
           getMarketplaceTemporaryLocation(),
           params.storeId,
-        ),
-      );
+        )
+        .then(acceptCart)
+        .catch(() => undefined);
       setPaymentSession(undefined);
+      void AsyncStorage.setItem(
+        activeOrderStorageKey(user?.uid),
+        JSON.stringify({
+          id: result.order_id,
+          shop:
+            [...new Set((cart?.items ?? []).map((item) => item.store_name))].join(", ") ||
+            "EcoChef Marketplace",
+          order_date: new Date().toISOString(),
+          status: result.order_status || "placed",
+          payment_status: result.payment_status || "paid",
+          fulfillment_method: fulfillmentMethod,
+          estimated_delivery_minutes: cart?.estimated_delivery_minutes ?? 30,
+        }),
+      );
       router.replace({
         pathname: "/marketplace/order" as never,
         params: {
@@ -257,7 +286,18 @@ export function CartScreen() {
     } finally {
       setBusy(undefined);
     }
-  }, [acceptCart, api, busy, cart?.estimated_delivery_minutes, fulfillmentMethod, paymentSession]);
+  }, [
+    acceptCart,
+    addressId,
+    api,
+    busy,
+    cart?.estimated_delivery_minutes,
+    cart?.items,
+    fulfillmentMethod,
+    params.storeId,
+    paymentSession,
+    user?.uid,
+  ]);
 
   useEffect(() => {
     if (
@@ -268,11 +308,8 @@ export function CartScreen() {
       return;
     handledCheckout.current = params.order_id;
     setBusy("checkout");
-    void showCheckoutResult(params.order_id)
-      .catch((reason) =>
-        setError(reason instanceof Error ? reason.message : "Payment status could not be loaded."),
-      )
-      .finally(() => setBusy(undefined));
+    showCheckoutResult(params.order_id);
+    setBusy(undefined);
   }, [params.checkout, params.order_id, showCheckoutResult]);
 
   const grouped = useMemo(() => {
@@ -305,14 +342,23 @@ export function CartScreen() {
     }
   };
   const applyPromo = async () => {
-    if (!promo.trim() || busy || paymentSession) return;
+    if (busy || paymentSession) return;
+    if (!promo.trim()) {
+      setPromoFeedback({ tone: "error", message: "Enter a promo code first." });
+      return;
+    }
     setBusy("promo");
     setError(undefined);
+    setPromoFeedback(undefined);
     try {
       await api.applyMarketplacePromo<MarketplaceCart>(promo, params.storeId);
       acceptCart(await getPricedCart());
+      setPromoFeedback({ tone: "success", message: "Code applied successfully" });
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "This promo code could not be applied.");
+      setPromoFeedback({
+        tone: "error",
+        message: reason instanceof Error ? reason.message : "This promo code could not be applied.",
+      });
     } finally {
       setBusy(undefined);
     }
@@ -320,18 +366,23 @@ export function CartScreen() {
   const removePromo = async () => {
     if (busy || paymentSession) return;
     setBusy("promo");
+    setPromoFeedback(undefined);
     try {
       await api.removeMarketplacePromo<MarketplaceCart>();
       acceptCart(await getPricedCart());
       setPromo("");
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "The promotion could not be removed.");
+      setPromoFeedback({
+        tone: "error",
+        message: reason instanceof Error ? reason.message : "The promotion could not be removed.",
+      });
     } finally {
       setBusy(undefined);
     }
   };
   const placeOrder = useCallback(async () => {
     const temporaryLocation = getMarketplaceTemporaryLocation();
+    const scheduledArrival = getMarketplaceArrival();
     if (fulfillmentMethod === "delivery" && !addressId && !temporaryLocation) {
       setMessage({
         title: "Delivery address required",
@@ -341,8 +392,21 @@ export function CartScreen() {
       return;
     }
     if (busy || paymentSession || !cart?.items.length) return;
-    if (cart.checkout_blocked_reason) {
-      setError(cart.checkout_blocked_reason);
+    if (scheduledArrival && new Date(scheduledArrival).getTime() < Date.now() + 30 * 60 * 1000) {
+      setMessage({
+        title: "Choose a later delivery time",
+        message: ORDER_TIME_TOO_SOON,
+        tone: "info",
+      });
+      setTimeOpen(true);
+      return;
+    }
+    const checkoutBlockedReason =
+      scheduledArrival && isCurrentShopClosure(cart.checkout_blocked_reason)
+        ? undefined
+        : cart.checkout_blocked_reason;
+    if (checkoutBlockedReason) {
+      setError(checkoutBlockedReason);
       return;
     }
     if (new Set(cart?.items.map((item) => item.product.store_id)).size > 1) {
@@ -360,7 +424,7 @@ export function CartScreen() {
             : { fulfillment_method: "delivery" as const, address_id: addressId as string };
       const result = await api.checkoutMarketplace<MarketplaceCheckoutResult>(
         checkoutRequest,
-        getMarketplaceArrival(),
+        scheduledArrival,
         params.storeId,
       );
       handledCheckout.current = result.order_id;
@@ -371,11 +435,35 @@ export function CartScreen() {
         simulationAvailable: result.simulation_available,
       });
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "The order could not be placed.");
+      const checkoutError =
+        reason instanceof Error ? reason.message : "The order could not be placed.";
+      if (
+        checkoutError.toLowerCase().includes("30 minutes") ||
+        checkoutError.toLowerCase().includes("later window")
+      ) {
+        setOrderTimeNow(Date.now());
+        setMessage({
+          title: "Choose a later delivery time",
+          message: checkoutError.replace(/^body:\s*/i, "").replace(/^Value error,\s*/i, ""),
+          tone: "info",
+        });
+        setTimeOpen(true);
+      } else {
+        setError(checkoutError);
+      }
     } finally {
       setBusy(undefined);
     }
-  }, [addressId, api, fulfillmentMethod, busy, paymentSession, cart?.items, params.storeId]);
+  }, [
+    addressId,
+    api,
+    fulfillmentMethod,
+    busy,
+    paymentSession,
+    cart?.items,
+    cart?.checkout_blocked_reason,
+    params.storeId,
+  ]);
 
   const chooseFulfillment = (next: FulfillmentMethod) => {
     if (next === fulfillmentMethod || busy || paymentSession) return;
@@ -411,6 +499,13 @@ export function CartScreen() {
     fulfillmentMethod === "pickup"
       ? Number(cart?.total ?? 0) - Number(cart?.delivery_fee ?? 0)
       : Number(cart?.total ?? 0);
+  const orderTimeTooSoon = Boolean(
+    arrivalAt && new Date(arrivalAt).getTime() < orderTimeNow + 30 * 60 * 1000,
+  );
+  const checkoutBlockedReason =
+    arrivalAt && isCurrentShopClosure(cart?.checkout_blocked_reason)
+      ? undefined
+      : cart?.checkout_blocked_reason;
 
   return (
     <View style={styles.root}>
@@ -433,7 +528,10 @@ export function CartScreen() {
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Back"
-            style={styles.back}
+            style={({ pressed }) => [
+              styles.back,
+              pressed && { opacity: 0.72, transform: [{ scale: 1.08 }] },
+            ]}
             onPress={() => router.back()}
           >
             <Ionicons name="chevron-back" size={spacing[6]} color={colors.text} />
@@ -466,9 +564,9 @@ export function CartScreen() {
           </View>
         ) : (
           <>
-            {cart.checkout_blocked_reason ? (
+            {checkoutBlockedReason ? (
               <Text accessibilityRole="alert" style={styles.errorText}>
-                {cart.checkout_blocked_reason}
+                {checkoutBlockedReason}
               </Text>
             ) : null}
             <Text style={styles.orderSummaryTitle}>Order Summary</Text>
@@ -627,7 +725,7 @@ export function CartScreen() {
                   accessibilityRole="button"
                   disabled={!!busy || !!paymentSession}
                   onPress={() => setTimeOpen(true)}
-                  style={styles.address}
+                  style={[styles.address, orderTimeTooSoon && styles.orderTimeErrorBorder]}
                 >
                   <Ionicons name="time-outline" size={spacing[5]} color={colors.primaryStrong} />
                   <View style={styles.addressCopy}>
@@ -645,13 +743,21 @@ export function CartScreen() {
                     <Text style={styles.addressText}>Malaysia time · Change arrival window</Text>
                   </View>
                 </Pressable>
+                {orderTimeTooSoon ? (
+                  <Text accessibilityRole="alert" style={styles.orderTimeError}>
+                    {ORDER_TIME_TOO_SOON}
+                  </Text>
+                ) : null}
               </>
             }
             <Text style={styles.section}>PROMO CODE</Text>
             <View style={styles.promoRow}>
               <TextInput
                 value={promo}
-                onChangeText={setPromo}
+                onChangeText={(value) => {
+                  setPromo(value);
+                  setPromoFeedback(undefined);
+                }}
                 editable={!cart.applied_promo && !busy && !paymentSession}
                 autoCapitalize="characters"
                 placeholder="Enter promo code"
@@ -661,11 +767,29 @@ export function CartScreen() {
               <Pressable
                 disabled={!!busy || !!paymentSession}
                 onPress={() => void (cart.applied_promo ? removePromo() : applyPromo())}
-                style={({ pressed }) => [styles.apply, pressed && styles.primaryPressed]}
+                style={({ pressed }) => [
+                  styles.apply,
+                  cart.applied_promo && styles.removePromo,
+                  pressed &&
+                    (cart.applied_promo ? styles.removePromoPressed : styles.primaryPressed),
+                ]}
               >
                 <Text style={styles.applyText}>{cart.applied_promo ? "Remove" : "Apply"}</Text>
               </Pressable>
             </View>
+            {promoFeedback ? (
+              <Text
+                accessibilityLiveRegion="polite"
+                style={[
+                  styles.promoFeedback,
+                  promoFeedback.tone === "success"
+                    ? styles.promoFeedbackSuccess
+                    : styles.promoFeedbackError,
+                ]}
+              >
+                {promoFeedback.message}
+              </Text>
+            ) : null}
             <View style={styles.paymentSectionTitle}>
               <Text style={styles.section}>PAYMENT METHOD</Text>
             </View>
@@ -674,18 +798,19 @@ export function CartScreen() {
                 accessibilityRole="button"
                 disabled={
                   !!busy ||
-                  !!cart.checkout_blocked_reason ||
+                  !!checkoutBlockedReason ||
+                  orderTimeTooSoon ||
                   new Set(cart.items.map((item) => item.product.store_id)).size > 1
                 }
                 onPress={() => void placeOrder()}
                 style={[
                   styles.apply,
-                  !!cart.checkout_blocked_reason && { opacity: 0.4 },
+                  (!!checkoutBlockedReason || orderTimeTooSoon) && { opacity: 0.4 },
                   { padding: spacing[4], marginTop: spacing[3] },
                 ]}
               >
                 <Text style={styles.applyText}>
-                  {cart.checkout_blocked_reason
+                  {checkoutBlockedReason
                     ? "Shop closed today"
                     : new Set(cart.items.map((item) => item.product.store_id)).size > 1
                       ? "Check out one shop at a time"
@@ -735,11 +860,7 @@ export function CartScreen() {
                           setError(payload.message ?? "Stripe could not load the payment form.");
                         if (payload.type === "confirmed") {
                           invalidateMarketplaceCartOptimisticUpdates();
-                          setBusy("checkout");
-                          void showCheckoutResult(paymentSession.orderId).finally(() => {
-                            setBusy(undefined);
-                            setPaymentSession(undefined);
-                          });
+                          showCheckoutResult(paymentSession.orderId);
                         }
                       } catch {
                         setError("Stripe returned an invalid payment-form response.");
@@ -771,6 +892,7 @@ export function CartScreen() {
         onSelect={(value) => {
           setMarketplaceArrival(value);
           setArrivalAt(value);
+          setOrderTimeNow(Date.now());
         }}
         onClearCart={() => undefined}
         onClose={() => setTimeOpen(false)}
@@ -1015,6 +1137,14 @@ const styles = StyleSheet.create({
     fontSize: textSize.caption,
     lineHeight: spacing[4],
   },
+  orderTimeErrorBorder: { borderColor: colors.danger },
+  orderTimeError: {
+    marginTop: spacing[2],
+    color: colors.danger,
+    fontSize: textSize.caption,
+    fontWeight: textWeight.bold,
+    lineHeight: spacing[4],
+  },
   promoRow: { flexDirection: "row", gap: spacing[2] },
   promoInput: {
     flex: 1,
@@ -1034,7 +1164,16 @@ const styles = StyleSheet.create({
     borderRadius: spacing[3],
     backgroundColor: colors.primary,
   },
+  removePromo: { backgroundColor: colors.danger },
+  removePromoPressed: { backgroundColor: colors.danger },
   applyText: { color: colors.surface, fontSize: textSize.caption, fontWeight: textWeight.bold },
+  promoFeedback: {
+    marginTop: spacing[2],
+    fontSize: textSize.caption,
+    fontWeight: textWeight.bold,
+  },
+  promoFeedbackSuccess: { color: colors.success },
+  promoFeedbackError: { color: colors.danger },
   paymentSectionTitle: {
     flexDirection: "row",
     alignItems: "center",

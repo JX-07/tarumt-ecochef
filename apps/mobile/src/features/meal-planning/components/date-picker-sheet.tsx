@@ -79,7 +79,13 @@ export function DatePickerSheet({
             </Pressable>
           </View>
           <View style={styles.monthHead}>
-            <Pressable style={styles.arrow} onPress={() => move(-1)}>
+            <Pressable
+              style={({ pressed }) => [
+                styles.arrow,
+                pressed && { opacity: 0.72, transform: [{ scale: 0.92 }] },
+              ]}
+              onPress={() => move(-1)}
+            >
               <Ionicons name="chevron-back" size={20} color={palette.c647184} />
             </Pressable>
             <Text style={styles.month}>

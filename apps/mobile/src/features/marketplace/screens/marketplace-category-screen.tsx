@@ -160,7 +160,10 @@ export function MarketplaceCategoryScreen() {
             accessibilityRole="button"
             accessibilityLabel="Back to store"
             onPress={() => router.back()}
-            style={styles.back}
+            style={({ pressed }) => [
+              styles.back,
+              pressed && { opacity: 0.72, transform: [{ scale: 1.08 }] },
+            ]}
           >
             <Ionicons name="chevron-back" size={22} color={colors.text} />
           </Pressable>

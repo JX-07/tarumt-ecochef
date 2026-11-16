@@ -21,6 +21,28 @@ export function recipeDefaultMealSlot(tags: string[]): MealSlot {
   return "breakfast";
 }
 
+export function recipeMealSlots(tags: string[]): MealSlot[] {
+  const slots = new Set<MealSlot>();
+  tags.forEach((tag) => {
+    const normalized = tag.trim().toLowerCase();
+    const slot =
+      normalized === "snack"
+        ? "snacks"
+        : normalized === "drink" ||
+            normalized === "breakfast" ||
+            normalized === "brunch" ||
+            normalized === "lunch" ||
+            normalized === "teatime" ||
+            normalized === "dinner" ||
+            normalized === "dessert" ||
+            normalized === "snacks"
+          ? normalized
+          : undefined;
+    if (slot) slots.add(slot);
+  });
+  return [...slots];
+}
+
 export const recipeMealTypes: ReadonlyArray<RecipeTagOption> = [
   ["🥤", "Drink"],
   ["🌅", "Breakfast"],

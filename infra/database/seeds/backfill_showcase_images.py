@@ -60,6 +60,25 @@ PRODUCT_PHOTOS = {
     "Sourdough Loaf": 33972459,
 }
 
+# Product records can share a catalogue name across shops, but each visible shop
+# item should still have its own photograph. These entries replace only known
+# duplicate URLs and are keyed by store as well as product name.
+UNIQUE_PRODUCT_PHOTOS = {
+    ("Always TT Fresh", "Breakfast Fruit Basket"): 32552098,
+    ("Always TT Fresh", "Capsicum"): 5620899,
+    ("Always TT Fresh", "Fresh Fruit Selection Box"): 10490101,
+    ("Always TT Fresh", "Royal Gala Apples 4 Pack"): 4110501,
+    ("Always TT Fresh", "Seasonal Citrus Box"): 27861254,
+    ("Always TT Fresh", "Tropical Fruit Mix"): 31387472,
+    ("Eco Fresh Produce", "Breakfast Fruit Basket"): 40538629,
+    ("Eco Fresh Produce", "Capsicum"): 11123495,
+    ("Eco Fresh Produce", "Fresh Fruit Selection Box"): 10343579,
+    ("Eco Fresh Produce", "Royal Gala Apples 4 Pack"): 9541084,
+    ("Eco Fresh Produce", "Seasonal Citrus Box"): 7081087,
+    ("Eco Fresh Produce", "Tropical Fruit Mix"): 1128678,
+    ("Green Basket Market", "Fuji Apple Bag"): 5323541,
+}
+
 STORE_COVER_PHOTO = 36289943
 ICON_STORES = ("Green Basket Market", "Eco Fresh Produce")
 
@@ -189,9 +208,14 @@ def missing_records(connection: psycopg.Connection) -> tuple[list, list, list, l
         )
         recipes = cursor.fetchall()
         cursor.execute(
-            "SELECT p.id, s.business_owner_id, p.product_name FROM products p "
-            "JOIN stores s ON s.id = p.store_id WHERE p.image_url IS NULL OR "
-            "btrim(p.image_url) = '' ORDER BY p.product_name, p.id"
+            "WITH duplicate_urls AS ("
+            "  SELECT image_url FROM products WHERE image_url IS NOT NULL "
+            "  AND btrim(image_url) <> '' GROUP BY image_url HAVING count(*) > 1"
+            ") SELECT p.id, s.business_owner_id, s.store_name, p.product_name, p.image_url "
+            "FROM products p JOIN stores s ON s.id = p.store_id "
+            "LEFT JOIN duplicate_urls duplicate ON duplicate.image_url = p.image_url "
+            "WHERE p.image_url IS NULL OR btrim(p.image_url) = '' OR duplicate.image_url IS NOT NULL "
+            "ORDER BY s.store_name, p.product_name, p.id"
         )
         products = cursor.fetchall()
         cursor.execute(
@@ -221,7 +245,21 @@ def main() -> None:
     with psycopg.connect(database_url, row_factory=dict_row) as connection:
         recipes, products, stores, ingredients = missing_records(connection)
         unknown_recipes = sorted({r["title"] for r in recipes} - RECIPE_PHOTOS.keys())
-        unknown_products = sorted({p["product_name"] for p in products} - PRODUCT_PHOTOS.keys())
+        products = [
+            product
+            for product in products
+            if not product.get("image_url")
+            or (product["store_name"], product["product_name"]) in UNIQUE_PRODUCT_PHOTOS
+        ]
+        unknown_products = sorted(
+            {
+                product["product_name"]
+                for product in products
+                if product["product_name"] not in PRODUCT_PHOTOS
+                and (product["store_name"], product["product_name"])
+                not in UNIQUE_PRODUCT_PHOTOS
+            }
+        )
         unknown_ingredients = sorted(
             {
                 i["ingredient_name"]
@@ -247,7 +285,12 @@ def main() -> None:
 
         needed_photos = {
             *(RECIPE_PHOTOS[r["title"]] for r in recipes),
-            *(PRODUCT_PHOTOS[p["product_name"]] for p in products),
+            *(
+                UNIQUE_PRODUCT_PHOTOS.get(
+                    (p["store_name"], p["product_name"]), PRODUCT_PHOTOS.get(p["product_name"])
+                )
+                for p in products
+            ),
             *(STORE_COVER_PHOTO for s in stores if not s["cover_image_url"]),
         }
         with ThreadPoolExecutor(max_workers=4) as pool:
@@ -268,6 +311,10 @@ def main() -> None:
                     (f"{API_BASE}/recipes/images/{image_id}", recipe["id"]),
                 )
             for product in products:
+                photo_id = UNIQUE_PRODUCT_PHOTOS.get(
+                    (product["store_name"], product["product_name"]),
+                    PRODUCT_PHOTOS.get(product["product_name"]),
+                )
                 image_id = uuid4()
                 cursor.execute(
                     "INSERT INTO product_images (id, uploaded_by, content_type, image_data) "
@@ -275,12 +322,11 @@ def main() -> None:
                     (
                         image_id,
                         product["business_owner_id"],
-                        images[PRODUCT_PHOTOS[product["product_name"]]],
+                        images[photo_id],
                     ),
                 )
                 cursor.execute(
-                    "UPDATE products SET image_url = %s WHERE id = %s AND "
-                    "(image_url IS NULL OR btrim(image_url) = '')",
+                    "UPDATE products SET image_url = %s WHERE id = %s",
                     (f"{API_BASE}/vendor/product-images/{image_id}", product["id"]),
                 )
             for store in stores:

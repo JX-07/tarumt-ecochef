@@ -1,9 +1,14 @@
 "use client";
 
-import { Save, UserPen } from "lucide-react";
+import { Camera, Save, UserPen, UserRound } from "lucide-react";
 import { FormEvent, useEffect, useState } from "react";
 
 import { createAuthenticatedWebApi } from "../../../src/lib/api";
+import {
+  loadProfileImage,
+  prepareProfileImage,
+  saveProfileImage,
+} from "../../../src/lib/profile-image";
 
 type AdministratorProfile = {
   id: string;
@@ -18,6 +23,7 @@ export default function AdministratorProfilePage() {
   const [name, setName] = useState("");
   const [message, setMessage] = useState<{ tone: "success" | "error"; text: string }>();
   const [saving, setSaving] = useState(false);
+  const [profileImage, setProfileImage] = useState<string | null>(null);
 
   useEffect(() => {
     createAuthenticatedWebApi("/api/ecochef")
@@ -33,6 +39,22 @@ export default function AdministratorProfilePage() {
         }),
       );
   }, []);
+  useEffect(() => setProfileImage(loadProfileImage("admin")), []);
+
+  const changeImage = async (file?: File) => {
+    if (!file) return;
+    try {
+      const image = await prepareProfileImage(file);
+      saveProfileImage("admin", image);
+      setProfileImage(image);
+      setMessage({ tone: "success", text: "Your administrator profile image was updated." });
+    } catch (reason) {
+      setMessage({
+        tone: "error",
+        text: reason instanceof Error ? reason.message : "The profile image could not be saved.",
+      });
+    }
+  };
 
   const save = async (event: FormEvent) => {
     event.preventDefault();
@@ -78,6 +100,23 @@ export default function AdministratorProfilePage() {
           </div>
         </header>
         <div className="admin-profile-form-body">
+          <label className="profile-image-picker">
+            <span className="profile-image-preview">
+              {profileImage ? (
+                <img src={profileImage} alt="Administrator profile" />
+              ) : (
+                <UserRound />
+              )}
+            </span>
+            <span>
+              <Camera size={16} /> Change profile image
+            </span>
+            <input
+              type="file"
+              accept="image/png,image/jpeg,image/webp"
+              onChange={(event) => void changeImage(event.target.files?.[0])}
+            />
+          </label>
           <label>
             Display name
             <input

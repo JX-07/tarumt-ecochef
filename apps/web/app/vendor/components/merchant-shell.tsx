@@ -20,6 +20,8 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { createAuthenticatedWebApi } from "../../../src/lib/api";
 import { signOutCurrentUser } from "../../../src/lib/auth";
+import { loadProfileImage, profileImageEvent } from "../../../src/lib/profile-image";
+import { playChatNotificationSound } from "../../../src/lib/chat-notification-sound";
 import { useVendor } from "./vendor-context";
 
 type ReportOutcome = {
@@ -36,6 +38,17 @@ type Invitation = {
   assigned_role: string;
   can_edit_store: boolean;
   invited_by_name: string;
+};
+type ChatNotice = {
+  id: string;
+  order_id: string;
+  store_id: string;
+  store_name: string;
+  sender_name: string;
+  message_type: "text" | "photo" | "pdf";
+  body?: string;
+  attachment_name?: string;
+  created_at: string;
 };
 const groups = [
   {
@@ -69,6 +82,11 @@ export function MerchantShell({ children }: { children: React.ReactNode }) {
   const [signingOut, setSigningOut] = useState(false);
   const [signOutError, setSignOutError] = useState("");
   const [notice, setNotice] = useState("");
+  const [profileImage, setProfileImage] = useState<string | null>(null);
+  const [chatNotices, setChatNotices] = useState<ChatNotice[]>([]);
+  const [unseenChatIds, setUnseenChatIds] = useState<Set<string>>(new Set());
+  const chatLoaded = useRef(false);
+  const notifiedChatIds = useRef<Set<string>>(new Set());
   const notificationRoot = useRef<HTMLDivElement>(null);
   const profileRoot = useRef<HTMLDivElement>(null);
   const currentDate = new Date().toLocaleDateString("en-MY", {
@@ -92,6 +110,47 @@ export function MerchantShell({ children }: { children: React.ReactNode }) {
       .getVendorInvitations<{ invitations: Invitation[] }>()
       .then((result) => setInvitations(result.invitations))
       .catch(() => undefined);
+  useEffect(() => {
+    setProfileImage(loadProfileImage("business"));
+    const updateImage = (event: Event) => setProfileImage((event as CustomEvent<string>).detail);
+    window.addEventListener(profileImageEvent("business"), updateImage);
+    return () => window.removeEventListener(profileImageEvent("business"), updateImage);
+  }, []);
+  useEffect(() => {
+    let active = true;
+    const refreshChats = () =>
+      void createAuthenticatedWebApi("/api/ecochef")
+        .getRecentVendorChatMessages<{ items: ChatNotice[] }>()
+        .then((result) => {
+          if (!active) return;
+          setChatNotices(result.items);
+          const stored = new Set<string>(
+            JSON.parse(localStorage.getItem("ecochef.vendor.seen-chat-messages") || "[]"),
+          );
+          if (!chatLoaded.current) {
+            chatLoaded.current = true;
+            notifiedChatIds.current = new Set(result.items.map((item) => item.id));
+            setUnseenChatIds(
+              new Set(result.items.filter((item) => !stored.has(item.id)).map((item) => item.id)),
+            );
+            return;
+          }
+          const unseenItems = result.items.filter((item) => !stored.has(item.id));
+          const newItems = unseenItems.filter((item) => !notifiedChatIds.current.has(item.id));
+          setUnseenChatIds(new Set(unseenItems.map((item) => item.id)));
+          if (newItems.length) {
+            newItems.forEach((item) => notifiedChatIds.current.add(item.id));
+            void playChatNotificationSound().catch(() => undefined);
+          }
+        })
+        .catch(() => undefined);
+    refreshChats();
+    const timer = setInterval(refreshChats, 5000);
+    return () => {
+      active = false;
+      clearInterval(timer);
+    };
+  }, []);
   useEffect(() => {
     void loadInvitations();
     const refresh = () =>
@@ -168,17 +227,44 @@ export function MerchantShell({ children }: { children: React.ReactNode }) {
                 aria-label="Notifications"
                 aria-expanded={notificationOpen}
                 onClick={() => {
-                  setNotificationOpen((open) => !open);
+                  setNotificationOpen((open) => {
+                    const next = !open;
+                    if (next && chatNotices.length) {
+                      localStorage.setItem(
+                        "ecochef.vendor.seen-chat-messages",
+                        JSON.stringify(chatNotices.map((item) => item.id)),
+                      );
+                      setUnseenChatIds(new Set());
+                    }
+                    return next;
+                  });
                   setProfileOpen(false);
                 }}
               >
                 <Bell size={18} />
-                {(invitations.length > 0 || reportOutcomes.length > 0) && <i />}
+                {(invitations.length > 0 ||
+                  reportOutcomes.length > 0 ||
+                  unseenChatIds.size > 0) && <i />}
               </button>
               {notificationOpen && (
                 <section className="topbar-popover notification-popover">
                   <h2>Notifications</h2>
                   {notice && <p className="notification-success">{notice}</p>}
+                  {chatNotices.map((item) => (
+                    <article key={item.id}>
+                      <strong>New message from {item.sender_name}</strong>
+                      <p>
+                        {item.message_type === "text"
+                          ? item.body
+                          : item.message_type === "photo"
+                            ? `Photo: ${item.attachment_name || "image"}`
+                            : `Document: ${item.attachment_name || "PDF"}`}
+                      </p>
+                      <small>
+                        {item.store_name} · Order #{item.order_id.slice(0, 8).toUpperCase()}
+                      </small>
+                    </article>
+                  ))}
                   {reportOutcomes.map((item) => (
                     <article key={item.id}>
                       <strong>Report confirmed · {item.category.replaceAll("_", " ")}</strong>
@@ -204,7 +290,7 @@ export function MerchantShell({ children }: { children: React.ReactNode }) {
                         </button>
                       </article>
                     ))
-                  ) : !reportOutcomes.length ? (
+                  ) : !reportOutcomes.length && !chatNotices.length ? (
                     <p>No new notifications.</p>
                   ) : null}
                 </section>
@@ -221,7 +307,7 @@ export function MerchantShell({ children }: { children: React.ReactNode }) {
                 }}
               >
                 <span className="merchant-avatar">
-                  <UserRound size={19} />
+                  {profileImage ? <img src={profileImage} alt="" /> : <UserRound size={19} />}
                 </span>
                 <strong>
                   {ownerName}

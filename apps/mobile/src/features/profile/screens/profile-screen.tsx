@@ -426,14 +426,14 @@ export function ProfileScreen() {
 
     try {
       const owner = user?.uid ?? "guest";
-      const destination = `${FileSystem.documentDirectory}ecochef-avatar-${owner}.jpg`;
-      await FileSystem.deleteAsync(destination, { idempotent: true });
+      const destination = `${FileSystem.documentDirectory}ecochef-avatar-${owner}-${Date.now()}.jpg`;
       await FileSystem.copyAsync({ from: result.assets[0].uri, to: destination });
       await AsyncStorage.multiSet([
         [`ecochef.profile.avatar.${owner}`, destination],
         [`ecochef.profile.avatar-date.${owner}`, today],
       ]);
       setAvatarUri(destination);
+      if (avatarUri) void FileSystem.deleteAsync(avatarUri, { idempotent: true });
       setLastAvatarChange(today);
       setMessage("Profile photo updated successfully. You can change it again tomorrow.");
     } catch {
@@ -627,13 +627,14 @@ export function ProfileScreen() {
             <>
               <View style={styles.pageHeading}>
                 <Pressable
-                  style={[
+                  style={({ pressed }) => [
                     styles.backButton,
                     {
                       borderRadius: 20,
                       backgroundColor: palette.ceef1f0,
                       borderColor: palette.ceef1f0,
                     },
+                    pressed && { opacity: 0.72, transform: [{ scale: 1.08 }] },
                   ]}
                   onPress={() =>
                     section === "friends" && friendsPage !== "friends"
@@ -836,7 +837,10 @@ function Overview({
     <>
       <View style={styles.overviewHeading}>
         <Pressable
-          style={styles.overviewBack}
+          style={({ pressed }) => [
+            styles.overviewBack,
+            pressed && { opacity: 0.72, transform: [{ scale: 1.08 }] },
+          ]}
           onPress={onBack}
           accessibilityRole="button"
           accessibilityLabel="Back to Home"
@@ -3891,7 +3895,11 @@ const styles = StyleSheet.create({
   },
   ratingHistoryIcon: { backgroundColor: colors.warningSoft },
   purchaseLinkCopy: { flex: 1 },
-  purchaseLinkTitle: { color: colors.text, fontSize: 14, fontWeight: "700" },
+  purchaseLinkTitle: {
+    color: colors.text,
+    fontSize: typography.mobile.rawSize.s14,
+    fontWeight: typography.weight.bold,
+  },
   promoToast: {
     position: "absolute",
     left: 16,
@@ -3906,7 +3914,12 @@ const styles = StyleSheet.create({
     elevation: 5,
   },
   promoToastError: { backgroundColor: colors.danger },
-  promoToastText: { flex: 1, color: palette.cfff, fontSize: 13, fontWeight: "600" },
+  promoToastText: {
+    flex: 1,
+    color: palette.cfff,
+    fontSize: typography.mobile.rawSize.s13,
+    fontWeight: typography.weight.semibold,
+  },
   spendMetric: {
     flex: 1,
     padding: 15,

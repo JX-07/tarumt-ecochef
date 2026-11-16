@@ -1,3 +1,5 @@
+import { colors } from "@ecochef/design-tokens";
+
 const LOGO_PATH = "/branding/ecochef-logo.png";
 
 export type PdfLogo = { imageObject: string };
@@ -15,7 +17,7 @@ export function loadPdfLogo(): Promise<PdfLogo> {
         canvas.height = image.naturalHeight;
         const context = canvas.getContext("2d");
         if (!context) throw new Error("The EcoChef logo could not be prepared for PDF export.");
-        context.fillStyle = "#ffffff";
+        context.fillStyle = colors.surface;
         context.fillRect(0, 0, canvas.width, canvas.height);
         context.drawImage(image, 0, 0);
         const binary = atob(canvas.toDataURL("image/jpeg", 0.92).split(",")[1]);

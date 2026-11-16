@@ -141,6 +141,11 @@ export function InventoryScreen() {
   }, [returnTo, returnDate]);
 
   const leaveInventory = () => {
+    if (returnTo === "home") {
+      returningToShopping.current = true;
+      router.replace("/(tabs)");
+      return;
+    }
     if (returnTo === "shopping" && allowShoppingReturn.current) {
       returningToShopping.current = true;
       requestShoppingReturn(returnDate);
@@ -161,8 +166,13 @@ export function InventoryScreen() {
           ) => () => void;
         }
       ).addListener("beforeRemove", (event) => {
-        if (returnTo !== "shopping" || !allowShoppingReturn.current || returningToShopping.current)
+        if (returningToShopping.current) return;
+        if (returnTo === "home") {
+          event.preventDefault();
+          leaveInventory();
           return;
+        }
+        if (returnTo !== "shopping" || !allowShoppingReturn.current) return;
         event.preventDefault();
         leaveInventory();
       }),
@@ -177,7 +187,7 @@ export function InventoryScreen() {
   );
   useFocusEffect(
     useCallback(() => {
-      if (returnTo !== "shopping") return;
+      if (returnTo !== "shopping" && returnTo !== "home") return;
       const subscription = BackHandler.addEventListener("hardwareBackPress", () => {
         leaveInventory();
         return true;
@@ -302,7 +312,14 @@ export function InventoryScreen() {
   const header = (
     <>
       <View style={styles.header}>
-        <Pressable accessibilityLabel="Go back" style={styles.roundButton} onPress={leaveInventory}>
+        <Pressable
+          accessibilityLabel="Go back"
+          style={({ pressed }) => [
+            styles.roundButton,
+            pressed && { opacity: 0.72, transform: [{ scale: 1.08 }] },
+          ]}
+          onPress={leaveInventory}
+        >
           <Ionicons name="chevron-back" size={20} color={palette.c687586} />
         </Pressable>
         <Text style={styles.title}>In Kitchen</Text>
@@ -449,6 +466,7 @@ export function InventoryScreen() {
       <IngredientEditor
         visible={editorOpen}
         item={editingItem}
+        searchNames={(query) => api.getIngredientSuggestions<string[]>(query)}
         onClose={() => setEditorOpen(false)}
         onSave={saveItem}
       />
@@ -534,11 +552,13 @@ function IngredientCard({
 function IngredientEditor({
   visible,
   item,
+  searchNames,
   onClose,
   onSave,
 }: {
   visible: boolean;
   item?: InventoryItem;
+  searchNames: (query: string) => Promise<string[]>;
   onClose: () => void;
   onSave: (input: InventoryItemInput) => Promise<void>;
 }) {
@@ -559,6 +579,7 @@ function IngredientEditor({
   const [calendarOpen, setCalendarOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<string>();
+  const [nameSuggestions, setNameSuggestions] = useState<string[]>([]);
 
   useEffect(() => {
     if (!visible) return;
@@ -578,7 +599,30 @@ function IngredientEditor({
     setCustomUnitOpen(false);
     setCustomUnit("");
     setMessage(undefined);
+    setNameSuggestions([]);
   }, [item, visible]);
+
+  useEffect(() => {
+    const query = name.trim();
+    if (!visible || query.length < 2 || query === item?.name) {
+      setNameSuggestions([]);
+      return;
+    }
+    let active = true;
+    const timer = setTimeout(() => {
+      void searchNames(query)
+        .then((names) => {
+          if (active) setNameSuggestions(names);
+        })
+        .catch(() => {
+          if (active) setNameSuggestions([]);
+        });
+    }, 250);
+    return () => {
+      active = false;
+      clearTimeout(timer);
+    };
+  }, [item?.name, name, searchNames, visible]);
 
   function updateName(value: string) {
     setName(value);
@@ -658,6 +702,23 @@ function IngredientEditor({
               autoFocus={!item}
             />
           </View>
+          {nameSuggestions.length > 0 ? (
+            <View style={styles.nameSuggestions}>
+              {nameSuggestions.map((suggestion) => (
+                <Pressable
+                  key={suggestion}
+                  style={styles.nameSuggestion}
+                  onPress={() => {
+                    updateName(suggestion);
+                    setNameSuggestions([]);
+                  }}
+                >
+                  <Ionicons name="search-outline" size={16} color={GREEN} />
+                  <Text style={styles.nameSuggestionText}>{suggestion}</Text>
+                </Pressable>
+              ))}
+            </View>
+          ) : null}
           {iconPickerOpen && (
             <View style={styles.pickerPanel}>
               <Pressable
@@ -1301,6 +1362,30 @@ const styles = StyleSheet.create({
     backgroundColor: palette.cf1f2f4,
   },
   nameRow: { flexDirection: "row", gap: 8 },
+  nameSuggestions: {
+    marginTop: 6,
+    marginLeft: 60,
+    overflow: "hidden",
+    borderWidth: 1,
+    borderColor: palette.ce4e6e8,
+    borderRadius: 12,
+    backgroundColor: palette.cffffff,
+  },
+  nameSuggestion: {
+    minHeight: 42,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 9,
+    paddingHorizontal: 12,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: palette.ce4e6e8,
+  },
+  nameSuggestionText: {
+    flex: 1,
+    color: palette.c111d2c,
+    fontSize: typography.mobile.rawSize.s13,
+    fontWeight: typography.weight.semibold,
+  },
   emojiInput: {
     width: 52,
     height: 48,

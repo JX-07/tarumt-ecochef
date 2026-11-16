@@ -128,7 +128,10 @@ export function ShopCartsScreen() {
           accessibilityLabel="Back"
           accessibilityRole="button"
           onPress={() => router.back()}
-          style={styles.iconButton}
+          style={({ pressed }) => [
+            styles.iconButton,
+            pressed && { opacity: 0.72, transform: [{ scale: 1.08 }] },
+          ]}
         >
           <Ionicons name="chevron-back" size={spacing[6]} color={colors.text} />
         </Pressable>

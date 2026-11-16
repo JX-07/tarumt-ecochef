@@ -19,6 +19,9 @@ const statusRank: Record<string, number> = {
   pending: 0,
   preparing: 1,
   ready: 2,
+  out_for_delivery: 3,
+  arriving: 3,
+  delayed: 2,
   completed: 3,
 };
 
@@ -37,6 +40,7 @@ export function MarketplaceOrderTrackingScreen() {
   const [paymentStatus, setPaymentStatus] = useState("");
   const [canCancel, setCanCancel] = useState(false);
   const [cancelAvailableAt, setCancelAvailableAt] = useState<string>();
+  const [cancellationReason, setCancellationReason] = useState<string>();
   const [cancelOpen, setCancelOpen] = useState(false);
   const [cancelling, setCancelling] = useState(false);
   const [cancelError, setCancelError] = useState("");
@@ -54,6 +58,7 @@ export function MarketplaceOrderTrackingScreen() {
           setPaymentStatus(result.payment_status);
           setCanCancel(result.can_cancel);
           setCancelAvailableAt(result.cancel_available_at);
+          setCancellationReason(result.cancellation_reason);
         }
       } catch {
         /* Keep the last visible status while temporarily offline. */
@@ -71,31 +76,33 @@ export function MarketplaceOrderTrackingScreen() {
   const activeStage = paymentStatus === "paid" && orderStatus !== "cancelled" ? backendStage : -1;
   const pickedUp = orderStatus === "completed";
   const deliverySteps = [
-    ["checkmark-circle", "Order confirmed", "Your payment was successful."],
+    ["checkmark-circle", "Order received", "Your payment was successful."],
     ["restaurant", "Preparing your order", "The shop is packing your items."],
     ["bag-check", "Ready for handover", "The shop has prepared your items."],
     ["location", "Delivered", "The shop has confirmed delivery of your order."],
   ] as const;
   const pickupSteps = [
-    ["checkmark-circle", "Order confirmed", "Your payment was successful."],
+    ["checkmark-circle", "Order received", "Your payment was successful."],
     ["restaurant", "Preparing your order", "The shop is preparing your pickup."],
     ["bag-check", "Ready for pickup", "You can now collect your order from the shop."],
   ] as const;
   const steps = pickup ? pickupSteps : deliverySteps;
   const title =
-    orderStatus === "cancelled"
-      ? "Order cancelled"
-      : paymentStatus !== "paid"
-        ? "Confirming your payment"
-        : pickedUp
-          ? pickup
-            ? "Pickup completed"
-            : "Delivery completed"
-          : pickup
-            ? activeStage >= 2
-              ? "Your order is ready"
-              : "Pickup in progress"
-            : "Track your delivery";
+    orderStatus === "cancellation_pending"
+      ? "Refund processing"
+      : orderStatus === "cancelled"
+        ? "Order cancelled"
+        : paymentStatus !== "paid"
+          ? "Confirming your payment"
+          : pickedUp
+            ? pickup
+              ? "Pickup completed"
+              : "Delivery completed"
+            : pickup
+              ? activeStage >= 2
+                ? "Your order is ready"
+                : "Pickup in progress"
+              : "Track your delivery";
 
   const cancelDelayedOrder = async () => {
     setCancelling(true);
@@ -129,7 +136,7 @@ export function MarketplaceOrderTrackingScreen() {
               accessibilityRole="button"
               accessibilityLabel="Close order tracking"
               style={styles.close}
-              onPress={() => router.replace("/(tabs)/marketplace")}
+              onPress={() => router.replace("/(tabs)")}
             >
               <Ionicons name="close" size={spacing[6]} color={colors.text} />
             </Pressable>
@@ -138,11 +145,13 @@ export function MarketplaceOrderTrackingScreen() {
             <Ionicons name="checkmark-circle" size={spacing[8]} color={colors.success} />
             <View style={styles.successCopy}>
               <Text style={styles.successTitle}>
-                {paymentStatus === "refunded"
-                  ? "Refund issued"
-                  : paymentStatus === "paid"
-                    ? "Payment successful"
-                    : "Checking payment status"}
+                {orderStatus === "cancellation_pending"
+                  ? "Refund requested"
+                  : paymentStatus === "refunded"
+                    ? "Refund issued"
+                    : paymentStatus === "paid"
+                      ? "Payment successful"
+                      : "Checking payment status"}
               </Text>
               <Text style={styles.successText}>
                 Order #{params.orderId?.slice(0, 8).toUpperCase()}
@@ -152,27 +161,44 @@ export function MarketplaceOrderTrackingScreen() {
           <View style={styles.hero}>
             <View style={styles.heroIcon}>
               <Ionicons
-                name={pickup ? "storefront" : "bicycle"}
+                name={
+                  orderStatus === "cancellation_pending"
+                    ? "return-down-back"
+                    : pickup
+                      ? "storefront"
+                      : "bicycle"
+                }
                 size={spacing[8]}
-                color={colors.primaryStrong}
+                color={
+                  orderStatus === "cancellation_pending" ? colors.danger : colors.primaryStrong
+                }
               />
             </View>
             <Text style={styles.title}>{title}</Text>
             <Text style={styles.subtitle}>
-              {orderStatus === "cancelled"
-                ? "This order was cancelled. Your refund was issued to your original payment method, and the items were returned to stock."
-                : pickup
-                  ? pickedUp
-                    ? "The shop has confirmed your completed pickup."
-                    : activeStage >= 2
-                      ? "The shop has marked your order as ready."
-                      : "This page updates when the shop changes your order status."
-                  : pickedUp
-                    ? "The shop has confirmed your completed delivery."
-                    : `Initial delivery estimate: approximately ${estimate} minutes. This page updates when the shop confirms progress.`}
+              {orderStatus === "cancellation_pending"
+                ? `The business owner cancelled this order and requested a refund.${cancellationReason ? ` Reason: ${cancellationReason}` : ""}`
+                : orderStatus === "cancelled"
+                  ? "This order was cancelled. Your refund was issued to your original payment method, and the items were returned to stock."
+                  : pickup
+                    ? pickedUp
+                      ? "The shop has confirmed your completed pickup."
+                      : activeStage >= 2
+                        ? "The shop has marked your order as ready."
+                        : "This page updates when the shop changes your order status."
+                    : pickedUp
+                      ? "The shop has confirmed your completed delivery."
+                      : `Initial delivery estimate: approximately ${estimate} minutes. This page updates when the shop confirms progress.`}
             </Text>
           </View>
-          {orderStatus !== "cancelled" ? (
+          {orderStatus === "cancellation_pending" ? (
+            <View style={styles.refundTimingNote}>
+              <Text style={styles.refundTimingText}>
+                The money will be returned to your original payment method within 14 days.
+              </Text>
+            </View>
+          ) : null}
+          {!["cancelled", "cancellation_pending"].includes(orderStatus) ? (
             <View style={styles.timeline}>
               {steps.map(([icon, label, detail], index) => {
                 const complete = index <= activeStage || pickedUp;
@@ -214,7 +240,6 @@ export function MarketplaceOrderTrackingScreen() {
           ) : null}
           {pickedUp ? (
             <View style={styles.completed}>
-              <Ionicons name="sparkles-outline" size={spacing[6]} color={colors.success} />
               <Text style={styles.completedText}>
                 Your order has been marked complete by the shop.
               </Text>
@@ -230,7 +255,7 @@ export function MarketplaceOrderTrackingScreen() {
                 })
               }
             >
-              <Ionicons name="star-outline" size={spacing[5]} color={colors.ratingStar} />
+              <Ionicons name="star" size={spacing[5]} color={colors.ratingStar} />
               <Text style={styles.chatButtonText}>Rate your purchased items</Text>
             </Pressable>
           ) : null}
@@ -393,6 +418,18 @@ const styles = StyleSheet.create({
     maxWidth: 310,
     color: colors.textMuted,
     fontSize: textSize.secondaryInteraction,
+    lineHeight: spacing[5],
+    textAlign: "center",
+  },
+  refundTimingNote: {
+    marginBottom: spacing[4],
+    padding: spacing[3],
+    borderRadius: spacing[3],
+    backgroundColor: colors.surfaceMuted,
+  },
+  refundTimingText: {
+    color: colors.textMuted,
+    fontSize: typography.mobile.rawSize.s10,
     lineHeight: spacing[5],
     textAlign: "center",
   },

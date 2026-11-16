@@ -1,8 +1,7 @@
 from datetime import datetime
 from decimal import Decimal
-from uuid import UUID
-
 from typing import Literal
+from uuid import UUID
 
 from pydantic import BaseModel, EmailStr, Field, model_validator
 
@@ -14,7 +13,7 @@ class VendorStoreInput(BaseModel):
     operating_hours: str | None = Field(default=None, max_length=100)
     description: str | None = Field(default=None, max_length=500)
     category: str | None = Field(default=None, max_length=50)
-    delivery_fee: Decimal = Field(default=Decimal("0"), ge=0)
+    delivery_fee: Decimal = Field(default=Decimal(0), ge=0)
     estimated_delivery_minutes: int | None = Field(default=None, gt=0, le=1440)
     street_address: str | None = Field(default=None, max_length=255)
     postal_code: str | None = Field(default=None, max_length=20)
@@ -36,6 +35,9 @@ class VendorStoreInput(BaseModel):
         for hours in self.operating_hours_schedule.values():
             if hours.get("closed"):
                 continue
+            if hours.get("open24Hours"):
+                total_minutes += 24 * 60
+                continue
             try:
                 open_hour, open_minute = map(int, str(hours.get("open", "")).split(":"))
                 close_hour, close_minute = map(int, str(hours.get("close", "")).split(":"))
@@ -51,10 +53,12 @@ class VendorStoreInput(BaseModel):
             ):
                 raise ValueError("Invalid Operating Hour Set: time is outside the 24-hour clock.")
             duration = close_hour * 60 + close_minute - open_hour * 60 - open_minute
-            if duration <= 0:
+            if duration == 0:
                 raise ValueError(
-                    "Invalid Operating Hour Set: closing time must be later than opening time."
+                    "Invalid Operating Hour Set: choose Open 24 hours when opening and closing times are the same."
                 )
+            if duration < 0:
+                duration += 24 * 60
             total_minutes += duration
         if total_minutes < 60:
             raise ValueError(
@@ -74,7 +78,7 @@ class StoreStaffPermissionInput(BaseModel):
 
 class VendorProductAddonOption(BaseModel):
     name: str = Field(min_length=1, max_length=80)
-    price: Decimal = Field(default=Decimal("0"), ge=0)
+    price: Decimal = Field(default=Decimal(0), ge=0)
 
 
 class VendorProductAddon(BaseModel):
@@ -170,7 +174,7 @@ class VendorPromotionInput(BaseModel):
     ends_at: datetime
     product_ids: list[UUID] = Field(default_factory=list, max_length=100)
     code: str | None = Field(default=None, min_length=3, max_length=30, pattern="^[A-Za-z0-9_-]+$")
-    minimum_order_amount: Decimal = Field(default=Decimal("0"), ge=0)
+    minimum_order_amount: Decimal = Field(default=Decimal(0), ge=0)
     usage_limit: int | None = Field(default=None, ge=1)
 
     @model_validator(mode="after")

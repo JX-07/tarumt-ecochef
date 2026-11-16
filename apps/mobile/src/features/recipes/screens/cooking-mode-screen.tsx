@@ -200,6 +200,8 @@ export function CookingModeScreen() {
   const voiceSubscriptionsRef = useRef<Array<{ remove: () => void }>>([]);
   const voiceWantedRef = useRef(false);
   const commandRef = useRef({ text: "", time: 0 });
+  const voiceActionRef = useRef({ action: "", time: 0 });
+  const finishingRef = useRef(false);
   const stepRef = useRef(0);
   const instructionsRef = useRef<string[]>([]);
   const restartingRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -392,7 +394,8 @@ export function CookingModeScreen() {
       flags: [...timer.flags, timer.duration - timer.remaining],
     }));
   const finishCooking = async () => {
-    if (finishing) return;
+    if (finishingRef.current) return;
+    finishingRef.current = true;
     setFinishing(true);
     const date = plannedDate ?? new Date().toISOString().slice(0, 10);
     try {
@@ -426,6 +429,7 @@ export function CookingModeScreen() {
         message:
           next instanceof Error ? next.message : "EcoChef could not update your saved ingredients.",
       });
+      finishingRef.current = false;
       setFinishing(false);
     }
   };
@@ -435,19 +439,60 @@ export function CookingModeScreen() {
     if (!command || (command === commandRef.current.text && now - commandRef.current.time < 1800))
       return;
     commandRef.current = { text: command, time: now };
-    if (/\b(next|forward)\b/.test(command)) {
+    const acceptAction = (action: string) => {
+      if (voiceActionRef.current.action === action && now - voiceActionRef.current.time < 1800)
+        return false;
+      voiceActionRef.current = { action, time: now };
+      return true;
+    };
+    const currentStep = stepRef.current;
+    const currentInstruction = instructionsRef.current[currentStep] ?? "";
+    const currentTimerKey = extractTimers(currentInstruction, currentStep)[0]?.key;
+    if (/\b(finish|finished|done cooking|complete recipe)\b/.test(command)) {
+      if (!acceptAction("finish")) return;
+      setVoiceMessage("Finishing cooking mode");
+      void finishCooking();
+    } else if (
+      /\b(start|begin|resume)\b.*\btimer\b|\btimer\b.*\b(start|begin|resume)\b/.test(command)
+    ) {
+      if (!acceptAction("start-timer")) return;
+      if (!currentTimerKey) {
+        setVoiceMessage("This step does not have a timer");
+        return;
+      }
+      toggleTimer(currentTimerKey);
+      setVoiceMessage("Timer started");
+    } else if (/\b(stop|pause)\b.*\btimer\b|\btimer\b.*\b(stop|pause)\b/.test(command)) {
+      if (!acceptAction("pause-timer")) return;
+      if (!currentTimerKey) {
+        setVoiceMessage("This step does not have a timer");
+        return;
+      }
+      pauseTimer(currentTimerKey);
+      setVoiceMessage("Timer paused");
+    } else if (/\b(reset|restart)\b.*\btimer\b|\btimer\b.*\b(reset|restart)\b/.test(command)) {
+      if (!acceptAction("reset-timer")) return;
+      if (!currentTimerKey) {
+        setVoiceMessage("This step does not have a timer");
+        return;
+      }
+      resetTimer(currentTimerKey);
+      setVoiceMessage("Timer reset");
+    } else if (/\b(next|forward)\b/.test(command)) {
+      if (!acceptAction("next")) return;
       setStep((current) => Math.min(instructionsRef.current.length - 1, current + 1));
       setVoiceMessage("Next step");
     } else if (/\b(previous|back|return)\b/.test(command)) {
+      if (!acceptAction("previous")) return;
       setStep((current) => Math.max(0, current - 1));
       setVoiceMessage("Previous step");
     } else if (/\b(read|repeat)\b/.test(command)) {
-      const current = stepRef.current;
-      Speech.speak(`Step ${current + 1}. ${instructionsRef.current[current]}`, {
+      if (!acceptAction("read")) return;
+      Speech.speak(`Step ${currentStep + 1}. ${instructionsRef.current[currentStep]}`, {
         rate: 0.88,
       });
       setVoiceMessage("Reading this step");
-    } else setVoiceMessage(`Heard “${transcript}” · say next or previous`);
+    } else setVoiceMessage(`Heard “${transcript}” · try one of the commands below`);
   };
   const startRecognizer = (voicePackage: VoicePackage) => {
     try {
@@ -466,6 +511,13 @@ export function CookingModeScreen() {
           "return",
           "read",
           "repeat",
+          "start timer",
+          "resume timer",
+          "pause timer",
+          "stop timer",
+          "reset timer",
+          "finish cooking",
+          "complete recipe",
         ],
       });
     } catch {
@@ -489,7 +541,7 @@ export function CookingModeScreen() {
       setVoiceNotice({
         title: "Open the EcoChef app",
         message:
-          "Speaking Mode is not available in Expo Go. Build and open the installed EcoChef development app to use hands-free cooking commands.",
+          "Speech Mode is not available in Expo Go. Build and open the installed EcoChef development app to use hands-free cooking commands.",
       });
       return;
     }
@@ -538,7 +590,7 @@ export function CookingModeScreen() {
               setVoiceEnabled(false);
               setListening(false);
               setVoiceNotice({
-                title: "Speaking mode stopped",
+                title: "Speech mode stopped",
                 message:
                   event.message ||
                   "EcoChef could not access this device’s speech-recognition service.",
@@ -549,7 +601,7 @@ export function CookingModeScreen() {
       }
       voiceWantedRef.current = true;
       setVoiceEnabled(true);
-      setVoiceMessage("Listening · say “next”, “previous”, or “read”");
+      setVoiceMessage("Listening for a cooking command");
       startRecognizer(voicePackage);
     } catch {
       setVoiceMessage(undefined);
@@ -717,11 +769,37 @@ export function CookingModeScreen() {
               color={voiceEnabled ? palette.cfff : GREEN}
             />
             <Text style={[styles.assistText, voiceEnabled && styles.assistTextActive]}>
-              {voiceEnabled ? (listening ? "Listening" : "Voice on") : "Speaking Mode"}
+              {voiceEnabled ? (listening ? "Listening" : "Speech on") : "Speech Mode"}
             </Text>
           </Pressable>
         </View>
         {voiceMessage && <Text style={styles.voiceMessage}>{voiceMessage}</Text>}
+        {voiceEnabled ? (
+          <View style={styles.voiceGuide}>
+            <View style={styles.voiceGuideHead}>
+              <MaterialCommunityIcons name="account-voice" size={18} color={GREEN} />
+              <View style={styles.voiceGuideCopy}>
+                <Text style={styles.voiceGuideTitle}>Try saying</Text>
+                <Text style={styles.voiceGuideHint}>Speak naturally while this mode is on.</Text>
+              </View>
+            </View>
+            <View style={styles.voiceCommands}>
+              {[
+                "Next step",
+                "Go back",
+                "Read this step",
+                "Start timer",
+                "Pause timer",
+                "Reset timer",
+                "Finish cooking",
+              ].map((command) => (
+                <View key={command} style={styles.voiceCommand}>
+                  <Text style={styles.voiceCommandText}>“{command}”</Text>
+                </View>
+              ))}
+            </View>
+          </View>
+        ) : null}
       </ScrollView>
       <View style={styles.navigation}>
         <Pressable
@@ -750,7 +828,7 @@ export function CookingModeScreen() {
       </View>
       <AppMessageModal
         visible={voiceNotice !== undefined}
-        title={voiceNotice?.title ?? "Speaking Mode"}
+        title={voiceNotice?.title ?? "Speech Mode"}
         message={voiceNotice?.message ?? ""}
         tone="info"
         onClose={() => setVoiceNotice(undefined)}
@@ -1102,6 +1180,41 @@ const styles = StyleSheet.create({
     color: palette.c8190a5,
     fontSize: typography.mobile.rawSize.s9,
     textAlign: "center",
+  },
+  voiceGuide: {
+    width: "100%",
+    maxWidth: 430,
+    alignSelf: "center",
+    marginTop: 12,
+    padding: 13,
+    borderWidth: 1,
+    borderColor: palette.c2b8b67,
+    borderRadius: 15,
+    backgroundColor: palette.c182336,
+  },
+  voiceGuideHead: { flexDirection: "row", alignItems: "center", gap: 9 },
+  voiceGuideCopy: { flex: 1 },
+  voiceGuideTitle: {
+    color: palette.ce7f7ed,
+    fontSize: typography.mobile.rawSize.s11,
+    fontWeight: typography.weight.black,
+  },
+  voiceGuideHint: {
+    marginTop: 1,
+    color: palette.c8190a5,
+    fontSize: typography.mobile.rawSize.s9,
+  },
+  voiceCommands: { flexDirection: "row", flexWrap: "wrap", gap: 7, marginTop: 11 },
+  voiceCommand: {
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    borderRadius: 999,
+    backgroundColor: palette.c223047,
+  },
+  voiceCommandText: {
+    color: palette.cdce3ed,
+    fontSize: typography.mobile.rawSize.s9,
+    fontWeight: typography.weight.extrabold,
   },
   navigation: {
     height: 66,

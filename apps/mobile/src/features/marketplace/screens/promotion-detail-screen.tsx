@@ -72,7 +72,10 @@ export function PromotionDetailScreen() {
             accessibilityRole="button"
             accessibilityLabel="Close"
             onPress={close}
-            style={styles.back}
+            style={({ pressed }) => [
+              styles.back,
+              pressed && { opacity: 0.72, transform: [{ scale: 0.92 }] },
+            ]}
           >
             <Ionicons name="chevron-down" size={spacing[6]} color={colors.text} />
           </Pressable>

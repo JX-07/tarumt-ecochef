@@ -38,6 +38,7 @@ export function OrderChat({
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [openPhoto, setOpenPhoto] = useState<{ src: string; name: string }>();
   const endRef = useRef<HTMLDivElement>(null);
   const typingTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const api = createAuthenticatedWebApi("/api/ecochef");
@@ -67,6 +68,14 @@ export function OrderChat({
     },
     [orderId, storeId],
   );
+  useEffect(() => {
+    if (!openPhoto) return;
+    const closePhoto = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setOpenPhoto(undefined);
+    };
+    window.addEventListener("keydown", closePhoto);
+    return () => window.removeEventListener("keydown", closePhoto);
+  }, [openPhoto]);
 
   const notifyTyping = () => {
     void api.setOrderChatTyping(orderId, storeId, true);
@@ -156,7 +165,7 @@ export function OrderChat({
             </div>
           ) : null}
           {chat?.messages.map((item) => (
-            <ChatBubble key={item.id} message={item} />
+            <ChatBubble key={item.id} message={item} onOpenPhoto={setOpenPhoto} />
           ))}
           {chat?.other_typing ? (
             <div className="typing-row">
@@ -212,11 +221,35 @@ export function OrderChat({
           </button>
         </footer>
       </section>
+      {openPhoto ? (
+        <div
+          className="chat-photo-viewer"
+          role="dialog"
+          aria-modal="true"
+          aria-label={openPhoto.name}
+          onClick={() => setOpenPhoto(undefined)}
+        >
+          <button aria-label="Close image" onClick={() => setOpenPhoto(undefined)}>
+            <X />
+          </button>
+          <img
+            src={openPhoto.src}
+            alt={openPhoto.name}
+            onClick={(event) => event.stopPropagation()}
+          />
+        </div>
+      ) : null}
     </div>
   );
 }
 
-function ChatBubble({ message }: { message: ChatMessage }) {
+function ChatBubble({
+  message,
+  onOpenPhoto,
+}: {
+  message: ChatMessage;
+  onOpenPhoto: (photo: { src: string; name: string }) => void;
+}) {
   if (message.message_type === "delivery_alert")
     return (
       <div className="delivery-alert-bubble">
@@ -236,12 +269,19 @@ function ChatBubble({ message }: { message: ChatMessage }) {
     <div className={`chat-bubble-row ${mine ? "mine" : "theirs"}`}>
       <div className="chat-bubble">
         {message.message_type === "photo" && dataUrl ? (
-          <a className="chat-photo" href={dataUrl} target="_blank" rel="noreferrer">
+          <button
+            type="button"
+            className="chat-photo"
+            aria-label={`Open ${message.attachment_name || "shared photo"}`}
+            onClick={() =>
+              onOpenPhoto({ src: dataUrl, name: message.attachment_name || "Shared photo" })
+            }
+          >
             <img src={dataUrl} alt={message.attachment_name || "Shared photo"} />
             <span>
               <ImageIcon size={14} /> {message.attachment_name}
             </span>
-          </a>
+          </button>
         ) : null}
         {message.message_type === "pdf" && dataUrl ? (
           <a

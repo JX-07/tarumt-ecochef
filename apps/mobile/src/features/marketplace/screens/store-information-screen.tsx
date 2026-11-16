@@ -186,7 +186,9 @@ export function StoreInformationScreen() {
                         {value
                           ? closed
                             ? "Closed"
-                            : `${formatTime(String(value.open))} – ${formatTime(String(value.close))}`
+                            : value.open24Hours
+                              ? "Open 24 hours"
+                              : `${formatTime(String(value.open))} – ${formatTime(String(value.close))}${String(value.close) < String(value.open) ? " next day" : ""}`
                           : "Not listed"}
                       </Text>
                     </View>

@@ -17,6 +17,10 @@ class PurchaseOrder(BaseModel):
     order_date: datetime
     status: str
     total_amount: Decimal
+    payment_status: str
+    fulfillment_method: str
+    estimated_delivery_minutes: int
+    cancellation_reason: str | None = None
     items: list[PurchaseItem]
 
 

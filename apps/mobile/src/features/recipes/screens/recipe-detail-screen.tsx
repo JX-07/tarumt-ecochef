@@ -371,7 +371,13 @@ export function RecipeDetailScreen() {
             </View>
           )}
           <View style={[styles.topActions, { paddingTop: insets.top + PAGE_TOP_GAP }]}>
-            <Pressable style={styles.circle} onPress={() => goBackOrReplace("/(tabs)/recipes")}>
+            <Pressable
+              style={({ pressed }) => [
+                styles.circle,
+                pressed && { opacity: 0.72, transform: [{ scale: 1.08 }] },
+              ]}
+              onPress={() => goBackOrReplace("/(tabs)/recipes")}
+            >
               <Ionicons name="chevron-back" size={23} color={palette.c294036} />
             </Pressable>
             <View style={styles.rightActions}>

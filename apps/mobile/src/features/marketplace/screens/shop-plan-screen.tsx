@@ -1,5 +1,5 @@
-import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
-import { colors, spacing, typography } from "@ecochef/design-tokens";
+import { Ionicons } from "@expo/vector-icons";
+import { colors, palette, spacing, typography } from "@ecochef/design-tokens";
 import type {
   ConsumerProfile,
   MarketplaceCart,
@@ -10,16 +10,16 @@ import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
-  FlatList,
   Pressable,
   RefreshControl,
+  SectionList,
   ScrollView,
   StyleSheet,
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Text } from "../../../shared/components/themed-text";
-import { PageHeader, PAGE_TOP_GAP } from "../../../shared/components/page-header";
+import { PAGE_TOP_GAP } from "../../../shared/components/page-header";
 import { apiBaseUrl } from "../../../lib/api-url";
 import { createMobileApi } from "../../../lib/api";
 import { useAuth } from "../../auth/auth-provider";
@@ -71,7 +71,6 @@ export function ShopPlanScreen() {
   });
   const [cartProducts, setCartProducts] = useState<MarketplaceProduct[]>([]);
   const [active, setActive] = useState("all");
-  const [showKitchen, setShowKitchen] = useState(false);
   const [dateOpen, setDateOpen] = useState(false);
   const [addressId, setAddressId] = useState<string>();
   const [location, setLocation] = useState("");
@@ -175,9 +174,12 @@ export function ShopPlanScreen() {
       ingredients.filter((item) => !item.inKitchen && (!selection || selection.includes(item.key))),
     );
   }, [ingredients, selection, user?.uid]);
-  const available = ingredients.filter(
-    (item) => (showKitchen || !item.inKitchen) && (!selection || selection.includes(item.key)),
-  );
+  const available = ingredients
+    .filter((item) => item.inKitchen || !selection || selection.includes(item.key))
+    .sort(
+      (left, right) =>
+        Number(left.inKitchen) - Number(right.inKitchen) || left.name.localeCompare(right.name),
+    );
   const visible = active === "all" ? available : available.filter((item) => item.key === active);
   const inCart = (ingredient: PlanIngredient) =>
     cartProducts.some(
@@ -262,7 +264,7 @@ export function ShopPlanScreen() {
                     } as never)
                   }
                 />
-                <Text numberOfLines={1} style={s.shop}>
+                <Text numberOfLines={1} style={s.productCompany}>
                   {store.name}
                 </Text>
                 <Text style={s.muted}>
@@ -287,125 +289,117 @@ export function ShopPlanScreen() {
     <View style={s.root}>
       <View style={[s.top, { paddingTop: insets.top + PAGE_TOP_GAP }]}>
         <Pressable
-          accessibilityLabel="Back"
+          accessibilityLabel="Back to shopping list"
           accessibilityRole="button"
           onPress={() => router.back()}
-          style={s.back}
+          style={({ pressed }) => [
+            s.back,
+            pressed && { opacity: 0.72, transform: [{ scale: 1.08 }] },
+          ]}
         >
-          <Ionicons name="chevron-back" size={spacing[6]} color={colors.text} />
+          <Ionicons name="chevron-back" size={22} color={palette.c64716d} />
         </Pressable>
-        <View style={s.title}>
-          <PageHeader title="Shop for my plan" />
+        <View style={s.headerCopy}>
+          <Text style={s.pageTitle}>Shop for My Plan</Text>
+          <Text style={s.pageSubtitle}>Find products for your planned meals</Text>
         </View>
       </View>
-      <View style={s.panel}>
-        <Pressable accessibilityRole="button" onPress={() => setDateOpen(true)} style={s.date}>
-          <Ionicons name="calendar-outline" size={spacing[5]} color={colors.primaryStrong} />
-          <Text style={s.link}>{rangeLabel}</Text>
-          <Ionicons name="chevron-down" size={spacing[4]} color={colors.primaryStrong} />
-        </Pressable>
-        <View style={s.rangeRow}>
-          {(["day", "week", "month"] as const).map((value) => (
-            <Pressable
-              key={value}
-              accessibilityRole="button"
-              accessibilityState={{ selected: range === value }}
-              onPress={() => {
-                setRange(value);
-                changeDates();
-              }}
-              style={[s.range, range === value && s.activeRange]}
-            >
-              <Text style={range === value ? s.activeText : s.copy}>
-                {value === "day" ? "Day" : value === "week" ? "Week" : "Month"}
-              </Text>
-            </Pressable>
-          ))}
-        </View>
-        <View style={s.locationRow}>
-          <Ionicons name="location-outline" size={spacing[4]} color={colors.primaryStrong} />
-          <Text numberOfLines={1} style={[s.muted, s.title]}>
-            {location || "Using your marketplace location"}
-          </Text>
-        </View>
-        <View style={s.options}>
-          <Pressable
-            accessibilityRole="checkbox"
-            accessibilityState={{ checked: showKitchen }}
-            onPress={() => {
-              setShowKitchen(!showKitchen);
-              setActive("all");
-            }}
-            style={s.locationRow}
-          >
-            <Ionicons
-              name={showKitchen ? "checkbox" : "square-outline"}
-              size={spacing[5]}
-              color={colors.primaryStrong}
-            />
-            <Text style={s.link}>Show already have</Text>
-          </Pressable>
-          {selection ? (
-            <Pressable
-              onPress={() => {
-                setSelection(undefined);
-                setActive("all");
-              }}
-            >
-              <Text style={s.link}>Show all needed</Text>
-            </Pressable>
-          ) : null}
-        </View>
-      </View>
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        style={s.chipScroller}
-        contentContainerStyle={s.chips}
-      >
-        {[{ key: "all", name: showKitchen ? "All ingredients" : "All needed" }, ...available].map(
-          (item) => (
-            <Pressable
-              key={item.key}
-              accessibilityRole="button"
-              accessibilityState={{ selected: active === item.key }}
-              onPress={() => setActive(item.key)}
-              style={[s.chip, active === item.key && s.activeRange]}
-            >
-              <Text style={active === item.key ? s.activeText : s.copy}>{item.name}</Text>
-            </Pressable>
-          ),
-        )}
-      </ScrollView>
-      {error ? (
-        <Pressable onPress={() => void load()} style={s.error}>
-          <Text style={s.warning}>{error} Tap to retry.</Text>
-        </Pressable>
-      ) : null}
-      <FlatList
+      <SectionList
         style={s.results}
         ListHeaderComponent={
-          <View style={s.resultsHeader}>
-            <View style={s.locationRow}>
-              <MaterialCommunityIcons
-                name="clipboard-list-outline"
-                size={spacing[5]}
-                color={colors.ratingStar}
-              />
-              <Text style={s.copy}>Required for your plan</Text>
+          <>
+            <View style={s.controls}>
+              <View style={s.datePanel}>
+                <Pressable
+                  accessibilityRole="button"
+                  onPress={() => setDateOpen(true)}
+                  style={s.date}
+                >
+                  <Ionicons
+                    name="calendar-outline"
+                    size={spacing[5]}
+                    color={colors.primaryStrong}
+                  />
+                  <Text style={s.link}>{rangeLabel}</Text>
+                  <Ionicons name="chevron-down" size={spacing[4]} color={colors.primaryStrong} />
+                </Pressable>
+                <View style={s.rangeRow}>
+                  {(["day", "week", "month"] as const).map((value) => (
+                    <Pressable
+                      key={value}
+                      accessibilityRole="button"
+                      accessibilityState={{ selected: range === value }}
+                      onPress={() => {
+                        setRange(value);
+                        changeDates();
+                      }}
+                      style={[s.range, range === value && s.activeRange]}
+                    >
+                      <Text style={range === value ? s.activeText : s.copy}>
+                        {value === "day" ? "Day" : value === "week" ? "Week" : "Month"}
+                      </Text>
+                    </Pressable>
+                  ))}
+                </View>
+                <View style={s.locationRow}>
+                  <Ionicons
+                    name="location-outline"
+                    size={spacing[4]}
+                    color={colors.primaryStrong}
+                  />
+                  <Text numberOfLines={1} style={[s.muted, s.title]}>
+                    {location || "Using your marketplace location"}
+                  </Text>
+                </View>
+              </View>
             </View>
-            <Text style={s.muted}>Check pack quantities and expiry before buying.</Text>
-            <Pressable
-              accessibilityRole="button"
-              onPress={() => router.push("/(tabs)/marketplace")}
-            >
-              <Text style={s.link}>Browse all shops →</Text>
-            </Pressable>
-          </View>
+            <View style={s.catalogueDivider}>
+              <View style={s.dividerLine} />
+              <Text style={s.dividerLabel}>PRODUCTS FOR YOUR PLAN</Text>
+              <View style={s.dividerLine} />
+            </View>
+            {error ? (
+              <Pressable onPress={() => void load()} style={s.error}>
+                <Text style={s.warning}>{error} Tap to retry.</Text>
+              </Pressable>
+            ) : null}
+          </>
         }
-        data={loading ? [] : visible}
+        sections={[{ data: loading ? [] : visible }]}
+        renderSectionHeader={() => (
+          <View style={s.stickyProductsHeader}>
+            <View style={s.stickyProductsRow}>
+              <Text style={s.stickyProductsTitle}>Products for Your Plan</Text>
+              <Pressable style={s.compactDate} onPress={() => setDateOpen(true)}>
+                <Text style={s.compactDateText}>{shortDate(date, true)}</Text>
+                <Ionicons name="chevron-down" size={16} color={colors.primaryStrong} />
+              </Pressable>
+            </View>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              style={s.stickyChipScroller}
+              contentContainerStyle={s.stickyChips}
+            >
+              {[{ key: "all", name: "All ingredients" }, ...available].map((item) => (
+                <Pressable
+                  key={item.key}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: active === item.key }}
+                  onPress={() => setActive(item.key)}
+                  style={[s.chip, active === item.key && s.activeRange]}
+                >
+                  <Text style={active === item.key ? s.activeChipText : s.chipText}>
+                    {item.name}
+                  </Text>
+                </Pressable>
+              ))}
+            </ScrollView>
+          </View>
+        )}
         renderItem={renderIngredient}
         keyExtractor={(item) => item.key}
+        stickySectionHeadersEnabled
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -424,7 +418,7 @@ export function ShopPlanScreen() {
               </Text>
               <Text style={s.copy}>
                 {ingredients.length
-                  ? "Your required ingredients are already in your kitchen. Change dates or show already have to browse."
+                  ? "All ingredients for this plan are already in your kitchen."
                   : "Choose another date or add recipes to your plan."}
               </Text>
             </View>
@@ -471,12 +465,31 @@ const s = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     paddingHorizontal: spacing[4],
-    gap: spacing[2],
+    gap: 10,
+    marginBottom: 18,
   },
-  back: { padding: spacing[2] },
+  back: {
+    width: 32,
+    height: 32,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 20,
+    backgroundColor: palette.ceef1f0,
+  },
+  headerCopy: { flex: 1 },
+  pageTitle: {
+    color: palette.c13273a,
+    fontSize: typography.mobile.rawSize.s21,
+    fontWeight: weight.bold,
+  },
+  pageSubtitle: {
+    marginTop: 1,
+    color: palette.c91a0ad,
+    fontSize: typography.mobile.rawSize.s11,
+  },
   title: { flex: 1 },
-  panel: {
-    margin: spacing[4],
+  controls: { paddingHorizontal: spacing[4], gap: spacing[3] },
+  datePanel: {
     padding: spacing[4],
     borderRadius: spacing[4],
     backgroundColor: colors.primarySoft,
@@ -501,28 +514,71 @@ const s = StyleSheet.create({
     fontSize: font.secondaryInteraction,
     fontWeight: weight.semibold,
   },
-  options: {
+  catalogueDivider: {
     flexDirection: "row",
-    justifyContent: "space-between",
-    flexWrap: "wrap",
-    gap: spacing[3],
-  },
-  chipScroller: { flexGrow: 0, flexShrink: 0, height: spacing[16] },
-  chips: {
     alignItems: "center",
+    gap: spacing[3],
     paddingHorizontal: spacing[4],
-    paddingVertical: spacing[2],
+    marginTop: spacing[5],
+  },
+  dividerLine: { flex: 1, height: 1, backgroundColor: colors.border },
+  dividerLabel: {
+    color: colors.textMuted,
+    fontSize: font.caption,
+    fontWeight: weight.bold,
+    letterSpacing: 0.6,
+  },
+  stickyProductsHeader: {
+    paddingTop: spacing[3],
+    paddingBottom: spacing[2],
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+    backgroundColor: colors.consumerCanvas,
+  },
+  stickyProductsRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     gap: spacing[2],
   },
-  chip: {
-    minHeight: spacing[12],
-    justifyContent: "center",
-    paddingHorizontal: spacing[4],
-    borderRadius: spacing[5],
+  stickyProductsTitle: {
+    flex: 1,
+    color: colors.text,
+    fontSize: font.bodyTextHeavy,
+    fontWeight: weight.bold,
+  },
+  compactDate: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: spacing[3],
+    minHeight: 32,
+    borderWidth: 1,
+    borderColor: colors.primaryBorder,
+    borderRadius: 16,
     backgroundColor: colors.surface,
   },
+  compactDateText: {
+    color: colors.primaryStrong,
+    fontSize: font.secondaryInteraction,
+    fontWeight: weight.bold,
+  },
+  stickyChipScroller: { flexGrow: 0, marginTop: spacing[2] },
+  stickyChips: { alignItems: "center", gap: spacing[2], paddingRight: spacing[3] },
+  chip: {
+    minHeight: 34,
+    justifyContent: "center",
+    paddingHorizontal: spacing[3],
+    borderRadius: 17,
+    backgroundColor: colors.surface,
+  },
+  chipText: { color: colors.text, fontSize: font.secondaryInteraction },
+  activeChipText: {
+    color: colors.surface,
+    fontSize: font.secondaryInteraction,
+    fontWeight: weight.bold,
+  },
   results: { flex: 1 },
-  resultsHeader: { gap: spacing[2], paddingBottom: spacing[2] },
   locationRow: { flexDirection: "row", alignItems: "center", gap: spacing[2] },
   list: {
     paddingHorizontal: spacing[4],
@@ -532,7 +588,10 @@ const s = StyleSheet.create({
     flexGrow: 1,
   },
   ingredient: {
+    marginBottom: spacing[5],
     padding: spacing[4],
+    borderWidth: 1,
+    borderColor: colors.border,
     borderRadius: spacing[4],
     backgroundColor: colors.surface,
     gap: spacing[2],
@@ -550,8 +609,14 @@ const s = StyleSheet.create({
     fontWeight: weight.bold,
   },
   state: { fontSize: font.secondaryInteraction, fontWeight: weight.semibold },
-  products: { paddingTop: spacing[3] },
+  products: { paddingTop: spacing[3], paddingRight: spacing[2] },
   product: { width: 170 },
+  productCompany: {
+    marginTop: spacing[3],
+    color: colors.primaryStrong,
+    fontSize: font.secondaryInteraction,
+    fontWeight: weight.bold,
+  },
   shop: { color: colors.text, fontSize: font.secondaryInteraction, fontWeight: weight.semibold },
   warning: { color: colors.danger, fontSize: font.caption, lineHeight: spacing[5] },
   noMatches: {

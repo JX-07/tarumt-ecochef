@@ -476,7 +476,13 @@ export function DeliveryAddressScreen() {
 export function Header({ title, onBack }: { title: string; onBack: () => void }) {
   return (
     <View style={base.header}>
-      <Pressable style={base.back} onPress={onBack}>
+      <Pressable
+        style={({ pressed }) => [
+          base.back,
+          pressed && { opacity: 0.72, transform: [{ scale: 1.08 }] },
+        ]}
+        onPress={onBack}
+      >
         <Ionicons name="chevron-back" size={22} color={colors.text} />
       </Pressable>
       <Text style={base.title}>{title}</Text>

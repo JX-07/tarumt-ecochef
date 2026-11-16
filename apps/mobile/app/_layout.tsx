@@ -24,6 +24,7 @@ export default function RootLayout() {
       <StatusBar style="dark" />
       <Stack screenOptions={{ headerShown: false }}>
         <Stack.Screen name="marketplace" options={{ animation: "none" }} />
+        <Stack.Screen name="shopping-list" options={{ animation: "slide_from_right" }} />
         <Stack.Screen name="rating-history" options={{ animation: "slide_from_right" }} />
         <Stack.Screen name="reports" options={{ animation: "slide_from_right" }} />
       </Stack>

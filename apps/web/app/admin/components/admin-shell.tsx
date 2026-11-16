@@ -17,6 +17,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 
 import { createAuthenticatedWebApi } from "../../../src/lib/api";
 import { signOutCurrentUser } from "../../../src/lib/auth";
+import { loadProfileImage, profileImageEvent } from "../../../src/lib/profile-image";
 
 const navigation = [
   {
@@ -50,6 +51,14 @@ export function AdminShell({ children }: { children: ReactNode }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
+  const [profileImage, setProfileImage] = useState<string | null>(null);
+
+  useEffect(() => {
+    setProfileImage(loadProfileImage("admin"));
+    const updateImage = (event: Event) => setProfileImage((event as CustomEvent<string>).detail);
+    window.addEventListener(profileImageEvent("admin"), updateImage);
+    return () => window.removeEventListener(profileImageEvent("admin"), updateImage);
+  }, []);
 
   useEffect(() => {
     const api = createAuthenticatedWebApi("/api/ecochef");
@@ -128,7 +137,7 @@ export function AdminShell({ children }: { children: ReactNode }) {
                 onClick={() => setMenuOpen((value) => !value)}
               >
                 <span>
-                  <UserRound size={20} />
+                  {profileImage ? <img src={profileImage} alt="" /> : <UserRound size={20} />}
                 </span>
                 <strong>
                   {accountName}

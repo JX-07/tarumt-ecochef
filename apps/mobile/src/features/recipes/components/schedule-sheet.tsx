@@ -11,7 +11,7 @@ import { useBottomSheetSlide } from "../../../shared/hooks/use-bottom-sheet-slid
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { AppMessageModal } from "../../../shared/components/app-message-modal";
 import type { RecipeDetail, RecipeSummary } from "../types";
-import { recipeDefaultMealSlot } from "../recipe-tag-options";
+import { recipeMealSlots } from "../recipe-tag-options";
 import { displayMealTime, TimePickerSheet } from "../../meal-planning/components/time-picker-sheet";
 import type { MealPlanEntry, MealSlot } from "../../meal-planning/types";
 import {
@@ -84,11 +84,14 @@ export function ScheduleSheet({
       active = false;
     };
   }, [recipe?.id, api, memberPrivateRecipe, allowedGroupIds?.join(",")]);
-  const defaultMeal = recipeDefaultMealSlot(recipe?.dietary_tags ?? []);
+  const authoredMealSlots = useMemo(
+    () => recipeMealSlots(recipe?.dietary_tags ?? []),
+    [recipe?.dietary_tags],
+  );
   const insets = useSafeAreaInsets();
   const [date, setDate] = useState(todayIso());
   const [dateOpen, setDateOpen] = useState(false);
-  const [meal, setMeal] = useState<MealSlot>(defaultMeal);
+  const [meal, setMeal] = useState<MealSlot>();
   const [time, setTime] = useState("");
   const [timeOpen, setTimeOpen] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -106,6 +109,7 @@ export function ScheduleSheet({
     reason: "recipe" | "meal" | "time";
   }>();
   const [privateShareWarning, setPrivateShareWarning] = useState(false);
+  const [mealMismatchWarning, setMealMismatchWarning] = useState(false);
   const plannedViewportHeight = 140;
   const plannedVisibleHeight =
     Math.min(3, plannedMeals.length) * 42 + Math.max(0, Math.min(3, plannedMeals.length) - 1) * 7;
@@ -156,6 +160,7 @@ export function ScheduleSheet({
       setGroupPickerOpen(false);
       setPlanConflict(undefined);
       setPrivateShareWarning(false);
+      setMealMismatchWarning(false);
       setLoadingPlanned(false);
       setPlannedMeals([]);
       setPlannedScrollOffset(0);
@@ -168,10 +173,11 @@ export function ScheduleSheet({
       setTime("");
       setTimeOpen(false);
       setPlanConflict(undefined);
-      setMeal(defaultMeal);
+      setMeal(undefined);
     }
-  }, [recipe?.id, defaultMeal]);
+  }, [recipe?.id]);
   async function completeSave() {
+    if (!meal) return;
     setSaving(true);
     try {
       await onSave(date, meal, time || undefined, sharedGroupId);
@@ -189,7 +195,19 @@ export function ScheduleSheet({
       setSaving(false);
     }
   }
-  function confirmSave() {
+  function confirmSave(skipMealMismatch = false) {
+    if (!meal) {
+      setMessage({
+        title: "Choose a meal type",
+        message: "Select where this recipe belongs in your schedule before continuing.",
+        tone: "error",
+      });
+      return;
+    }
+    if (!skipMealMismatch && authoredMealSlots.length > 0 && !authoredMealSlots.includes(meal)) {
+      setMealMismatchWarning(true);
+      return;
+    }
     if (memberPrivateRecipe && !sharedGroupId) {
       setMessage({
         title: "Choose a cooking group",
@@ -206,6 +224,14 @@ export function ScheduleSheet({
   }
   async function save() {
     if (saving) return;
+    if (!meal) {
+      setMessage({
+        title: "Choose a meal type",
+        message: "Meal type is required. Select one before adding this recipe to your schedule.",
+        tone: "error",
+      });
+      return;
+    }
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
       setMessage({ title: "Check the date", message: "Select a valid date.", tone: "error" });
       return;
@@ -359,7 +385,7 @@ export function ScheduleSheet({
                 </View>
               )}
             </View>
-            <Text style={styles.label}>2. CHOOSE MEAL</Text>
+            <Text style={styles.label}>2. CHOOSE MEAL *</Text>
             <View style={styles.meals}>
               {meals.map((item) => (
                 <Pressable
@@ -388,7 +414,6 @@ export function ScheduleSheet({
               <Ionicons name="time-outline" size={18} color={palette.c12ad55} />
               <Text style={styles.selectedTimeText}>{displayMealTime(time)}</Text>
               <Text style={styles.customize}>Customize</Text>
-              <Ionicons name="chevron-forward" size={17} color={palette.c7a8795} />
             </Pressable>
             <View style={groupStyles.section}>
               <Text style={styles.label}>4. COOKING GROUP</Text>
@@ -575,6 +600,42 @@ export function ScheduleSheet({
                     ? "Choose another meal"
                     : "Keep editing"}
               </Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
+      <Modal
+        visible={mealMismatchWarning}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setMealMismatchWarning(false)}
+      >
+        <View style={confirmStyles.overlay}>
+          <View style={confirmStyles.dialog}>
+            <View style={confirmStyles.icon}>
+              <Ionicons name="restaurant-outline" size={24} color={palette.cb86a24} />
+            </View>
+            <Text style={confirmStyles.title}>Different meal type?</Text>
+            <Text style={confirmStyles.copy}>
+              The recipe author listed this for{" "}
+              {authoredMealSlots
+                .map((slot) => meals.find((item) => item.value === slot)?.label ?? slot)
+                .join(", ")}
+              , but you selected {meals.find((item) => item.value === meal)?.label ?? meal}.
+            </Text>
+            <Text style={confirmStyles.question}>Add it using your selected meal type anyway?</Text>
+            <Pressable
+              disabled={saving}
+              style={confirmStyles.confirm}
+              onPress={() => {
+                setMealMismatchWarning(false);
+                confirmSave(true);
+              }}
+            >
+              <Text style={confirmStyles.confirmText}>Use selected meal type</Text>
+            </Pressable>
+            <Pressable style={confirmStyles.adjust} onPress={() => setMealMismatchWarning(false)}>
+              <Text style={confirmStyles.adjustText}>Choose another meal</Text>
             </Pressable>
           </View>
         </View>

@@ -1,6 +1,6 @@
 import { apiBaseUrl } from "../../../lib/api-url";
 import { Text } from "../../../shared/components/themed-text";
-import { colors, spacing, typography } from "@ecochef/design-tokens";
+import { colors, palette, spacing, typography } from "@ecochef/design-tokens";
 import { Ionicons } from "@expo/vector-icons";
 import { router, useFocusEffect } from "expo-router";
 import { useCallback, useMemo, useState } from "react";
@@ -132,10 +132,10 @@ export function NotificationsScreen() {
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Go back"
-          style={({ pressed }) => [styles.headerButton, pressed && styles.pressed]}
+          style={({ pressed }) => [styles.backButton, pressed && styles.backPressed]}
           onPress={() => router.back()}
         >
-          <Ionicons name="chevron-back" size={22} color={colors.text} />
+          <Ionicons name="chevron-back" size={22} color={palette.c64716d} />
         </Pressable>
         <View style={styles.headerCopy}>
           <Text style={styles.title}>Notifications</Text>
@@ -264,18 +264,24 @@ const styles = StyleSheet.create({
     borderRadius: 21,
     backgroundColor: colors.surface,
   },
+  backButton: {
+    width: 32,
+    height: 32,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 16,
+    backgroundColor: palette.ceef1f0,
+  },
   headerCopy: { flex: 1 },
   title: {
     color: colors.text,
-    fontSize: typography.mobile.rawSize.s25,
-    lineHeight: 31,
+    fontSize: typography.mobile.rawSize.s21,
     fontWeight: typography.weight.bold,
-    letterSpacing: -0.3,
   },
   subtitle: {
-    marginTop: spacing[1],
+    marginTop: 1,
     color: colors.textMuted,
-    fontSize: typography.mobile.size.caption,
+    fontSize: typography.mobile.rawSize.s11,
   },
   markAll: {
     alignSelf: "flex-end",
@@ -372,5 +378,6 @@ const styles = StyleSheet.create({
     lineHeight: 20,
     textAlign: "center",
   },
-  pressed: { opacity: 0.7 },
+  pressed: { opacity: 0.72, transform: [{ scale: 0.92 }] },
+  backPressed: { opacity: 0.72, transform: [{ scale: 1.08 }] },
 });

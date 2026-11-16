@@ -321,6 +321,9 @@ export class ApiClient {
       `/chats/orders/${encodeURIComponent(orderId)}/stores/${encodeURIComponent(storeId)}`,
     );
   }
+  async getRecentVendorChatMessages<Response>(): Promise<Response> {
+    return this.get("/chats/vendor/recent");
+  }
   async sendOrderChatMessage<Response>(
     orderId: string,
     storeId: string,

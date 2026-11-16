@@ -187,6 +187,8 @@ export function NewRecipeScreen() {
   const [ingredients, setIngredients] = useState<Row[]>([
     { name: "", amount: "", unit: "g", customUnit: "" },
   ]);
+  const [suggestionTarget, setSuggestionTarget] = useState<number>();
+  const [ingredientSuggestions, setIngredientSuggestions] = useState<string[]>([]);
   const [allergenTags, setAllergenTags] = useState<string[]>([]);
   const previousDetectedAllergens = useRef<string[]>([]);
   const [unitPicker, setUnitPicker] = useState<number>();
@@ -206,6 +208,32 @@ export function NewRecipeScreen() {
     () => Array.from(new Set([...allergenOptions, ...allergenTags])),
     [allergenTags],
   );
+  useEffect(() => {
+    if (suggestionTarget === undefined) {
+      setIngredientSuggestions([]);
+      return;
+    }
+    const query = ingredients[suggestionTarget]?.name.trim() ?? "";
+    if (query.length < 2) {
+      setIngredientSuggestions([]);
+      return;
+    }
+    let active = true;
+    const timer = setTimeout(() => {
+      void api
+        .getIngredientSuggestions<string[]>(query)
+        .then((names) => {
+          if (active) setIngredientSuggestions(names);
+        })
+        .catch(() => {
+          if (active) setIngredientSuggestions([]);
+        });
+    }, 250);
+    return () => {
+      active = false;
+      clearTimeout(timer);
+    };
+  }, [api, ingredients, suggestionTarget]);
   useEffect(() => {
     const previous = previousDetectedAllergens.current;
     setAllergenTags((current) =>
@@ -309,10 +337,9 @@ export function NewRecipeScreen() {
   }
   function toggleMealTag(label: string) {
     const value = label.toLowerCase();
-    setTags((current) => {
-      const withoutMeals = current.filter((item) => recipeTagKind(item) !== "meal");
-      return current.includes(value) ? withoutMeals : [...withoutMeals, value];
-    });
+    setTags((current) =>
+      current.includes(value) ? current.filter((item) => item !== value) : [...current, value],
+    );
   }
   function toggleDietaryTag(label: string) {
     const value = label.toLowerCase();
@@ -512,7 +539,6 @@ export function NewRecipeScreen() {
       return;
     }
     if (
-      !photo ||
       title.trim().length < 2 ||
       Number(servings) <= 0 ||
       ingredients.some(
@@ -525,8 +551,7 @@ export function NewRecipeScreen() {
     ) {
       setPageMessage({
         title: "Complete required fields",
-        message:
-          "Add a photo, title, positive servings, ingredient amounts and units, and cooking steps.",
+        message: "Add a title, positive servings, ingredient amounts and units, and cooking steps.",
         icon: "alert-circle-outline",
       });
       return;
@@ -562,7 +587,7 @@ export function NewRecipeScreen() {
         return;
       }
       let imageUrl = photo;
-      if (!/^https?:\/\//i.test(photo)) {
+      if (photo && !/^https?:\/\//i.test(photo)) {
         const data = await FileSystem.readAsStringAsync(photo, {
           encoding: FileSystem.EncodingType.Base64,
         });
@@ -605,7 +630,13 @@ export function NewRecipeScreen() {
   return (
     <View style={styles.root}>
       <View style={[styles.header, { paddingTop: insets.top + PAGE_TOP_GAP }]}>
-        <Pressable style={styles.back} onPress={() => goBackOrReplace("/(tabs)/recipes")}>
+        <Pressable
+          style={({ pressed }) => [
+            styles.back,
+            pressed && { opacity: 0.72, transform: [{ scale: 1.08 }] },
+          ]}
+          onPress={() => goBackOrReplace("/(tabs)/recipes")}
+        >
           <Ionicons name="chevron-back" size={22} color={palette.c647084} />
         </Pressable>
         <Text style={styles.headerTitle}>{editing ? "Edit Recipe" : "New Recipe"}</Text>
@@ -626,8 +657,8 @@ export function NewRecipeScreen() {
           ) : (
             <>
               <Ionicons name="camera-outline" size={30} color={palette.c94a0b2} />
-              <Text style={styles.photoTitle}>Add Photo*</Text>
-              <Text style={styles.photoCopy}>Required</Text>
+              <Text style={styles.photoTitle}>Add Photo</Text>
+              <Text style={styles.photoCopy}>Optional</Text>
             </>
           )}
         </Pressable>
@@ -723,7 +754,7 @@ export function NewRecipeScreen() {
               ))}
           </View>
         )}
-        <Text style={tagChoiceStyles.label}>MEAL TYPE · CHOOSE ONE</Text>
+        <Text style={tagChoiceStyles.label}>MEAL TYPE · CHOOSE MULTIPLE</Text>
         <View style={tagChoiceStyles.options}>
           {recipeMealTypes.map(([emoji, label]) => {
             const active = tags.includes(label.toLowerCase());
@@ -747,30 +778,6 @@ export function NewRecipeScreen() {
             );
           })}
         </View>
-        <Text style={tagChoiceStyles.label}>DIETARY · CHOOSE MULTIPLE</Text>
-        <View style={tagChoiceStyles.options}>
-          {recipeDietaryTags.map(([emoji, label]) => {
-            const active = tags.includes(label.toLowerCase());
-            return (
-              <Pressable
-                key={label}
-                onPress={() => toggleDietaryTag(label)}
-                style={[
-                  tagChoiceStyles.option,
-                  tagChoiceStyles.dietaryOption,
-                  active && tagChoiceStyles.dietaryOptionActive,
-                ]}
-              >
-                <Text
-                  style={[tagChoiceStyles.optionText, active && tagChoiceStyles.optionTextActive]}
-                >
-                  {emoji} {label}
-                </Text>
-                {active && <Ionicons name="checkmark" size={13} color={palette.cfff} />}
-              </Pressable>
-            );
-          })}
-        </View>
         <Label text="INGREDIENTS*" />
         <View style={styles.columns}>
           <Text style={styles.column}>INGREDIENT</Text>
@@ -781,6 +788,7 @@ export function NewRecipeScreen() {
             <View style={styles.ingredientRow}>
               <TextInput
                 value={item.name}
+                onFocus={() => setSuggestionTarget(index)}
                 onChangeText={(value) =>
                   setIngredients(
                     ingredients.map((row, i) => (i === index ? { ...row, name: value } : row)),
@@ -807,6 +815,26 @@ export function NewRecipeScreen() {
                 <Ionicons name="chevron-down" size={14} color={palette.c697588} />
               </Pressable>
             </View>
+            {suggestionTarget === index && ingredientSuggestions.length > 0 ? (
+              <View style={styles.ingredientSuggestions}>
+                {ingredientSuggestions.map((name) => (
+                  <Pressable
+                    key={name}
+                    style={styles.ingredientSuggestion}
+                    onPress={() => {
+                      setIngredients(
+                        ingredients.map((row, i) => (i === index ? { ...row, name } : row)),
+                      );
+                      setIngredientSuggestions([]);
+                      setSuggestionTarget(undefined);
+                    }}
+                  >
+                    <Ionicons name="search-outline" size={15} color={GREEN} />
+                    <Text style={styles.ingredientSuggestionText}>{name}</Text>
+                  </Pressable>
+                ))}
+              </View>
+            ) : null}
             {item.unit === "Custom" && (
               <TextInput
                 value={item.customUnit}
@@ -832,6 +860,30 @@ export function NewRecipeScreen() {
           <Ionicons name="add" size={18} color={GREEN} />
           <Text style={styles.addLineText}>Add Ingredient</Text>
         </Pressable>
+        <Text style={tagChoiceStyles.label}>DIETARY · CHOOSE MULTIPLE</Text>
+        <View style={tagChoiceStyles.options}>
+          {recipeDietaryTags.map(([emoji, label]) => {
+            const active = tags.includes(label.toLowerCase());
+            return (
+              <Pressable
+                key={label}
+                onPress={() => toggleDietaryTag(label)}
+                style={[
+                  tagChoiceStyles.option,
+                  tagChoiceStyles.dietaryOption,
+                  active && tagChoiceStyles.dietaryOptionActive,
+                ]}
+              >
+                <Text
+                  style={[tagChoiceStyles.optionText, active && tagChoiceStyles.optionTextActive]}
+                >
+                  {emoji} {label}
+                </Text>
+                {active && <Ionicons name="checkmark" size={13} color={palette.cfff} />}
+              </Pressable>
+            );
+          })}
+        </View>
         <View style={allergenStyles.card}>
           <View style={allergenStyles.heading}>
             <View style={allergenStyles.icon}>
@@ -1526,6 +1578,30 @@ const styles = StyleSheet.create({
   },
   ingredientRow: { flexDirection: "row", gap: 7, marginTop: 8 },
   ingredientName: { flex: 1 },
+  ingredientSuggestions: {
+    marginTop: 5,
+    marginRight: 158,
+    overflow: "hidden",
+    borderWidth: 1,
+    borderColor: palette.ce1e4df,
+    borderRadius: 12,
+    backgroundColor: palette.cfff,
+  },
+  ingredientSuggestion: {
+    minHeight: 40,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingHorizontal: 11,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: palette.ce1e4df,
+  },
+  ingredientSuggestionText: {
+    flex: 1,
+    color: palette.c263c34,
+    fontSize: typography.mobile.rawSize.s12,
+    fontWeight: typography.weight.semibold,
+  },
   amount: { width: 62, paddingHorizontal: 5, textAlign: "center" },
   unitButton: {
     width: 82,

@@ -91,7 +91,6 @@ export function ProductReviewForm({
       transparent
       presentationStyle="overFullScreen"
       statusBarTranslucent
-      navigationBarTranslucent
       animationType="fade"
       onRequestClose={() => {
         if (!saving) onClose();
@@ -110,12 +109,17 @@ export function ProductReviewForm({
         <Animated.View
           style={[
             styles.sheet,
-            { paddingBottom: Math.max(insets.bottom, spacing[5]) },
+            {
+              paddingBottom: Math.max(insets.bottom, Platform.OS === "android" ? 28 : spacing[5]),
+            },
             sheetMotion,
           ]}
           accessibilityViewIsModal
         >
-          <ScrollView keyboardShouldPersistTaps="handled">
+          <ScrollView
+            keyboardShouldPersistTaps="handled"
+            contentContainerStyle={{ paddingBottom: spacing[2] }}
+          >
             <View style={styles.header}>
               <Text style={styles.title}>
                 {data?.my_review ? "Your product rating" : "Rate your purchased item"}
