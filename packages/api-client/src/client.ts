@@ -367,10 +367,15 @@ export class ApiClient {
   async broadcastVendorPromotion<Response>(
     promotionId: string,
     rewardMessage: string,
+    audience: {
+      relationship: "all" | "customers" | "favourites" | "customers_and_favourites";
+      min_total_spent?: number;
+      min_total_orders?: number;
+    },
   ): Promise<Response> {
     return this.request(`/vendor/promotions/${encodeURIComponent(promotionId)}/broadcast`, {
       method: "POST",
-      body: JSON.stringify({ reward_message: rewardMessage }),
+      body: JSON.stringify({ reward_message: rewardMessage, ...audience }),
     });
   }
   async getVendorHolidays<Response>(storeId: string): Promise<Response> {

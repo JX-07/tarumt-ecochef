@@ -373,7 +373,8 @@ def _handle_order_cancellation_refund(refund: Any, session: Session) -> bool:
         return False
     payment = session.execute(
         text("""
-        SELECT p.id, p.inventory_deducted_at, p.inventory_released_at, o.order_status, cart.user_id
+        SELECT p.id, p.inventory_deducted_at, p.inventory_released_at, o.order_status,
+               o.cancellation_reason, cart.user_id
         FROM payments p JOIN orders o ON o.id = p.order_id JOIN carts cart ON cart.id=o.cart_id
         WHERE o.id = :order_id AND p.stripe_payment_intent_id = :payment_intent_id
         FOR UPDATE OF p, o
@@ -419,13 +420,20 @@ def _handle_order_cancellation_refund(refund: Any, session: Session) -> bool:
     """),
         {"order_id": order_id},
     )
+    cancelled_by_customer = str(payment.cancellation_reason or "").startswith(
+        "Cancelled by the customer"
+    )
     create_notification(
         session,
         user_id=payment.user_id,
         category="order",
         title="Order cancelled and refunded",
-        message=f"Your order #{str(order_id)[:8].upper()} was cancelled by the shop. A full refund was issued to your original payment method.",
-        source_key=f"vendor-order-cancelled:{order_id}",
+        message=(
+            f"Your delayed order #{str(order_id)[:8].upper()} was cancelled. A full refund was issued to your original payment method."
+            if cancelled_by_customer
+            else f"Your order #{str(order_id)[:8].upper()} was cancelled by the shop. A full refund was issued to your original payment method."
+        ),
+        source_key=f"order-cancelled:{order_id}",
         action_path=f"/marketplace/order?orderId={order_id}",
     )
     return True

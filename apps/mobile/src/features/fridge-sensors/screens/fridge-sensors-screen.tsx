@@ -4,7 +4,7 @@ import { colors, spacing, typography } from "@ecochef/design-tokens";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import * as Clipboard from "expo-clipboard";
 import { router, useFocusEffect } from "expo-router";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Animated,
@@ -41,21 +41,30 @@ export function FridgeSensorsScreen() {
   const [sensorName, setSensorName] = useState("EcoChef E-Nose");
   const [deviceCode, setDeviceCode] = useState("");
   const [paired, setPaired] = useState<PairFridgeSensorResponse>();
+  const requestId = useRef(0);
 
   const load = useCallback(
-    async (refresh = false) => {
-      refresh ? setRefreshing(true) : setLoading(true);
-      setError(undefined);
+    async (mode: "initial" | "manual" | "background" = "initial") => {
+      const currentRequest = ++requestId.current;
+      if (mode === "manual") setRefreshing(true);
+      if (mode === "initial") setLoading(true);
+      if (mode !== "background") setError(undefined);
       try {
         const result = await api.getFridgeSensors<FridgeSensorList>();
-        setSensors(Array.isArray(result?.items) ? result.items : []);
+        if (currentRequest === requestId.current) {
+          setSensors(Array.isArray(result?.items) ? result.items : []);
+          setError(undefined);
+        }
       } catch (nextError) {
-        setError(
-          nextError instanceof Error ? nextError.message : "Fridge Sensors could not be loaded.",
-        );
+        if (currentRequest === requestId.current && mode !== "background")
+          setError(
+            nextError instanceof Error ? nextError.message : "Fridge Sensors could not be loaded.",
+          );
       } finally {
-        setLoading(false);
-        setRefreshing(false);
+        if (currentRequest === requestId.current) {
+          setLoading(false);
+          setRefreshing(false);
+        }
       }
     },
     [api],
@@ -64,6 +73,11 @@ export function FridgeSensorsScreen() {
   useFocusEffect(
     useCallback(() => {
       void load();
+      const timer = setInterval(() => void load("background"), 15_000);
+      return () => {
+        clearInterval(timer);
+        requestId.current++;
+      };
     }, [load]),
   );
 
@@ -85,7 +99,7 @@ export function FridgeSensorsScreen() {
         device_code: deviceCode,
       });
       setPaired(result);
-      await load(true);
+      await load("manual");
     } catch (nextError) {
       setError(
         nextError instanceof Error ? nextError.message : "The Fridge Sensor could not be linked.",
@@ -134,7 +148,7 @@ export function FridgeSensorsScreen() {
           refreshControl={
             <RefreshControl
               refreshing={refreshing}
-              onRefresh={() => void load(true)}
+              onRefresh={() => void load("manual")}
               tintColor={colors.primary}
               colors={[colors.primary]}
             />
@@ -324,7 +338,9 @@ export function FridgeSensorsScreen() {
 
 function SensorRow({ sensor }: { sensor: FridgeSensorSummary }) {
   const reading = sensor.latest_reading;
-  const freshness = freshnessAppearance[reading?.freshness_status ?? "unknown"];
+  const freshness = reading
+    ? freshnessAppearance[reading.freshness_status]
+    : { ...freshnessAppearance.unknown, label: "Waiting for readings" };
   return (
     <Pressable
       accessibilityRole="button"

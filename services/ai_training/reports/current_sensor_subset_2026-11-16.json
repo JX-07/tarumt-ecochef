@@ -1,0 +1,268 @@
+{
+  "warning": "Source-dataset testing only. Not validated on the current ESP32 or mixed foods.",
+  "beef": {
+    "full": {
+      "features": ["mq2", "mq3", "mq4", "mq5", "mq135", "mq136", "temperature", "humidity"],
+      "train_rows": 27295,
+      "labels": ["acceptable", "excellent", "good", "spoiled"],
+      "val": {
+        "rows": 2160,
+        "accuracy": 0.7713,
+        "balanced_accuracy": 0.7009,
+        "macro_f1": 0.6487,
+        "confusion_matrix": [
+          [0, 0, 77, 343],
+          [0, 296, 64, 0],
+          [0, 10, 530, 0],
+          [0, 0, 0, 840]
+        ]
+      },
+      "test": {
+        "rows": 2160,
+        "accuracy": 0.6611,
+        "balanced_accuracy": 0.6493,
+        "macro_f1": 0.5886,
+        "confusion_matrix": [
+          [0, 0, 420, 0],
+          [0, 342, 18, 0],
+          [0, 4, 536, 0],
+          [0, 0, 290, 550]
+        ]
+      }
+    },
+    "esp32_subset": {
+      "features": ["mq3", "mq135", "mq136", "temperature", "humidity"],
+      "train_rows": 27295,
+      "labels": ["acceptable", "excellent", "good", "spoiled"],
+      "val": {
+        "rows": 2160,
+        "accuracy": 0.6616,
+        "balanced_accuracy": 0.5942,
+        "macro_f1": 0.5678,
+        "confusion_matrix": [
+          [0, 0, 0, 420],
+          [0, 309, 51, 0],
+          [0, 7, 280, 253],
+          [0, 0, 0, 840]
+        ]
+      },
+      "test": {
+        "rows": 2160,
+        "accuracy": 0.7148,
+        "balanced_accuracy": 0.6872,
+        "macro_f1": 0.5847,
+        "confusion_matrix": [
+          [0, 253, 167, 0],
+          [0, 358, 2, 0],
+          [0, 22, 518, 0],
+          [0, 111, 61, 668]
+        ]
+      }
+    },
+    "shared_four": {
+      "features": ["mq3", "mq135", "temperature", "humidity"],
+      "train_rows": 27295,
+      "labels": ["acceptable", "excellent", "good", "spoiled"],
+      "val": {
+        "rows": 2160,
+        "accuracy": 0.5718,
+        "balanced_accuracy": 0.4833,
+        "macro_f1": 0.4678,
+        "confusion_matrix": [
+          [0, 0, 0, 420],
+          [0, 218, 44, 98],
+          [0, 4, 177, 359],
+          [0, 0, 0, 840]
+        ]
+      },
+      "test": {
+        "rows": 2160,
+        "accuracy": 0.5171,
+        "balanced_accuracy": 0.569,
+        "macro_f1": 0.5322,
+        "confusion_matrix": [
+          [163, 0, 257, 0],
+          [0, 249, 111, 0],
+          [0, 0, 540, 0],
+          [181, 0, 494, 165]
+        ]
+      }
+    }
+  },
+  "trout": {
+    "full": {
+      "features": [
+        "mq3_mean",
+        "mq3_std",
+        "mq3_min",
+        "mq3_max",
+        "mq3_slope",
+        "mq3_delta",
+        "mq5_mean",
+        "mq5_std",
+        "mq5_min",
+        "mq5_max",
+        "mq5_slope",
+        "mq5_delta",
+        "mq9_mean",
+        "mq9_std",
+        "mq9_min",
+        "mq9_max",
+        "mq9_slope",
+        "mq9_delta",
+        "mq135_mean",
+        "mq135_std",
+        "mq135_min",
+        "mq135_max",
+        "mq135_slope",
+        "mq135_delta",
+        "mq137_mean",
+        "mq137_std",
+        "mq137_min",
+        "mq137_max",
+        "mq137_slope",
+        "mq137_delta",
+        "temperature_mean",
+        "temperature_std",
+        "temperature_min",
+        "temperature_max",
+        "temperature_slope",
+        "temperature_delta",
+        "humidity_mean",
+        "humidity_std",
+        "humidity_min",
+        "humidity_max",
+        "humidity_slope",
+        "humidity_delta"
+      ],
+      "train_rows": 169,
+      "labels": ["fresh", "spoiled"],
+      "val": {
+        "rows": 17,
+        "accuracy": 1.0,
+        "balanced_accuracy": 1.0,
+        "macro_f1": 1.0,
+        "confusion_matrix": [
+          [15, 0],
+          [0, 2]
+        ]
+      },
+      "test": {
+        "rows": 24,
+        "accuracy": 1.0,
+        "balanced_accuracy": 1.0,
+        "macro_f1": 1.0,
+        "confusion_matrix": [
+          [16, 0],
+          [0, 8]
+        ]
+      }
+    },
+    "esp32_subset": {
+      "features": [
+        "mq3_mean",
+        "mq3_std",
+        "mq3_min",
+        "mq3_max",
+        "mq3_slope",
+        "mq3_delta",
+        "mq135_mean",
+        "mq135_std",
+        "mq135_min",
+        "mq135_max",
+        "mq135_slope",
+        "mq135_delta",
+        "mq137_mean",
+        "mq137_std",
+        "mq137_min",
+        "mq137_max",
+        "mq137_slope",
+        "mq137_delta",
+        "temperature_mean",
+        "temperature_std",
+        "temperature_min",
+        "temperature_max",
+        "temperature_slope",
+        "temperature_delta",
+        "humidity_mean",
+        "humidity_std",
+        "humidity_min",
+        "humidity_max",
+        "humidity_slope",
+        "humidity_delta"
+      ],
+      "train_rows": 169,
+      "labels": ["fresh", "spoiled"],
+      "val": {
+        "rows": 17,
+        "accuracy": 1.0,
+        "balanced_accuracy": 1.0,
+        "macro_f1": 1.0,
+        "confusion_matrix": [
+          [15, 0],
+          [0, 2]
+        ]
+      },
+      "test": {
+        "rows": 24,
+        "accuracy": 1.0,
+        "balanced_accuracy": 1.0,
+        "macro_f1": 1.0,
+        "confusion_matrix": [
+          [16, 0],
+          [0, 8]
+        ]
+      }
+    },
+    "shared_four": {
+      "features": [
+        "mq3_mean",
+        "mq3_std",
+        "mq3_min",
+        "mq3_max",
+        "mq3_slope",
+        "mq3_delta",
+        "mq135_mean",
+        "mq135_std",
+        "mq135_min",
+        "mq135_max",
+        "mq135_slope",
+        "mq135_delta",
+        "temperature_mean",
+        "temperature_std",
+        "temperature_min",
+        "temperature_max",
+        "temperature_slope",
+        "temperature_delta",
+        "humidity_mean",
+        "humidity_std",
+        "humidity_min",
+        "humidity_max",
+        "humidity_slope",
+        "humidity_delta"
+      ],
+      "train_rows": 169,
+      "labels": ["fresh", "spoiled"],
+      "val": {
+        "rows": 17,
+        "accuracy": 1.0,
+        "balanced_accuracy": 1.0,
+        "macro_f1": 1.0,
+        "confusion_matrix": [
+          [15, 0],
+          [0, 2]
+        ]
+      },
+      "test": {
+        "rows": 24,
+        "accuracy": 1.0,
+        "balanced_accuracy": 1.0,
+        "macro_f1": 1.0,
+        "confusion_matrix": [
+          [16, 0],
+          [0, 8]
+        ]
+      }
+    }
+  }
+}

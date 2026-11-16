@@ -285,3 +285,5 @@ class CheckoutStatusResult(BaseModel):
     total: Decimal
     invoice_url: str | None = None
     invoice_pdf_url: str | None = None
+    can_cancel: bool = False
+    cancel_available_at: datetime | None = None

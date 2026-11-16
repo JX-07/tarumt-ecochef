@@ -339,9 +339,7 @@ function FreshnessResults({
         </View>
         <View style={styles.aiPill}>
           <Ionicons name="sparkles" size={13} color={colors.primaryStrong} />
-          <Text style={styles.aiPillText}>
-            {result.provider === "freshness_model_api" ? "EcoChef freshness AI" : "Gemini preview"}
-          </Text>
+          <Text style={styles.aiPillText}>EcoChef freshness AI</Text>
         </View>
       </View>
       {result.items.length ? (
@@ -528,9 +526,7 @@ function IngredientResults({
         </View>
         <View style={styles.aiPill}>
           <Ionicons name="sparkles" size={13} color={colors.primaryStrong} />
-          <Text style={styles.aiPillText}>
-            {provider === "food_detection_api" ? "EcoChef detector" : "Gemini fallback"}
-          </Text>
+          <Text style={styles.aiPillText}>EcoChef detector</Text>
         </View>
       </View>
       {items.length ? (

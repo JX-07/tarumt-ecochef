@@ -1230,14 +1230,53 @@ def broadcast_vendor_promotion(
     session: Session = Depends(get_db_session),
 ) -> dict:
     store_id = _account_store_id(session, current_user.id, require_approved=True)
+    relationship = str(request.get("relationship") or "all")
+    if relationship not in {"all", "customers", "favourites", "customers_and_favourites"}:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "Choose a valid relationship.")
+    try:
+        min_total_spent = max(0.0, float(request.get("min_total_spent") or 0))
+        min_total_orders = max(0, int(request.get("min_total_orders") or 0))
+    except (TypeError, ValueError):
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_CONTENT,
+            "Spending and order filters must be valid numbers.",
+        )
     customer_ids = (
         session.execute(
             text("""
-        SELECT DISTINCT c.user_id FROM carts c JOIN orders o ON o.cart_id=c.id JOIN order_items item ON item.order_id=o.id
-        JOIN payments pay ON pay.order_id=o.id AND pay.payment_status='paid' WHERE item.store_id=:store_id
-        UNION SELECT user_id FROM store_favourites WHERE store_id=:store_id
+        WITH purchases AS (
+          SELECT c.user_id, COUNT(DISTINCT o.id) AS total_orders,
+                 COALESCE(SUM(item.net_amount), 0) AS total_spent
+          FROM carts c
+          JOIN orders o ON o.cart_id=c.id
+          JOIN order_items item ON item.order_id=o.id AND item.store_id=:store_id
+          JOIN payments pay ON pay.order_id=o.id AND pay.payment_status='paid'
+          GROUP BY c.user_id
+        ), favourites AS (
+          SELECT user_id FROM store_favourites WHERE store_id=:store_id
+        ), audience AS (
+          SELECT user_id FROM purchases UNION SELECT user_id FROM favourites
+        )
+        SELECT audience.user_id
+        FROM audience
+        LEFT JOIN purchases ON purchases.user_id=audience.user_id
+        LEFT JOIN favourites ON favourites.user_id=audience.user_id
+        WHERE (:min_total_spent = 0 OR COALESCE(purchases.total_spent, 0) > :min_total_spent)
+          AND (:min_total_orders = 0 OR COALESCE(purchases.total_orders, 0) > :min_total_orders)
+          AND (
+            :relationship = 'all'
+            OR (:relationship = 'customers' AND purchases.user_id IS NOT NULL)
+            OR (:relationship = 'favourites' AND favourites.user_id IS NOT NULL)
+            OR (:relationship = 'customers_and_favourites'
+                AND purchases.user_id IS NOT NULL AND favourites.user_id IS NOT NULL)
+          )
     """),
-            {"store_id": store_id},
+            {
+                "store_id": store_id,
+                "relationship": relationship,
+                "min_total_spent": min_total_spent,
+                "min_total_orders": min_total_orders,
+            },
         )
         .scalars()
         .all()

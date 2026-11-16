@@ -80,6 +80,7 @@ LATEST_READING_SELECT = """
     LEFT JOIN LATERAL (
         SELECT reading.* FROM fridge_sensor_readings reading
         WHERE reading.sensor_id = sensor.id
+          AND reading.captured_at >= now() - interval '21 days'
         ORDER BY reading.captured_at DESC LIMIT 1
     ) latest ON true
 """
@@ -281,6 +282,13 @@ def ingest_fridge_sensor_reading(
 
     received_at = datetime.now(timezone.utc)
     captured_at = request.captured_at or received_at
+    session.execute(
+        text("""
+        DELETE FROM fridge_sensor_readings
+        WHERE sensor_id = :sensor_id AND captured_at < :cutoff
+    """),
+        {"sensor_id": sensor.id, "cutoff": received_at - timedelta(days=21)},
+    )
     reading_id = session.execute(
         text("""
         INSERT INTO fridge_sensor_readings
@@ -375,18 +383,31 @@ def get_fridge_sensor(
     ).one_or_none()
     if row is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Fridge Sensor not found.")
+    now = datetime.now(timezone.utc)
+    window_start = now - timedelta(hours=hours)
     readings = session.execute(
         text("""
-        SELECT recent.* FROM (
-            SELECT id, captured_at, mq3, mq135, mq136, mq137,
-                   temperature_c, humidity_percent, freshness_status, confidence, model_version
-            FROM fridge_sensor_readings
-            WHERE sensor_id = :sensor_id AND captured_at >= now() - (:hours * interval '1 hour')
-            ORDER BY captured_at DESC, id DESC
-            LIMIT 500
-        ) recent ORDER BY captured_at, id
+        SELECT id, captured_at, mq3, mq135, mq136, mq137,
+               temperature_c, humidity_percent, freshness_status, confidence, model_version
+        FROM (
+            SELECT reading.*,
+                   row_number() OVER (
+                       PARTITION BY floor(extract(epoch FROM captured_at) / (:hours * 30))
+                       ORDER BY captured_at DESC, id DESC
+                   ) AS bucket_rank
+            FROM fridge_sensor_readings reading
+            WHERE sensor_id = :sensor_id
+              AND captured_at >= :window_start AND captured_at <= :window_end
+        ) sampled
+        WHERE bucket_rank = 1
+        ORDER BY captured_at, id
     """),
-        {"sensor_id": sensor_id, "hours": hours},
+        {
+            "sensor_id": sensor_id,
+            "hours": hours,
+            "window_start": window_start,
+            "window_end": now,
+        },
     ).all()
     summary = _summary(row)
     return FridgeSensorDetail(

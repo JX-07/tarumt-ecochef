@@ -1,0 +1,241 @@
+{
+  "trained": 12,
+  "reports": {
+    "trout_freshness": {
+      "status": "trained",
+      "task": "classification",
+      "rows": 210,
+      "features": 42,
+      "train_rows": 147,
+      "validation_rows": 31,
+      "test_rows": 32,
+      "validation": {
+        "accuracy": 1.0,
+        "macro_f1": 1.0
+      },
+      "test": {
+        "accuracy": 1.0,
+        "macro_f1": 1.0
+      },
+      "note": "TVC-linked storage-day label; use runs/enose_fish_cleaned for the fillet-disjoint benchmark.",
+      "evaluation_scope": "random recording holdout; canonical benchmark is fillet-disjoint"
+    },
+    "beef_quality": {
+      "status": "trained",
+      "task": "classification",
+      "rows": 16849,
+      "features": 10,
+      "train_rows": 11794,
+      "validation_rows": 2527,
+      "test_rows": 2528,
+      "validation": {
+        "accuracy": 0.996438464582509,
+        "macro_f1": 0.995529340780689
+      },
+      "test": {
+        "accuracy": 0.995253164556962,
+        "macro_f1": 0.9940200391696445
+      },
+      "note": "",
+      "evaluation_scope": "row holdout from a continuous public recording; not independent-batch validation"
+    },
+    "pork_adulteration": {
+      "status": "trained",
+      "task": "classification",
+      "rows": 745,
+      "features": 10,
+      "train_rows": 521,
+      "validation_rows": 112,
+      "test_rows": 112,
+      "validation": {
+        "accuracy": 1.0,
+        "macro_f1": 1.0
+      },
+      "test": {
+        "accuracy": 0.9910714285714286,
+        "macro_f1": 0.9888288288288288
+      },
+      "note": "",
+      "evaluation_scope": "row holdout; independent-batch IDs unavailable"
+    },
+    "aroma_identity": {
+      "status": "trained",
+      "task": "classification",
+      "rows": 23794,
+      "features": 1,
+      "train_rows": 16655,
+      "validation_rows": 3569,
+      "test_rows": 3570,
+      "validation": {
+        "accuracy": 0.07957411039506865,
+        "macro_f1": 0.08009927312515262
+      },
+      "test": {
+        "accuracy": 0.08571428571428572,
+        "macro_f1": 0.08636767409678561
+      },
+      "note": "Row-level public labels; independent-recording IDs were unavailable.",
+      "evaluation_scope": "random cleaned-row holdout"
+    },
+    "coffee_powder_identity": {
+      "status": "trained",
+      "task": "classification",
+      "rows": 16845,
+      "features": 1,
+      "train_rows": 11791,
+      "validation_rows": 2527,
+      "test_rows": 2527,
+      "validation": {
+        "accuracy": 0.17293233082706766,
+        "macro_f1": 0.17695149037026692
+      },
+      "test": {
+        "accuracy": 0.17965967550455086,
+        "macro_f1": 0.1840192872028811
+      },
+      "note": "Row-level public labels; independent-recording IDs were unavailable.",
+      "evaluation_scope": "random cleaned-row holdout"
+    },
+    "seafood_freshness": {
+      "status": "trained",
+      "task": "classification",
+      "rows": 336977,
+      "features": 14,
+      "train_rows": 235883,
+      "validation_rows": 50547,
+      "test_rows": 50547,
+      "validation": {
+        "accuracy": 0.9987338516628089,
+        "macro_f1": 0.9985480243593065
+      },
+      "test": {
+        "accuracy": 0.9987536352305775,
+        "macro_f1": 0.9985705954488633
+      },
+      "note": "TVC excluded to prevent target leakage.",
+      "evaluation_scope": "row holdout from five species recordings; external-session validation required"
+    },
+    "beef_cut_identity": {
+      "status": "trained",
+      "task": "classification",
+      "rows": 26638,
+      "features": 11,
+      "train_rows": 18646,
+      "validation_rows": 3996,
+      "test_rows": 3996,
+      "validation": {
+        "accuracy": 1.0,
+        "macro_f1": 1.0
+      },
+      "test": {
+        "accuracy": 1.0,
+        "macro_f1": 1.0
+      },
+      "note": "",
+      "evaluation_scope": "row holdout; each cut is a single continuous source series"
+    },
+    "fish_species_identity": {
+      "status": "trained",
+      "task": "classification",
+      "rows": 62,
+      "features": 10,
+      "train_rows": 43,
+      "validation_rows": 9,
+      "test_rows": 10,
+      "validation": {
+        "accuracy": 0.4444444444444444,
+        "macro_f1": 0.4481481481481482
+      },
+      "test": {
+        "accuracy": 0.2,
+        "macro_f1": 0.16666666666666666
+      },
+      "note": "",
+      "evaluation_scope": "random cleaned-row holdout"
+    },
+    "fish_storage_day": {
+      "status": "trained",
+      "task": "regression",
+      "rows": 62,
+      "features": 10,
+      "train_rows": 43,
+      "validation_rows": 9,
+      "test_rows": 10,
+      "validation": {
+        "mae": 0.45162037037037056,
+        "r2": 0.9754174140625
+      },
+      "test": {
+        "mae": 0.5581874999999992,
+        "r2": 0.9415735186749251
+      },
+      "note": "Storage-day progression, not a safety label.",
+      "evaluation_scope": "random cleaned-row holdout"
+    },
+    "food_storage_day": {
+      "status": "trained",
+      "task": "regression",
+      "rows": 50,
+      "features": 45,
+      "train_rows": 35,
+      "validation_rows": 7,
+      "test_rows": 8,
+      "validation": {
+        "mae": 0.5531547619047613,
+        "r2": 0.6641904610339511
+      },
+      "test": {
+        "mae": 0.5518229166666667,
+        "r2": 0.7088560275080904
+      },
+      "note": "D1-D5 progression only; not verified spoilage.",
+      "evaluation_scope": "random cleaned-row holdout"
+    },
+    "gas_concentration_identity": {
+      "status": "trained",
+      "task": "classification",
+      "rows": 624,
+      "features": 252,
+      "train_rows": 436,
+      "validation_rows": 94,
+      "test_rows": 94,
+      "validation": {
+        "accuracy": 0.8191489361702128,
+        "macro_f1": 0.8218027734976887
+      },
+      "test": {
+        "accuracy": 0.8085106382978723,
+        "macro_f1": 0.8282749632026606
+      },
+      "note": "",
+      "evaluation_scope": "random cleaned-row holdout"
+    },
+    "wine_ethanol_substance": {
+      "status": "trained",
+      "task": "classification",
+      "rows": 300,
+      "features": 40,
+      "train_rows": 210,
+      "validation_rows": 45,
+      "test_rows": 45,
+      "validation": {
+        "accuracy": 1.0,
+        "macro_f1": 1.0
+      },
+      "test": {
+        "accuracy": 0.9777777777777777,
+        "macro_f1": 0.9688644688644689
+      },
+      "note": "",
+      "evaluation_scope": "random cleaned-row holdout"
+    },
+    "partition_benchmarks": {
+      "status": "excluded",
+      "reason": "Derived train/validation/test transformations of the 12-cut beef workbook; excluded to avoid duplicate evidence."
+    },
+    "unlabelled_files": {
+      "status": "excluded",
+      "reason": "Files without a defensible target remain available for calibration or unsupervised pretraining."
+    }
+  }
+}

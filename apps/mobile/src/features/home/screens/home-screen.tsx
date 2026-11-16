@@ -7,6 +7,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Image,
+  Modal,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -24,8 +25,20 @@ import type { MealPlanCalendar } from "../../meal-planning/types";
 import { recipeImageUrl } from "../../recipes/recipe-image";
 import type { NotificationList } from "../../notifications/types";
 import { type CookingGroupList } from "../../social/cooking-group";
-import { freshnessAppearance, relativeTime } from "../../fridge-sensors/sensor-insights";
-import type { FridgeSensorList } from "../../fridge-sensors/types";
+import {
+  createGasCalibration,
+  freshnessAppearance,
+  gasTrendInsight,
+  relativeTime,
+} from "../../fridge-sensors/sensor-insights";
+import type { GasTrendInsight } from "../../fridge-sensors/sensor-insights";
+import {
+  clearPendingGasCalibration,
+  loadGasCalibration,
+  loadPendingGasCalibration,
+  saveGasCalibration,
+} from "../../fridge-sensors/calibration-storage";
+import type { FridgeSensorDetail, FridgeSensorList } from "../../fridge-sensors/types";
 
 const GREEN = colors.primary;
 const INK = colors.text;
@@ -78,6 +91,41 @@ export function HomeScreen() {
   const [error, setError] = useState<string>();
   const [unreadNotifications, setUnreadNotifications] = useState(0);
   const [fridgeSensors, setFridgeSensors] = useState<FridgeSensorList>({ items: [] });
+  const [sensorGasInsights, setSensorGasInsights] = useState<Record<string, GasTrendInsight>>({});
+  const [calibratedSensors, setCalibratedSensors] = useState<Record<string, boolean>>({});
+  const [calibrationComplete, setCalibrationComplete] = useState<string>();
+  const refreshSensorCalibration = useCallback(
+    async (sensors: FridgeSensorList) => {
+      const insightEntries: [string, GasTrendInsight][] = [];
+      const calibratedEntries: [string, boolean][] = [];
+      await Promise.all(
+        sensors.items.map(async (sensor) => {
+          let calibration = await loadGasCalibration(sensor.id);
+          const pending = await loadPendingGasCalibration(sensor.id);
+          let detail: FridgeSensorDetail | undefined;
+          if (pending && pending.endsAt <= Date.now()) {
+            detail = await api.getFridgeSensor<FridgeSensorDetail>(sensor.id, 1);
+            const completed = createGasCalibration(detail.readings);
+            if (completed) {
+              await Promise.all([
+                saveGasCalibration(sensor.id, completed),
+                clearPendingGasCalibration(sensor.id),
+              ]);
+              calibration = completed;
+              setCalibrationComplete(sensor.fridge_name);
+            }
+          }
+          calibratedEntries.push([sensor.id, Boolean(calibration)]);
+          if (!calibration) return;
+          detail ??= await api.getFridgeSensor<FridgeSensorDetail>(sensor.id, 1);
+          insightEntries.push([sensor.id, gasTrendInsight(detail.readings, calibration)]);
+        }),
+      );
+      setCalibratedSensors(Object.fromEntries(calibratedEntries));
+      setSensorGasInsights(Object.fromEntries(insightEntries));
+    },
+    [api],
+  );
   const load = useCallback(
     async (refresh = false) => {
       refresh ? setRefreshing(true) : !hasLoaded.current && setLoading(true);
@@ -126,7 +174,10 @@ export function HomeScreen() {
       void api
         .getFridgeSensors<FridgeSensorList>()
         .then((result) => {
-          if (active) setFridgeSensors(result);
+          if (active) {
+            setFridgeSensors(result);
+            void refreshSensorCalibration(result).catch(() => undefined);
+          }
         })
         .catch(() => undefined);
       void api
@@ -155,7 +206,7 @@ export function HomeScreen() {
         active = false;
         clearInterval(notificationTimer);
       };
-    }, [api, load]),
+    }, [api, load, refreshSensorCalibration]),
   );
   const currentInventory = inventory.items
     .filter((item) => daysUntil(item.expiry_date) >= 0)
@@ -184,391 +235,507 @@ export function HomeScreen() {
     router.push({ pathname: "/account", params: { section: "friends", mode: "group" } } as never);
 
   return (
-    <ScrollView
-      ref={scrollRef}
-      style={styles.root}
-      contentContainerStyle={[
-        styles.content,
-        {
-          paddingTop: insets.top + PAGE_TOP_GAP,
-          paddingBottom: Math.max(insets.bottom + 105, 120),
-        },
-      ]}
-      contentInsetAdjustmentBehavior="never"
-      showsVerticalScrollIndicator={false}
-      refreshControl={
-        <RefreshControl
-          refreshing={refreshing}
-          onRefresh={() => void load(true)}
-          tintColor={GREEN}
-          colors={[GREEN]}
-        />
-      }
-    >
-      <View style={styles.header}>
-        <PageHeader
-          title={`Hello, ${firstName}!`}
-          action={
-            <Pressable
-              style={({ pressed }) => [styles.avatar, pressed && styles.pressed]}
-              onPress={openProfile}
-              accessibilityRole="button"
-              accessibilityLabel="Open profile"
-            >
-              <Ionicons name="person" size={23} color={palette.c9aa3ae} />
-            </Pressable>
-          }
-        />
-      </View>
-
-      {error && (
-        <Pressable style={styles.errorCard} onPress={() => void load()}>
-          <Ionicons name="cloud-offline-outline" size={18} color={palette.cb42331} />
-          <Text style={styles.errorText}>{error} Tap to retry.</Text>
-        </Pressable>
-      )}
-      {loading ? (
-        <ActivityIndicator style={styles.loading} color={GREEN} />
-      ) : (
-        <>
-          <View style={[styles.impactCard, styles.shadow]}>
-            <View>
-              <Text style={styles.impactEyebrow}>This week’s kitchen</Text>
-              <View style={styles.impactValueRow}>
-                <Text style={styles.impactValue}>{weekPlan?.items.length ?? 0}</Text>
-                <Text style={styles.impactUnit}>meals planned</Text>
-              </View>
-              <View style={styles.improvementPill}>
-                <Ionicons name="leaf-outline" size={11} color={palette.cffffff} />
-                <Text style={styles.improvementText}>
-                  {inventory.expiring_soon} ingredient{inventory.expiring_soon === 1 ? "" : "s"}{" "}
-                  expiring soon
-                </Text>
-              </View>
-            </View>
-            <View style={styles.healthScore}>
-              <Text style={styles.healthNumber}>{inventory.total}</Text>
-              <Text style={styles.healthLabel}>ITEMS</Text>
-            </View>
-          </View>
-
-          {expiringSoon.length > 0 && (
-            <Pressable
-              style={({ pressed }) => [styles.expiryCard, pressed && styles.pressed]}
-              onPress={() => router.push("/ingredients" as never)}
-            >
-              <View style={styles.expiryIcon}>
-                <Ionicons name="warning-outline" size={18} color={colors.warning} />
-              </View>
-              <View style={styles.flex}>
-                <Text style={styles.expiryTitle}>{expiryTitle}</Text>
-                <Text style={styles.helper}>Check In Kitchen before these items expire.</Text>
-              </View>
-              <Text style={styles.cookLink}>View</Text>
-              <Ionicons name="chevron-forward" size={14} color={colors.warningStrong} />
-            </Pressable>
-          )}
-
-          <Pressable
-            style={({ pressed }) => [styles.notificationCard, pressed && styles.pressed]}
-            onPress={() => router.push("/notifications" as never)}
-            accessibilityRole="button"
-            accessibilityLabel={
-              unreadNotifications
-                ? `${unreadNotifications} unread notifications`
-                : "Open notifications"
+    <>
+      <ScrollView
+        ref={scrollRef}
+        style={styles.root}
+        contentContainerStyle={[
+          styles.content,
+          {
+            paddingTop: insets.top + PAGE_TOP_GAP,
+            paddingBottom: Math.max(insets.bottom + 105, 120),
+          },
+        ]}
+        contentInsetAdjustmentBehavior="never"
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={() => void load(true)}
+            tintColor={GREEN}
+            colors={[GREEN]}
+          />
+        }
+      >
+        <View style={styles.header}>
+          <PageHeader
+            title={`Hello, ${firstName}!`}
+            action={
+              <Pressable
+                style={({ pressed }) => [styles.avatar, pressed && styles.pressed]}
+                onPress={openProfile}
+                accessibilityRole="button"
+                accessibilityLabel="Open profile"
+              >
+                <Ionicons name="person" size={23} color={palette.c9aa3ae} />
+              </Pressable>
             }
-          >
-            <View style={styles.notificationIcon}>
-              <Ionicons
-                name={unreadNotifications ? "notifications" : "notifications-outline"}
-                size={20}
-                color={colors.warning}
-              />
-              {unreadNotifications > 0 ? (
-                <View style={styles.notificationBadge}>
-                  <Text style={styles.notificationBadgeText}>
-                    {Math.min(unreadNotifications, 99)}
+          />
+        </View>
+
+        {error && (
+          <Pressable style={styles.errorCard} onPress={() => void load()}>
+            <Ionicons name="cloud-offline-outline" size={18} color={palette.cb42331} />
+            <Text style={styles.errorText}>{error} Tap to retry.</Text>
+          </Pressable>
+        )}
+        {loading ? (
+          <ActivityIndicator style={styles.loading} color={GREEN} />
+        ) : (
+          <>
+            <View style={[styles.impactCard, styles.shadow]}>
+              <View>
+                <Text style={styles.impactEyebrow}>This week’s kitchen</Text>
+                <View style={styles.impactValueRow}>
+                  <Text style={styles.impactValue}>{weekPlan?.items.length ?? 0}</Text>
+                  <Text style={styles.impactUnit}>meals planned</Text>
+                </View>
+                <View style={styles.improvementPill}>
+                  <Ionicons name="leaf-outline" size={11} color={palette.cffffff} />
+                  <Text style={styles.improvementText}>
+                    {inventory.expiring_soon} ingredient{inventory.expiring_soon === 1 ? "" : "s"}{" "}
+                    expiring soon
                   </Text>
                 </View>
-              ) : null}
+              </View>
+              <View style={styles.healthScore}>
+                <Text style={styles.healthNumber}>{inventory.total}</Text>
+                <Text style={styles.healthLabel}>ITEMS</Text>
+              </View>
             </View>
-            <View style={styles.flex}>
-              <Text style={styles.notificationTitle}>Notifications</Text>
-              <Text style={styles.notificationCopy}>
-                {unreadNotifications
-                  ? `${unreadNotifications} new kitchen update${unreadNotifications === 1 ? "" : "s"}`
-                  : "No new kitchen updates"}
-              </Text>
-            </View>
-            <Ionicons name="chevron-forward" size={16} color={colors.textSubtle} />
-          </Pressable>
 
-          <SectionHeader
-            title="GAS SENSOR"
-            action={fridgeSensors.items.length ? "Manage" : undefined}
-            onAction={() => router.push("/fridge-sensors" as never)}
-          />
-          {fridgeSensors.items.length === 0 ? (
+            {expiringSoon.length > 0 && (
+              <Pressable
+                style={({ pressed }) => [styles.expiryCard, pressed && styles.pressed]}
+                onPress={() => router.push("/ingredients" as never)}
+              >
+                <View style={styles.expiryIcon}>
+                  <Ionicons name="warning-outline" size={18} color={colors.warning} />
+                </View>
+                <View style={styles.flex}>
+                  <Text style={styles.expiryTitle}>{expiryTitle}</Text>
+                  <Text style={styles.helper}>Check In Kitchen before these items expire.</Text>
+                </View>
+                <Text style={styles.cookLink}>View</Text>
+                <Ionicons name="chevron-forward" size={14} color={colors.warningStrong} />
+              </Pressable>
+            )}
+
             <Pressable
+              style={({ pressed }) => [styles.notificationCard, pressed && styles.pressed]}
+              onPress={() => router.push("/notifications" as never)}
               accessibilityRole="button"
-              accessibilityLabel="Connect the gas sensor set"
-              style={({ pressed }) => [styles.sensorEmptyCard, pressed && styles.pressed]}
-              onPress={() => router.push("/fridge-sensors" as never)}
+              accessibilityLabel={
+                unreadNotifications
+                  ? `${unreadNotifications} unread notifications`
+                  : "Open notifications"
+              }
             >
-              <View style={styles.sensorEmptyIcon}>
-                <MaterialCommunityIcons
-                  name="fridge-outline"
-                  size={27}
-                  color={colors.primaryStrong}
+              <View style={styles.notificationIcon}>
+                <Ionicons
+                  name={unreadNotifications ? "notifications" : "notifications-outline"}
+                  size={20}
+                  color={colors.warning}
                 />
+                {unreadNotifications > 0 ? (
+                  <View style={styles.notificationBadge}>
+                    <Text style={styles.notificationBadgeText}>
+                      {Math.min(unreadNotifications, 99)}
+                    </Text>
+                  </View>
+                ) : null}
               </View>
               <View style={styles.flex}>
-                <Text style={styles.sensorEmptyTitle}>Connect your gas sensor set</Text>
-                <Text style={styles.sensorEmptyText}>
-                  Tap here to connect and test every gas, temperature and humidity sensor.
+                <Text style={styles.notificationTitle}>Notifications</Text>
+                <Text style={styles.notificationCopy}>
+                  {unreadNotifications
+                    ? `${unreadNotifications} new kitchen update${unreadNotifications === 1 ? "" : "s"}`
+                    : "No new kitchen updates"}
                 </Text>
               </View>
-              <Ionicons name="chevron-forward" size={17} color={colors.primaryStrong} />
+              <Ionicons name="chevron-forward" size={16} color={colors.textSubtle} />
             </Pressable>
-          ) : (
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.sensorCards}
-            >
-              {fridgeSensors.items.map((sensor) => {
-                const reading = sensor.latest_reading;
-                const freshness = freshnessAppearance[reading?.freshness_status ?? "unknown"];
-                return (
-                  <Pressable
-                    key={sensor.id}
-                    accessibilityRole="button"
-                    accessibilityLabel={`Open ${sensor.fridge_name} Fridge Sensor`}
-                    style={({ pressed }) => [styles.sensorCard, pressed && styles.pressed]}
-                    onPress={() => router.push(`/fridge-sensors/${sensor.id}` as never)}
-                  >
-                    <View style={styles.sensorCardTop}>
-                      <View style={styles.sensorFridgeIcon}>
-                        <MaterialCommunityIcons
-                          name="fridge-outline"
-                          size={22}
-                          color={colors.primaryStrong}
-                        />
-                      </View>
-                      <View style={styles.flex}>
-                        <Text style={styles.sensorCardName}>{sensor.fridge_name}</Text>
-                        <Text style={styles.sensorCardDevice}>{sensor.sensor_name}</Text>
-                      </View>
-                      <View style={[styles.sensorStatus, { backgroundColor: freshness.tint }]}>
-                        <View
-                          style={[styles.sensorStatusDot, { backgroundColor: freshness.color }]}
-                        />
-                        <Text style={[styles.sensorStatusText, { color: freshness.color }]}>
-                          {freshness.label}
-                        </Text>
-                      </View>
-                    </View>
-                    <View style={styles.sensorMetricRow}>
-                      <View>
-                        <Text style={styles.sensorMetricValue}>
-                          {reading ? `${reading.temperature_c.toFixed(1)}°` : "—"}
-                        </Text>
-                        <Text style={styles.sensorMetricLabel}>Temperature</Text>
-                      </View>
-                      <View style={styles.sensorMetricDivider} />
-                      <View>
-                        <Text style={styles.sensorMetricValue}>
-                          {reading ? `${Math.round(reading.humidity_percent)}%` : "—"}
-                        </Text>
-                        <Text style={styles.sensorMetricLabel}>Humidity</Text>
-                      </View>
-                      <View style={styles.sensorMetricDivider} />
-                      <View>
-                        <Text style={styles.sensorMetricValue}>
-                          {sensor.connection_status === "online"
-                            ? "Live"
-                            : sensor.connection_status === "waiting"
-                              ? "New"
-                              : "Offline"}
-                        </Text>
-                        <Text style={styles.sensorMetricLabel}>
-                          {relativeTime(sensor.last_seen_at)}
-                        </Text>
-                      </View>
-                    </View>
-                  </Pressable>
-                );
-              })}
-            </ScrollView>
-          )}
 
-          <SectionHeader
-            title="IN KITCHEN"
-            action="Manage"
-            onAction={() => router.push("/ingredients" as never)}
-          />
-          {currentInventory.length ? (
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.ingredients}
-            >
-              {currentInventory.map((ingredient) => {
-                const days = daysUntil(ingredient.expiry_date),
-                  warning = days <= 3;
-                return (
-                  <Pressable
-                    key={ingredient.id}
-                    style={({ pressed }) => [
-                      styles.ingredientCard,
-                      warning && styles.warningCard,
-                      pressed && styles.pressed,
-                    ]}
-                    onPress={() => router.push("/ingredients" as never)}
-                  >
-                    <Text style={styles.ingredientEmoji}>
-                      {ingredient.icon || ingredientEmojiFor(ingredient.name)}
-                    </Text>
-                    <Text style={styles.ingredientName} numberOfLines={1}>
-                      {ingredient.name}
-                    </Text>
-                    <View style={[styles.lifeBadge, warning && styles.warningBadge]}>
-                      <Text style={[styles.lifeText, warning && styles.warningText]}>
-                        {days === 0 ? "Expires today" : `${days}d left`}
-                      </Text>
-                    </View>
-                  </Pressable>
-                );
-              })}
-            </ScrollView>
-          ) : (
-            <EmptyCard
-              text="No ingredients in your kitchen yet."
-              action="Add ingredients"
-              onPress={() => router.push("/ingredients" as never)}
+            <SectionHeader
+              title="GAS SENSOR"
+              action={fridgeSensors.items.length ? "Manage" : undefined}
+              onAction={() => router.push("/fridge-sensors" as never)}
             />
-          )}
-
-          <SectionHeader
-            title="MEAL PLANNING"
-            action="Manage"
-            onAction={() => router.push("/(tabs)/plan")}
-          />
-          {dinner ? (
-            <View style={[styles.dinnerCard, styles.shadow]}>
-              <View style={styles.dinnerVisual}>
-                {dinnerImageUrl && !dinnerImageFailed ? (
-                  <Image
-                    source={{ uri: dinnerImageUrl }}
-                    style={styles.dinnerImage}
-                    resizeMode="cover"
-                    onError={() => setDinnerImageFailed(true)}
-                    accessibilityLabel={`${dinner.title} recipe photo`}
-                  />
-                ) : (
-                  <>
-                    <View style={styles.foodGlow} />
-                    <Text style={styles.dinnerFallback}>🍽️</Text>
-                  </>
-                )}
-                <View style={styles.dinnerCaption}>
-                  <View>
-                    <Text style={styles.dinnerTitle}>{dinner.title}</Text>
-                    {dinner.shared_group_id ? (
-                      <Text style={styles.dinnerCopy}>
-                        Group Schedule · Added by {dinner.added_by_name ?? "group member"}
-                      </Text>
-                    ) : null}
-                    <Text style={styles.dinnerCopy}>
-                      {dinner.scheduled_time
-                        ? `Planned for ${new Date(`2000-01-01T${dinner.scheduled_time}`).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })}`
-                        : "Planned for dinner"}
-                    </Text>
-                  </View>
-                  <View style={styles.timePill}>
-                    <Text style={styles.timeText}>{dinner.total_time} min</Text>
-                  </View>
-                </View>
-              </View>
+            {fridgeSensors.items.length === 0 ? (
               <Pressable
-                style={({ pressed }) => [styles.primaryButton, pressed && styles.primaryPressed]}
-                onPress={() => router.push(`/recipes/${dinner.recipe_id}`)}
+                accessibilityRole="button"
+                accessibilityLabel="Connect the gas sensor set"
+                style={({ pressed }) => [styles.sensorEmptyCard, pressed && styles.pressed]}
+                onPress={() => router.push("/fridge-sensors" as never)}
               >
-                <Text style={styles.primaryButtonText}>Start Cooking</Text>
-              </Pressable>
-            </View>
-          ) : (
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Open meal planning"
-              style={({ pressed }) => [styles.emptyCard, pressed && styles.pressed]}
-              onPress={() => router.push("/(tabs)/plan")}
-            >
-              <Text style={styles.emptyText}>No dinner is planned for today.</Text>
-              <Text style={styles.sectionAction}>Plan dinner</Text>
-            </Pressable>
-          )}
-
-          <SectionHeader title="GROUP" />
-          <View style={[styles.groupCard, styles.shadow]}>
-            <View style={styles.groupTop}>
-              <View>
-                <Text style={styles.groupTitle}>Your cooking friends</Text>
-                <Text style={styles.helper}>
-                  {groupFriends.length} friend{groupFriends.length === 1 ? "" : "s"} in your group
-                </Text>
-              </View>
-              <View style={styles.avatars}>
-                {groupFriends.slice(0, 3).map((member, index) => (
-                  <View
-                    key={member.id}
-                    style={[
-                      styles.memberAvatar,
-                      {
-                        backgroundColor: [palette.cbdf3da, palette.cffd8b7, palette.ccbeaff][index],
-                        marginLeft: index ? -7 : 0,
-                      },
-                    ]}
-                  >
-                    <Text style={styles.memberInitial}>
-                      {member.name.trim().charAt(0).toUpperCase()}
-                    </Text>
-                  </View>
-                ))}
-              </View>
-            </View>
-            {groupFriends.length > 0 && (
-              <View style={styles.sharedList}>
-                <View style={styles.sharedListHeading}>
+                <View style={styles.sensorEmptyIcon}>
                   <MaterialCommunityIcons
-                    name="account-multiple-outline"
-                    size={17}
-                    color={palette.c59667a}
+                    name="fridge-outline"
+                    size={27}
+                    color={colors.primaryStrong}
                   />
-                  <Text style={styles.sharedListTitle}>FRIENDS</Text>
                 </View>
-                <View style={styles.chips}>
-                  {groupFriends.map((friend) => (
-                    <View key={friend.id} style={styles.chip}>
-                      <Text style={styles.chipText}>{friend.name}</Text>
+                <View style={styles.flex}>
+                  <Text style={styles.sensorEmptyTitle}>Connect your gas sensor set</Text>
+                  <Text style={styles.sensorEmptyText}>
+                    Tap here to connect and test every gas, temperature and humidity sensor.
+                  </Text>
+                </View>
+                <Ionicons name="chevron-forward" size={17} color={colors.primaryStrong} />
+              </Pressable>
+            ) : (
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.sensorCards}
+              >
+                {fridgeSensors.items.map((sensor) => {
+                  const reading = sensor.latest_reading;
+                  const freshness = freshnessAppearance[reading?.freshness_status ?? "unknown"];
+                  const gas = sensorGasInsights[sensor.id];
+                  return (
+                    <Pressable
+                      key={sensor.id}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Open ${sensor.fridge_name} Fridge Sensor`}
+                      style={({ pressed }) => [styles.sensorCard, pressed && styles.pressed]}
+                      onPress={() => router.push(`/fridge-sensors/${sensor.id}` as never)}
+                    >
+                      <View style={styles.sensorCardTop}>
+                        <View style={styles.sensorFridgeIcon}>
+                          <MaterialCommunityIcons
+                            name="fridge-outline"
+                            size={22}
+                            color={colors.primaryStrong}
+                          />
+                        </View>
+                        <View style={styles.flex}>
+                          <Text style={styles.sensorCardName}>{sensor.fridge_name}</Text>
+                          <Text style={styles.sensorCardDevice}>{sensor.sensor_name}</Text>
+                        </View>
+                        <View style={[styles.sensorStatus, { backgroundColor: freshness.tint }]}>
+                          <View
+                            style={[styles.sensorStatusDot, { backgroundColor: freshness.color }]}
+                          />
+                          <Text style={[styles.sensorStatusText, { color: freshness.color }]}>
+                            {freshness.label}
+                          </Text>
+                        </View>
+                      </View>
+                      <View style={styles.sensorMetricRow}>
+                        <View>
+                          <Text style={styles.sensorMetricValue}>
+                            {reading ? `${reading.temperature_c.toFixed(1)}°` : "—"}
+                          </Text>
+                          <Text style={styles.sensorMetricLabel}>Temperature</Text>
+                        </View>
+                        <View style={styles.sensorMetricDivider} />
+                        <View>
+                          <Text style={styles.sensorMetricValue}>
+                            {reading ? `${Math.round(reading.humidity_percent)}%` : "—"}
+                          </Text>
+                          <Text style={styles.sensorMetricLabel}>Humidity</Text>
+                        </View>
+                        <View style={styles.sensorMetricDivider} />
+                        <View>
+                          <Text style={styles.sensorMetricValue}>
+                            {sensor.connection_status === "online"
+                              ? "Live"
+                              : sensor.connection_status === "waiting"
+                                ? "New"
+                                : "Offline"}
+                          </Text>
+                          <Text style={styles.sensorMetricLabel}>
+                            {relativeTime(sensor.last_seen_at)}
+                          </Text>
+                        </View>
+                      </View>
+                      {calibratedSensors[sensor.id] && reading ? (
+                        <View style={styles.sensorMiniStatuses}>
+                          <View
+                            style={[
+                              styles.sensorMiniStatus,
+                              {
+                                backgroundColor:
+                                  reading.temperature_c > 4
+                                    ? colors.warningSoft
+                                    : colors.successSoft,
+                              },
+                            ]}
+                          >
+                            <Ionicons
+                              name={
+                                reading.temperature_c > 4
+                                  ? "thermometer-outline"
+                                  : "checkmark-circle-outline"
+                              }
+                              size={15}
+                              color={
+                                reading.temperature_c > 4 ? colors.warningStrong : colors.success
+                              }
+                            />
+                            <Text
+                              style={[
+                                styles.sensorMiniStatusText,
+                                {
+                                  color:
+                                    reading.temperature_c > 4
+                                      ? colors.warningStrong
+                                      : colors.success,
+                                },
+                              ]}
+                            >
+                              {reading.temperature_c > 4
+                                ? "Fridge is too warm"
+                                : "Temperature looks good"}
+                            </Text>
+                          </View>
+                          <View
+                            style={[
+                              styles.sensorMiniStatus,
+                              {
+                                backgroundColor:
+                                  gas?.kind === "multiple_changes"
+                                    ? colors.dangerSoft
+                                    : colors.primarySoft,
+                              },
+                            ]}
+                          >
+                            <Ionicons
+                              name={
+                                gas?.kind === "multiple_changes"
+                                  ? "warning-outline"
+                                  : "pulse-outline"
+                              }
+                              size={15}
+                              color={
+                                gas?.kind === "multiple_changes"
+                                  ? colors.danger
+                                  : colors.primaryStrong
+                              }
+                            />
+                            <Text
+                              style={[
+                                styles.sensorMiniStatusText,
+                                {
+                                  color:
+                                    gas?.kind === "multiple_changes"
+                                      ? colors.danger
+                                      : colors.primaryStrong,
+                                },
+                              ]}
+                            >
+                              {gas?.kind === "multiple_changes"
+                                ? "Odour anomaly"
+                                : gas?.kind === "single_change"
+                                  ? "One gas reading changed"
+                                  : gas?.kind === "steady"
+                                    ? "Gas readings are steady"
+                                    : "Checking gas readings"}
+                            </Text>
+                          </View>
+                        </View>
+                      ) : null}
+                    </Pressable>
+                  );
+                })}
+              </ScrollView>
+            )}
+
+            <SectionHeader
+              title="IN KITCHEN"
+              action="Manage"
+              onAction={() => router.push("/ingredients" as never)}
+            />
+            {currentInventory.length ? (
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.ingredients}
+              >
+                {currentInventory.map((ingredient) => {
+                  const days = daysUntil(ingredient.expiry_date),
+                    warning = days <= 3;
+                  return (
+                    <Pressable
+                      key={ingredient.id}
+                      style={({ pressed }) => [
+                        styles.ingredientCard,
+                        warning && styles.warningCard,
+                        pressed && styles.pressed,
+                      ]}
+                      onPress={() => router.push("/ingredients" as never)}
+                    >
+                      <Text style={styles.ingredientEmoji}>
+                        {ingredient.icon || ingredientEmojiFor(ingredient.name)}
+                      </Text>
+                      <Text style={styles.ingredientName} numberOfLines={1}>
+                        {ingredient.name}
+                      </Text>
+                      <View style={[styles.lifeBadge, warning && styles.warningBadge]}>
+                        <Text style={[styles.lifeText, warning && styles.warningText]}>
+                          {days === 0 ? "Expires today" : `${days}d left`}
+                        </Text>
+                      </View>
+                    </Pressable>
+                  );
+                })}
+              </ScrollView>
+            ) : (
+              <EmptyCard
+                text="No ingredients in your kitchen yet."
+                action="Add ingredients"
+                onPress={() => router.push("/ingredients" as never)}
+              />
+            )}
+
+            <SectionHeader
+              title="MEAL PLANNING"
+              action="Manage"
+              onAction={() => router.push("/(tabs)/plan")}
+            />
+            {dinner ? (
+              <View style={[styles.dinnerCard, styles.shadow]}>
+                <View style={styles.dinnerVisual}>
+                  {dinnerImageUrl && !dinnerImageFailed ? (
+                    <Image
+                      source={{ uri: dinnerImageUrl }}
+                      style={styles.dinnerImage}
+                      resizeMode="cover"
+                      onError={() => setDinnerImageFailed(true)}
+                      accessibilityLabel={`${dinner.title} recipe photo`}
+                    />
+                  ) : (
+                    <>
+                      <View style={styles.foodGlow} />
+                      <Text style={styles.dinnerFallback}>🍽️</Text>
+                    </>
+                  )}
+                  <View style={styles.dinnerCaption}>
+                    <View>
+                      <Text style={styles.dinnerTitle}>{dinner.title}</Text>
+                      {dinner.shared_group_id ? (
+                        <Text style={styles.dinnerCopy}>
+                          Group Schedule · Added by {dinner.added_by_name ?? "group member"}
+                        </Text>
+                      ) : null}
+                      <Text style={styles.dinnerCopy}>
+                        {dinner.scheduled_time
+                          ? `Planned for ${new Date(`2000-01-01T${dinner.scheduled_time}`).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })}`
+                          : "Planned for dinner"}
+                      </Text>
+                    </View>
+                    <View style={styles.timePill}>
+                      <Text style={styles.timeText}>{dinner.total_time} min</Text>
+                    </View>
+                  </View>
+                </View>
+                <Pressable
+                  style={({ pressed }) => [styles.primaryButton, pressed && styles.primaryPressed]}
+                  onPress={() => router.push(`/recipes/${dinner.recipe_id}`)}
+                >
+                  <Text style={styles.primaryButtonText}>Start Cooking</Text>
+                </Pressable>
+              </View>
+            ) : (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Open meal planning"
+                style={({ pressed }) => [styles.emptyCard, pressed && styles.pressed]}
+                onPress={() => router.push("/(tabs)/plan")}
+              >
+                <Text style={styles.emptyText}>No dinner is planned for today.</Text>
+                <Text style={styles.sectionAction}>Plan dinner</Text>
+              </Pressable>
+            )}
+
+            <SectionHeader title="GROUP" />
+            <View style={[styles.groupCard, styles.shadow]}>
+              <View style={styles.groupTop}>
+                <View>
+                  <Text style={styles.groupTitle}>Your cooking friends</Text>
+                  <Text style={styles.helper}>
+                    {groupFriends.length} friend{groupFriends.length === 1 ? "" : "s"} in your group
+                  </Text>
+                </View>
+                <View style={styles.avatars}>
+                  {groupFriends.slice(0, 3).map((member, index) => (
+                    <View
+                      key={member.id}
+                      style={[
+                        styles.memberAvatar,
+                        {
+                          backgroundColor: [palette.cbdf3da, palette.cffd8b7, palette.ccbeaff][
+                            index
+                          ],
+                          marginLeft: index ? -7 : 0,
+                        },
+                      ]}
+                    >
+                      <Text style={styles.memberInitial}>
+                        {member.name.trim().charAt(0).toUpperCase()}
+                      </Text>
                     </View>
                   ))}
                 </View>
               </View>
-            )}
+              {groupFriends.length > 0 && (
+                <View style={styles.sharedList}>
+                  <View style={styles.sharedListHeading}>
+                    <MaterialCommunityIcons
+                      name="account-multiple-outline"
+                      size={17}
+                      color={palette.c59667a}
+                    />
+                    <Text style={styles.sharedListTitle}>FRIENDS</Text>
+                  </View>
+                  <View style={styles.chips}>
+                    {groupFriends.map((friend) => (
+                      <View key={friend.id} style={styles.chip}>
+                        <Text style={styles.chipText}>{friend.name}</Text>
+                      </View>
+                    ))}
+                  </View>
+                </View>
+              )}
+              <Pressable
+                style={({ pressed }) => [styles.primaryButton, pressed && styles.primaryPressed]}
+                onPress={openGroupManager}
+              >
+                <Text style={styles.primaryButtonText}>
+                  {groupFriends.length ? "Manage group" : "Add a cooking friend"}
+                </Text>
+              </Pressable>
+            </View>
+          </>
+        )}
+      </ScrollView>
+      <Modal
+        visible={Boolean(calibrationComplete)}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setCalibrationComplete(undefined)}
+      >
+        <View style={styles.calibrationOverlay}>
+          <View style={styles.calibrationCompleteCard}>
+            <View style={styles.calibrationCompleteIcon}>
+              <Ionicons name="checkmark-circle" size={30} color={colors.success} />
+            </View>
+            <Text style={styles.calibrationCompleteTitle}>Baseline established successfully</Text>
+            <Text style={styles.calibrationCompleteText}>
+              {calibrationComplete} can now compare new readings with its normal baseline and detect
+              unusual odour changes.
+            </Text>
             <Pressable
-              style={({ pressed }) => [styles.primaryButton, pressed && styles.primaryPressed]}
-              onPress={openGroupManager}
+              style={styles.calibrationCompleteButton}
+              onPress={() => setCalibrationComplete(undefined)}
             >
-              <Text style={styles.primaryButtonText}>
-                {groupFriends.length ? "Manage group" : "Add a cooking friend"}
-              </Text>
+              <Text style={styles.calibrationCompleteButtonText}>Got it</Text>
             </Pressable>
           </View>
-        </>
-      )}
-    </ScrollView>
+        </View>
+      </Modal>
+    </>
   );
 }
 
@@ -902,6 +1069,71 @@ const styles = StyleSheet.create({
     fontSize: typography.mobile.rawSize.s9,
   },
   sensorMetricDivider: { width: 1, height: 28, backgroundColor: colors.border },
+  sensorMiniStatuses: { gap: 7, marginTop: 12 },
+  sensorMiniStatus: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 9,
+    paddingVertical: 7,
+    borderRadius: 11,
+  },
+  sensorMiniStatusText: {
+    fontSize: typography.mobile.rawSize.s9,
+    fontWeight: typography.weight.extrabold,
+  },
+  calibrationOverlay: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 22,
+    backgroundColor: colors.overlay,
+  },
+  calibrationCompleteCard: {
+    width: "100%",
+    maxWidth: 390,
+    alignItems: "center",
+    padding: 22,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 24,
+    backgroundColor: colors.surface,
+  },
+  calibrationCompleteIcon: {
+    width: 60,
+    height: 60,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 30,
+    backgroundColor: colors.successSoft,
+  },
+  calibrationCompleteTitle: {
+    marginTop: 16,
+    color: colors.text,
+    fontSize: typography.mobile.rawSize.s19,
+    fontWeight: typography.weight.extrabold,
+    textAlign: "center",
+  },
+  calibrationCompleteText: {
+    marginTop: 9,
+    color: colors.textMuted,
+    fontSize: typography.mobile.rawSize.s12,
+    lineHeight: 19,
+    textAlign: "center",
+  },
+  calibrationCompleteButton: {
+    width: "100%",
+    alignItems: "center",
+    marginTop: 20,
+    padding: 13,
+    borderRadius: 14,
+    backgroundColor: colors.primaryStrong,
+  },
+  calibrationCompleteButtonText: {
+    color: colors.surface,
+    fontSize: typography.mobile.rawSize.s12,
+    fontWeight: typography.weight.extrabold,
+  },
   ingredients: { gap: 10, paddingRight: 18 },
   ingredientCard: {
     width: 106,

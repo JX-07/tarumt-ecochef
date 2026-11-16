@@ -320,6 +320,12 @@ class MobileApi {
       cache: "no-store",
     });
   }
+  async cancelDelayedMarketplaceOrder<Response>(orderId: string): Promise<Response> {
+    return this.request<Response>(
+      `/marketplace/checkout/${encodeURIComponent(orderId)}/cancel-delayed`,
+      { method: "POST" },
+    );
+  }
   async getOrderChats<Response>(orderId: string): Promise<Response> {
     return this.request<Response>(`/chats/orders/${encodeURIComponent(orderId)}`, {
       cache: "no-store",

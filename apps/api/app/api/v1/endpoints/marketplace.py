@@ -2126,8 +2126,11 @@ def checkout_status(
 ) -> CheckoutStatusResult:
     row = session.execute(
         text("""
-        SELECT o.id, o.order_status, o.total_amount, p.payment_status,
-               p.stripe_hosted_invoice_url, p.stripe_invoice_pdf_url
+        SELECT o.id, o.order_status, o.total_amount, o.order_date, p.payment_status, p.paid_at,
+               p.stripe_hosted_invoice_url, p.stripe_invoice_pdf_url,
+               (SELECT MAX(COALESCE(store.estimated_delivery_minutes, 30))
+                FROM order_items item JOIN stores store ON store.id=item.store_id
+                WHERE item.order_id=o.id) AS estimated_delivery_minutes
         FROM orders o
         JOIN carts c ON c.id = o.cart_id
         JOIN payments p ON p.order_id = o.id
@@ -2137,6 +2140,10 @@ def checkout_status(
     ).one_or_none()
     if row is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Checkout not found.")
+    estimate = max(30, int(row.estimated_delivery_minutes or 30))
+    cancel_available_at = (row.paid_at or row.order_date) + timedelta(
+        minutes=max(15, estimate // 2)
+    )
     return CheckoutStatusResult(
         order_id=row.id,
         payment_status=row.payment_status,
@@ -2144,4 +2151,81 @@ def checkout_status(
         total=row.total_amount,
         invoice_url=row.stripe_hosted_invoice_url,
         invoice_pdf_url=row.stripe_invoice_pdf_url,
+        can_cancel=(
+            row.payment_status == "paid"
+            and row.order_status == "placed"
+            and datetime.now(timezone.utc) >= cancel_available_at
+        ),
+        cancel_available_at=cancel_available_at if row.order_status == "placed" else None,
     )
+
+
+@router.post("/checkout/{order_id}/cancel-delayed")
+def cancel_delayed_order(
+    order_id: UUID,
+    current_user: AuthenticatedUser = CurrentConsumer,
+    session: Session = Depends(get_db_session),
+) -> dict:
+    order = session.execute(
+        text("""
+        SELECT o.id, o.order_status, o.order_date, c.user_id,
+               p.id AS payment_id, p.payment_status, p.paid_at, p.stripe_payment_intent_id,
+               (SELECT MAX(COALESCE(store.estimated_delivery_minutes, 30))
+                FROM order_items item JOIN stores store ON store.id=item.store_id
+                WHERE item.order_id=o.id) AS estimated_delivery_minutes
+        FROM orders o
+        JOIN carts c ON c.id=o.cart_id
+        JOIN payments p ON p.order_id=o.id
+        WHERE o.id=:order_id AND c.user_id=:user_id
+        ORDER BY p.paid_at DESC NULLS LAST LIMIT 1
+        FOR UPDATE OF o, p
+    """),
+        {"order_id": order_id, "user_id": current_user.id},
+    ).one_or_none()
+    if order is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Order not found.")
+    estimate = max(30, int(order.estimated_delivery_minutes or 30))
+    cancel_available_at = (order.paid_at or order.order_date) + timedelta(
+        minutes=max(15, estimate // 2)
+    )
+    if order.payment_status != "paid" or order.order_status != "placed":
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            "This order can only be cancelled while it is still waiting for the shop.",
+        )
+    if datetime.now(timezone.utc) < cancel_available_at:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            "The shop still has time to confirm this order.",
+        )
+    if not order.stripe_payment_intent_id:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            "This order does not have a refundable Stripe payment.",
+        )
+    session.execute(
+        text("""
+        UPDATE orders SET order_status='cancellation_pending',
+            cancellation_reason='Cancelled by the customer after no shop update.'
+        WHERE id=:order_id
+    """),
+        {"order_id": order_id},
+    )
+    session.commit()
+    try:
+        refund = stripe_payments.refund_order_payment(
+            payment_intent_id=order.stripe_payment_intent_id,
+            order_id=order_id,
+        )
+    except (
+        stripe_payments.StripeConfigurationError,
+        stripe_payments.StripeOperationError,
+    ) as error:
+        raise HTTPException(status.HTTP_502_BAD_GATEWAY, str(error)) from error
+    from app.api.v1.endpoints.stripe import _handle_order_cancellation_refund
+
+    completed = _handle_order_cancellation_refund(refund, session)
+    session.commit()
+    if refund.status in {"failed", "canceled"}:
+        raise HTTPException(status.HTTP_502_BAD_GATEWAY, "The refund could not be completed.")
+    return {"status": "cancelled" if completed else "cancellation_pending"}

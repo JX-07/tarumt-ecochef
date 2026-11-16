@@ -9545,6 +9545,40 @@ button {
   outline: 3px solid var(--ec-color-primary-soft);
   background: var(--ec-color-surface);
 }
+.broadcast-targeting {
+  display: grid;
+  gap: var(--ec-space-3);
+  margin: var(--ec-space-4) var(--ec-space-5);
+  padding: var(--ec-space-4);
+  border: 1px solid var(--ec-color-primary-border);
+  border-radius: var(--ec-space-3);
+  background: var(--ec-color-primary-soft);
+}
+.broadcast-target-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--ec-space-3);
+}
+.broadcast-target-grid .share-promotion-field,
+.broadcast-target-grid label {
+  display: grid;
+  gap: var(--ec-space-2);
+  margin: 0;
+  color: var(--ec-color-text);
+  font-size: var(--ec-font-size-caption);
+}
+.broadcast-target-grid .share-promotion-field {
+  grid-column: 1 / -1;
+}
+.broadcast-target-grid input {
+  min-height: var(--ec-space-10);
+  padding: var(--ec-space-2) var(--ec-space-3);
+  border: 1px solid var(--ec-color-border);
+  border-radius: var(--ec-space-2);
+  color: var(--ec-color-text);
+  background: var(--ec-color-surface);
+  font: inherit;
+}
 .dialog-icon {
   display: grid;
   width: var(--ec-space-10);

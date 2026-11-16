@@ -5,7 +5,7 @@ import { colors, spacing, typography } from "@ecochef/design-tokens";
 import type { MarketplaceCheckoutStatus } from "@ecochef/contracts";
 import { router, useLocalSearchParams } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
-import { Pressable, ScrollView, StyleSheet, View } from "react-native";
+import { ActivityIndicator, Modal, Pressable, ScrollView, StyleSheet, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { createMobileApi } from "../../../lib/api";
 import { PAGE_TOP_GAP } from "../../../shared/components/page-header";
@@ -35,6 +35,11 @@ export function MarketplaceOrderTrackingScreen() {
   const estimate = Math.max(10, Number(params.estimate) || 30);
   const [orderStatus, setOrderStatus] = useState("pending_payment");
   const [paymentStatus, setPaymentStatus] = useState("");
+  const [canCancel, setCanCancel] = useState(false);
+  const [cancelAvailableAt, setCancelAvailableAt] = useState<string>();
+  const [cancelOpen, setCancelOpen] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
+  const [cancelError, setCancelError] = useState("");
 
   useEffect(() => {
     if (!params.orderId) return;
@@ -47,6 +52,8 @@ export function MarketplaceOrderTrackingScreen() {
         if (active) {
           setOrderStatus(result.order_status);
           setPaymentStatus(result.payment_status);
+          setCanCancel(result.can_cancel);
+          setCancelAvailableAt(result.cancel_available_at);
         }
       } catch {
         /* Keep the last visible status while temporarily offline. */
@@ -90,147 +97,239 @@ export function MarketplaceOrderTrackingScreen() {
               : "Pickup in progress"
             : "Track your delivery";
 
+  const cancelDelayedOrder = async () => {
+    setCancelling(true);
+    setCancelError("");
+    try {
+      const result = await api.cancelDelayedMarketplaceOrder<{ status: string }>(params.orderId);
+      setOrderStatus(result.status);
+      setPaymentStatus(result.status === "cancelled" ? "refunded" : paymentStatus);
+      setCanCancel(false);
+      setCancelOpen(false);
+    } catch (cause) {
+      setCancelError(cause instanceof Error ? cause.message : "The order could not be cancelled.");
+    } finally {
+      setCancelling(false);
+    }
+  };
+
   return (
-    <View style={styles.root}>
-      <ScrollView
-        contentContainerStyle={[
-          styles.content,
-          { paddingTop: insets.top + PAGE_TOP_GAP, paddingBottom: insets.bottom + spacing[8] },
-        ]}
-      >
-        <View style={styles.header}>
-          <View style={styles.headerSpace} />
-          <Text style={styles.headerTitle}>Order status</Text>
+    <>
+      <View style={styles.root}>
+        <ScrollView
+          contentContainerStyle={[
+            styles.content,
+            { paddingTop: insets.top + PAGE_TOP_GAP, paddingBottom: insets.bottom + spacing[8] },
+          ]}
+        >
+          <View style={styles.header}>
+            <View style={styles.headerSpace} />
+            <Text style={styles.headerTitle}>Order status</Text>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Close order tracking"
+              style={styles.close}
+              onPress={() => router.replace("/(tabs)/marketplace")}
+            >
+              <Ionicons name="close" size={spacing[6]} color={colors.text} />
+            </Pressable>
+          </View>
+          <View style={styles.success}>
+            <Ionicons name="checkmark-circle" size={spacing[8]} color={colors.success} />
+            <View style={styles.successCopy}>
+              <Text style={styles.successTitle}>
+                {paymentStatus === "refunded"
+                  ? "Refund issued"
+                  : paymentStatus === "paid"
+                    ? "Payment successful"
+                    : "Checking payment status"}
+              </Text>
+              <Text style={styles.successText}>
+                Order #{params.orderId?.slice(0, 8).toUpperCase()}
+              </Text>
+            </View>
+          </View>
+          <View style={styles.hero}>
+            <View style={styles.heroIcon}>
+              <Ionicons
+                name={pickup ? "storefront" : "bicycle"}
+                size={spacing[8]}
+                color={colors.primaryStrong}
+              />
+            </View>
+            <Text style={styles.title}>{title}</Text>
+            <Text style={styles.subtitle}>
+              {orderStatus === "cancelled"
+                ? "This order was cancelled. Your refund was issued to your original payment method, and the items were returned to stock."
+                : pickup
+                  ? pickedUp
+                    ? "The shop has confirmed your completed pickup."
+                    : activeStage >= 2
+                      ? "The shop has marked your order as ready."
+                      : "This page updates when the shop changes your order status."
+                  : pickedUp
+                    ? "The shop has confirmed your completed delivery."
+                    : `Initial delivery estimate: approximately ${estimate} minutes. This page updates when the shop confirms progress.`}
+            </Text>
+          </View>
+          {orderStatus !== "cancelled" ? (
+            <View style={styles.timeline}>
+              {steps.map(([icon, label, detail], index) => {
+                const complete = index <= activeStage || pickedUp;
+                return (
+                  <View key={label} style={styles.step}>
+                    <View style={styles.stepRail}>
+                      <View style={[styles.stepDot, complete && styles.stepDotComplete]}>
+                        <Ionicons
+                          name={complete ? icon : "ellipse-outline"}
+                          size={spacing[5]}
+                          color={complete ? colors.surface : colors.textSubtle}
+                        />
+                      </View>
+                      {index < steps.length - 1 ? (
+                        <View
+                          style={[styles.stepLine, index < activeStage && styles.stepLineComplete]}
+                        />
+                      ) : null}
+                    </View>
+                    <View style={styles.stepCopy}>
+                      <Text style={[styles.stepTitle, complete && styles.stepTitleComplete]}>
+                        {label}
+                      </Text>
+                      <Text style={styles.stepDetail}>{detail}</Text>
+                    </View>
+                  </View>
+                );
+              })}
+            </View>
+          ) : null}
+          {pickup && activeStage >= 2 && !pickedUp ? (
+            <View style={styles.pickupCard}>
+              <Text style={styles.pickupTitle}>Ready for collection</Text>
+              <Text style={styles.pickupText}>
+                Collect your items from the shop. Your rating unlocks when the shop confirms
+                handover.
+              </Text>
+            </View>
+          ) : null}
+          {pickedUp ? (
+            <View style={styles.completed}>
+              <Ionicons name="sparkles-outline" size={spacing[6]} color={colors.success} />
+              <Text style={styles.completedText}>
+                Your order has been marked complete by the shop.
+              </Text>
+            </View>
+          ) : null}
+          {orderStatus === "completed" && paymentStatus === "paid" ? (
+            <Pressable
+              style={styles.chatButton}
+              onPress={() =>
+                router.push({
+                  pathname: "/marketplace/reviews" as never,
+                  params: { orderId: params.orderId },
+                })
+              }
+            >
+              <Ionicons name="star-outline" size={spacing[5]} color={colors.ratingStar} />
+              <Text style={styles.chatButtonText}>Rate your purchased items</Text>
+            </Pressable>
+          ) : null}
+          {paymentStatus === "paid" ? (
+            <Pressable
+              style={styles.chatButton}
+              onPress={() =>
+                router.push({
+                  pathname: "/marketplace/chat" as never,
+                  params: { orderId: params.orderId },
+                })
+              }
+            >
+              <Ionicons name="chatbubbles-outline" size={spacing[5]} color={colors.primaryStrong} />
+              <Text style={styles.chatButtonText}>Message shop</Text>
+            </Pressable>
+          ) : null}
+          {canCancel ? (
+            <View style={styles.lateOrderCard}>
+              <View style={styles.lateOrderIcon}>
+                <Ionicons name="time-outline" size={spacing[6]} color={colors.warningStrong} />
+              </View>
+              <View style={styles.lateOrderCopy}>
+                <Text style={styles.lateOrderTitle}>Still waiting for the shop?</Text>
+                <Text style={styles.lateOrderText}>
+                  The shop has not started preparing this order within the expected response time.
+                </Text>
+              </View>
+              <Pressable style={styles.cancelOrderButton} onPress={() => setCancelOpen(true)}>
+                <Text style={styles.cancelOrderButtonText}>Cancel order</Text>
+              </Pressable>
+            </View>
+          ) : orderStatus === "placed" && paymentStatus === "paid" && cancelAvailableAt ? (
+            <Text style={styles.cancelTiming}>
+              Cancellation becomes available if the shop has not responded by{" "}
+              {new Date(cancelAvailableAt).toLocaleTimeString([], {
+                hour: "numeric",
+                minute: "2-digit",
+              })}
+              .
+            </Text>
+          ) : null}
           <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Close order tracking"
-            style={styles.close}
+            style={styles.continueButton}
             onPress={() => router.replace("/(tabs)/marketplace")}
           >
-            <Ionicons name="close" size={spacing[6]} color={colors.text} />
+            <Text style={styles.continueText}>Continue shopping</Text>
           </Pressable>
-        </View>
-        <View style={styles.success}>
-          <Ionicons name="checkmark-circle" size={spacing[8]} color={colors.success} />
-          <View style={styles.successCopy}>
-            <Text style={styles.successTitle}>
-              {paymentStatus === "refunded"
-                ? "Refund issued"
-                : paymentStatus === "paid"
-                  ? "Payment successful"
-                  : "Checking payment status"}
-            </Text>
-            <Text style={styles.successText}>
-              Order #{params.orderId?.slice(0, 8).toUpperCase()}
-            </Text>
-          </View>
-        </View>
-        <View style={styles.hero}>
-          <View style={styles.heroIcon}>
-            <Ionicons
-              name={pickup ? "storefront" : "bicycle"}
-              size={spacing[8]}
-              color={colors.primaryStrong}
-            />
-          </View>
-          <Text style={styles.title}>{title}</Text>
-          <Text style={styles.subtitle}>
-            {orderStatus === "cancelled"
-              ? "The shop cancelled this order. Your refund was issued to your original payment method, and the items were returned to stock."
-              : pickup
-                ? pickedUp
-                  ? "The shop has confirmed your completed pickup."
-                  : activeStage >= 2
-                    ? "The shop has marked your order as ready."
-                    : "This page updates when the shop changes your order status."
-                : pickedUp
-                  ? "The shop has confirmed your completed delivery."
-                  : `Initial delivery estimate: approximately ${estimate} minutes. This page updates when the shop confirms progress.`}
-          </Text>
-        </View>
-        {orderStatus !== "cancelled" ? (
-          <View style={styles.timeline}>
-            {steps.map(([icon, label, detail], index) => {
-              const complete = index <= activeStage || pickedUp;
-              return (
-                <View key={label} style={styles.step}>
-                  <View style={styles.stepRail}>
-                    <View style={[styles.stepDot, complete && styles.stepDotComplete]}>
-                      <Ionicons
-                        name={complete ? icon : "ellipse-outline"}
-                        size={spacing[5]}
-                        color={complete ? colors.surface : colors.textSubtle}
-                      />
-                    </View>
-                    {index < steps.length - 1 ? (
-                      <View
-                        style={[styles.stepLine, index < activeStage && styles.stepLineComplete]}
-                      />
-                    ) : null}
-                  </View>
-                  <View style={styles.stepCopy}>
-                    <Text style={[styles.stepTitle, complete && styles.stepTitleComplete]}>
-                      {label}
-                    </Text>
-                    <Text style={styles.stepDetail}>{detail}</Text>
-                  </View>
-                </View>
-              );
-            })}
-          </View>
-        ) : null}
-        {pickup && activeStage >= 2 && !pickedUp ? (
-          <View style={styles.pickupCard}>
-            <Text style={styles.pickupTitle}>Ready for collection</Text>
-            <Text style={styles.pickupText}>
-              Collect your items from the shop. Your rating unlocks when the shop confirms handover.
-            </Text>
-          </View>
-        ) : null}
-        {pickedUp ? (
-          <View style={styles.completed}>
-            <Ionicons name="sparkles-outline" size={spacing[6]} color={colors.success} />
-            <Text style={styles.completedText}>
-              Your order has been marked complete by the shop.
-            </Text>
-          </View>
-        ) : null}
-        {orderStatus === "completed" && paymentStatus === "paid" ? (
+        </ScrollView>
+      </View>
+      <Modal
+        visible={cancelOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={() => {
+          if (!cancelling) setCancelOpen(false);
+        }}
+      >
+        <View style={styles.modalOverlay}>
           <Pressable
-            style={styles.chatButton}
-            onPress={() =>
-              router.push({
-                pathname: "/marketplace/reviews" as never,
-                params: { orderId: params.orderId },
-              })
-            }
-          >
-            <Ionicons name="star-outline" size={spacing[5]} color={colors.ratingStar} />
-            <Text style={styles.chatButtonText}>Rate your purchased items</Text>
-          </Pressable>
-        ) : null}
-        {paymentStatus === "paid" ? (
-          <Pressable
-            style={styles.chatButton}
-            onPress={() =>
-              router.push({
-                pathname: "/marketplace/chat" as never,
-                params: { orderId: params.orderId },
-              })
-            }
-          >
-            <Ionicons name="chatbubbles-outline" size={spacing[5]} color={colors.primaryStrong} />
-            <Text style={styles.chatButtonText}>Message shop</Text>
-          </Pressable>
-        ) : null}
-        <Pressable
-          style={styles.continueButton}
-          onPress={() => router.replace("/(tabs)/marketplace")}
-        >
-          <Text style={styles.continueText}>Continue shopping</Text>
-        </Pressable>
-      </ScrollView>
-    </View>
+            style={StyleSheet.absoluteFill}
+            onPress={() => {
+              if (!cancelling) setCancelOpen(false);
+            }}
+          />
+          <View style={styles.modalCard}>
+            <View style={styles.modalIcon}>
+              <Ionicons name="close-circle-outline" size={28} color={colors.warningStrong} />
+            </View>
+            <Text style={styles.modalTitle}>Cancel this delayed order?</Text>
+            <Text style={styles.modalText}>
+              The order is still waiting for the shop. Cancelling will return the items to stock and
+              issue a full refund to the original payment method.
+            </Text>
+            {cancelError ? <Text style={styles.cancelError}>{cancelError}</Text> : null}
+            <View style={styles.modalActions}>
+              <Pressable
+                disabled={cancelling}
+                style={styles.keepOrderButton}
+                onPress={() => setCancelOpen(false)}
+              >
+                <Text style={styles.keepOrderText}>Keep order</Text>
+              </Pressable>
+              <Pressable
+                disabled={cancelling}
+                style={styles.confirmCancelButton}
+                onPress={() => void cancelDelayedOrder()}
+              >
+                {cancelling ? (
+                  <ActivityIndicator color={colors.surface} />
+                ) : (
+                  <Text style={styles.confirmCancelText}>Cancel and refund</Text>
+                )}
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
+    </>
   );
 }
 
@@ -401,6 +500,111 @@ const styles = StyleSheet.create({
     fontSize: textSize.bodyInteraction,
     fontWeight: textWeight.bold,
   },
+  lateOrderCard: {
+    marginTop: spacing[4],
+    padding: spacing[4],
+    borderWidth: 1,
+    borderColor: colors.warning,
+    borderRadius: spacing[4],
+    backgroundColor: colors.warningSoft,
+  },
+  lateOrderIcon: {
+    width: spacing[10],
+    height: spacing[10],
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: spacing[5],
+    backgroundColor: colors.surface,
+  },
+  lateOrderCopy: { marginTop: spacing[3] },
+  lateOrderTitle: {
+    color: colors.warningStrong,
+    fontSize: textSize.secondaryTextHeavy,
+    fontWeight: textWeight.bold,
+  },
+  lateOrderText: {
+    marginTop: spacing[1],
+    color: colors.text,
+    fontSize: textSize.caption,
+    lineHeight: spacing[5],
+  },
+  cancelOrderButton: {
+    alignItems: "center",
+    marginTop: spacing[3],
+    padding: spacing[3],
+    borderRadius: spacing[3],
+    backgroundColor: colors.warningStrong,
+  },
+  cancelOrderButtonText: {
+    color: colors.surface,
+    fontSize: textSize.secondaryInteraction,
+    fontWeight: textWeight.bold,
+  },
+  cancelTiming: {
+    marginTop: spacing[3],
+    color: colors.textMuted,
+    fontSize: textSize.caption,
+    lineHeight: spacing[5],
+    textAlign: "center",
+  },
+  modalOverlay: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    padding: spacing[5],
+    backgroundColor: colors.overlay,
+  },
+  modalCard: {
+    width: "100%",
+    maxWidth: 420,
+    padding: spacing[5],
+    borderRadius: spacing[5],
+    backgroundColor: colors.surface,
+  },
+  modalIcon: {
+    width: spacing[12],
+    height: spacing[12],
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: spacing[6],
+    backgroundColor: colors.warningSoft,
+  },
+  modalTitle: {
+    marginTop: spacing[4],
+    color: colors.text,
+    fontSize: typography.mobile.rawSize.s19,
+    fontWeight: textWeight.bold,
+  },
+  modalText: {
+    marginTop: spacing[2],
+    color: colors.textMuted,
+    fontSize: textSize.secondaryInteraction,
+    lineHeight: spacing[5],
+  },
+  cancelError: {
+    marginTop: spacing[3],
+    color: colors.danger,
+    fontSize: textSize.caption,
+  },
+  modalActions: { flexDirection: "row", gap: spacing[3], marginTop: spacing[5] },
+  keepOrderButton: {
+    flex: 1,
+    alignItems: "center",
+    padding: spacing[3],
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: spacing[3],
+    backgroundColor: colors.surface,
+  },
+  keepOrderText: { color: colors.text, fontWeight: textWeight.bold },
+  confirmCancelButton: {
+    flex: 1,
+    alignItems: "center",
+    padding: spacing[3],
+    borderRadius: spacing[3],
+    backgroundColor: colors.warningStrong,
+  },
+  confirmCancelText: { color: colors.surface, fontWeight: textWeight.bold },
   continueButton: {
     height: 52,
     alignItems: "center",

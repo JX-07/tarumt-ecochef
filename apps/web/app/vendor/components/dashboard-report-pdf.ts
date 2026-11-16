@@ -97,17 +97,21 @@ class Report {
   newPage() {
     this.commands = [];
     this.pages.push(this.commands);
-    this.rect(0, PAGE_HEIGHT - 94, PAGE_WIDTH, 94, colors.primaryStrong);
-    this.commands.push(drawPdfLogo(MARGIN, PAGE_HEIGHT - 75, 160));
+    this.rect(0, PAGE_HEIGHT - 150, PAGE_WIDTH, 150, colors.surface);
+    this.commands.push(drawPdfLogo(MARGIN, PAGE_HEIGHT - 68, 160));
+    this.commands.push(
+      `${rgb(colors.primaryStrong)} RG 2 w ${MARGIN} ${PAGE_HEIGHT - 80} m ${PAGE_WIDTH - MARGIN} ${PAGE_HEIGHT - 80} l S`,
+    );
     this.text(
       "BUSINESS PERFORMANCE SUMMARY",
-      220,
-      PAGE_HEIGHT - 40,
+      MARGIN,
+      PAGE_HEIGHT - 105,
       print.label,
-      colors.primarySoft,
+      colors.text,
+      true,
     );
-    this.text(this.period, 220, PAGE_HEIGHT - 62, print.caption, colors.surface);
-    this.y = PAGE_HEIGHT - 119;
+    this.text(this.period, MARGIN, PAGE_HEIGHT - 125, print.caption, colors.text);
+    this.y = PAGE_HEIGHT - 158;
   }
   ensure(height: number) {
     if (this.y - height < 62) this.newPage();

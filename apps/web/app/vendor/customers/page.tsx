@@ -28,6 +28,7 @@ type Promotion = {
   discount_amount?: number;
 };
 type ShareTarget = { customer?: Customer; broadcast?: true };
+type BroadcastRelationship = "all" | "customers" | "favourites" | "customers_and_favourites";
 
 export default function Customers() {
   const [customers, setCustomers] = useState<Customer[]>([]),
@@ -188,6 +189,9 @@ function SharePromotion({
     [rewardMessage, setRewardMessage] = useState(
       "Thanks for supporting our shop and reducing food waste!",
     ),
+    [relationship, setRelationship] = useState<BroadcastRelationship>("all"),
+    [minimumSpent, setMinimumSpent] = useState(""),
+    [minimumOrders, setMinimumOrders] = useState(""),
     [saving, setSaving] = useState(false),
     [error, setError] = useState("");
   const selected = promotions.find((promotion) => promotion.id === promotionId);
@@ -198,7 +202,15 @@ function SharePromotion({
     try {
       const api = createAuthenticatedWebApi("/api/ecochef");
       const result = target.broadcast
-        ? await api.broadcastVendorPromotion<{ message: string }>(promotionId, rewardMessage.trim())
+        ? await api.broadcastVendorPromotion<{ message: string }>(
+            promotionId,
+            rewardMessage.trim(),
+            {
+              relationship,
+              min_total_spent: minimumSpent ? Number(minimumSpent) : undefined,
+              min_total_orders: minimumOrders ? Number(minimumOrders) : undefined,
+            },
+          )
         : await api.shareVendorPromotion<{ message: string }>(
             promotionId,
             target.customer!.id,
@@ -269,6 +281,49 @@ function SharePromotion({
                 </dl>
               </article>
             ) : null}
+            {target.broadcast ? (
+              <div className="broadcast-targeting">
+                <strong>Choose customers</strong>
+                <div className="broadcast-target-grid">
+                  <div className="share-promotion-field">
+                    <span>Relationship</span>
+                    <ThemedSelectControl
+                      ariaLabel="Customer relationship"
+                      value={relationship}
+                      onChange={(value) => setRelationship(value as BroadcastRelationship)}
+                      options={[
+                        { value: "all", label: "All logged customers" },
+                        { value: "customers", label: "Purchased from store" },
+                        { value: "favourites", label: "Favourited store" },
+                        { value: "customers_and_favourites", label: "Purchased and favourited" },
+                      ]}
+                    />
+                  </div>
+                  <label>
+                    Total spent more than (RM)
+                    <input
+                      min="0"
+                      step="0.01"
+                      type="number"
+                      value={minimumSpent}
+                      onChange={(event) => setMinimumSpent(event.target.value)}
+                      placeholder="Any amount"
+                    />
+                  </label>
+                  <label>
+                    Total orders more than
+                    <input
+                      min="0"
+                      step="1"
+                      type="number"
+                      value={minimumOrders}
+                      onChange={(event) => setMinimumOrders(event.target.value)}
+                      placeholder="Any number"
+                    />
+                  </label>
+                </div>
+              </div>
+            ) : null}
             <label>
               Custom reward message
               <textarea
@@ -288,11 +343,7 @@ function SharePromotion({
                 disabled={saving || !rewardMessage.trim()}
                 onClick={() => void submit()}
               >
-                {saving
-                  ? "Sending…"
-                  : target.broadcast
-                    ? "Send to All Logged Customers"
-                    : "Send Coupon Code"}
+                {saving ? "Sending…" : target.broadcast ? "Broadcast Coupon" : "Send Coupon Code"}
               </button>
             </footer>
           </>

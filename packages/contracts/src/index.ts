@@ -310,6 +310,8 @@ export interface MarketplaceCheckoutStatus {
   total: number;
   invoice_url?: string;
   invoice_pdf_url?: string;
+  can_cancel: boolean;
+  cancel_available_at?: string;
 }
 
 export interface VendorProductInput {
